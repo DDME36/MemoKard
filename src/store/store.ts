@@ -8,6 +8,10 @@ export interface Deck {
   name: string;
   color: string; // tailwind color key e.g. 'violet', 'sky', 'teal'
   createdAt: Date;
+  // Sync model fields
+  linkedPublicDeckId?: string | null; // Reference to public_decks.id
+  isSynced?: boolean; // True if synced with public deck (read-only)
+  originalCreatorUsername?: string | null; // Original creator for synced decks
 }
 
 export interface Flashcard {

@@ -7,11 +7,14 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "migration:test": "node scripts/test-migration.js",
+    "migration:guide": "cat COMMUNITY_SHARING_SETUP.md"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.104.0",
     "canvas-confetti": "^1.9.4",
+    "dotenv": "^16.4.7",
     "framer-motion": "^12.38.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",

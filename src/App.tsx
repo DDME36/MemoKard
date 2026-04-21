@@ -3,10 +3,14 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useFlashcardStore, type Deck, type Flashcard } from './store/store';
 import { useAuth } from './contexts/AuthContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
+import { ToastProvider } from './contexts/ToastContext';
 import AuthPage from './pages/AuthPage';
 import Dashboard from './pages/Dashboard';
 import DeckDetail from './pages/DeckDetail';
 import ReviewSession from './pages/ReviewSession';
+import ExplorePage from './pages/ExplorePage';
+import PublicDeckDetail from './pages/PublicDeckDetail';
+import AdminPage from './pages/AdminPage';
 import AddCard from './components/AddCard';
 import AddDeck from './components/AddDeck';
 import EditCard from './components/EditCard';
@@ -44,7 +48,7 @@ const DECK_COLOR_MAP: Record<string, { gradient: string; shadow: string }> = {
   indigo:  { gradient: 'from-indigo-500 to-blue-600',   shadow: 'shadow-indigo-200' },
 };
 
-type View = 'home' | 'deck' | 'review';
+type View = 'home' | 'deck' | 'review' | 'explore' | 'public-deck' | 'admin';
 
 function AppContent() {
   const { user, loading, isDemo, signOut, setDemoMode } = useAuth();
@@ -64,6 +68,7 @@ function AppContent() {
 
   const [view, setView] = useState<View>('home');
   const [activeDeck, setActiveDeck] = useState<Deck | null>(null);
+  const [activePublicDeckId, setActivePublicDeckId] = useState<string | null>(null);
   const [showAddCard, setShowAddCard] = useState(false);
   const [showAddDeck, setShowAddDeck] = useState(false);
   const [editingCard, setEditingCard] = useState<Flashcard | null>(null);
@@ -80,7 +85,14 @@ function AppContent() {
 
   const openDeck = (deck: Deck) => { setActiveDeck(deck); setView('deck'); };
   const startReview = (deck?: Deck) => { setActiveDeck(deck ?? null); setView('review'); };
-  const goHome = () => { setView('home'); setActiveDeck(null); };
+  const goHome = () => { setView('home'); setActiveDeck(null); setActivePublicDeckId(null); };
+  const goExplore = () => { setView('explore'); setActiveDeck(null); setActivePublicDeckId(null); };
+  const goAdmin = () => { setView('admin'); setActiveDeck(null); setActivePublicDeckId(null); };
+  const openPublicDeck = (publicDeckId: string) => { setActivePublicDeckId(publicDeckId); setView('public-deck'); };
+  const closePublicDeck = () => { setView('explore'); setActivePublicDeckId(null); };
+
+  const ADMIN_USER_ID = import.meta.env.VITE_ADMIN_USER_ID;
+  const isAdmin = user?.id === ADMIN_USER_ID && !!ADMIN_USER_ID;
 
   // deckColor = สีของ deck ที่กำลัง review (ถ้ามี)
   const deckColor = activeDeck ? DECK_COLOR_MAP[activeDeck.color] ?? undefined : undefined;
@@ -123,6 +135,44 @@ function AppContent() {
                   </svg>
                   ทดลองใช้
                 </div>
+              )}
+
+              {/* Explore Button */}
+              {view !== 'explore' && view !== 'public-deck' && (
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={goExplore}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-colors ${
+                    isDark
+                      ? 'bg-slate-800 text-white hover:bg-slate-700'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <span className="hidden sm:inline">สำรวจ</span>
+                </motion.button>
+              )}
+
+              {/* Admin Button */}
+              {isAdmin && view !== 'admin' && (
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={goAdmin}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-colors ${
+                    isDark
+                      ? 'bg-rose-900/30 text-rose-400 hover:bg-rose-900/50 border border-rose-800/30'
+                      : 'bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                  <span className="hidden sm:inline">Admin</span>
+                </motion.button>
               )}
 
               {streak > 0 && (
@@ -252,6 +302,29 @@ function AppContent() {
                   deckColor={deckColor}
                 />
               )}
+              {view === 'explore' && (
+                <ExplorePage
+                  key="explore"
+                  onOpenDeck={openPublicDeck}
+                />
+              )}
+              {view === 'public-deck' && activePublicDeckId && (
+                <PublicDeckDetail
+                  key="public-deck"
+                  publicDeckId={activePublicDeckId}
+                  onClose={closePublicDeck}
+                  onImported={(deckId) => {
+                    const deck = store.getDeckById(deckId);
+                    if (deck) {
+                      closePublicDeck();
+                      openDeck(deck);
+                    }
+                  }}
+                />
+              )}
+              {view === 'admin' && isAdmin && (
+                <AdminPage key="admin" />
+              )}
             </AnimatePresence>
           </motion.main>
         )}
@@ -303,7 +376,9 @@ function AppContent() {
 export default function App() {
   return (
     <ThemeProvider>
-      <AppContent />
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
     </ThemeProvider>
   );
 }
