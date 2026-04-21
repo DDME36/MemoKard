@@ -64,6 +64,7 @@ export default function AuthPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [confirmTouched, setConfirmTouched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
@@ -360,19 +361,20 @@ export default function AuthPage() {
                       type="password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
+                      onBlur={() => setConfirmTouched(true)}
                       placeholder="••••••••"
                       className={`w-full px-4 py-3 border-2 rounded-xl placeholder-slate-400 focus:outline-none focus:ring-4 transition-all font-medium ${
-                        confirmPassword.length === 0
+                        !confirmTouched || confirmPassword.length === 0
                           ? isDark ? 'bg-slate-800 border-slate-700 text-slate-200 focus:border-teal-400 focus:ring-teal-100/20' : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-teal-400 focus:ring-teal-100/20'
                           : confirmPassword === password
-                            ? 'bg-emerald-50 border-emerald-400 text-slate-800 focus:border-emerald-400 focus:ring-emerald-100/20'
-                            : 'bg-rose-50 border-rose-400 text-slate-800 focus:border-rose-400 focus:ring-rose-100/20'
+                            ? isDark ? 'bg-emerald-900/20 border-emerald-600 text-slate-200 focus:border-emerald-500 focus:ring-emerald-100/20' : 'bg-emerald-50 border-emerald-400 text-slate-800 focus:border-emerald-400 focus:ring-emerald-100/20'
+                            : isDark ? 'bg-rose-900/20 border-rose-600 text-slate-200 focus:border-rose-500 focus:ring-rose-100/20' : 'bg-rose-50 border-rose-400 text-slate-800 focus:border-rose-400 focus:ring-rose-100/20'
                       }`}
                       required
                       disabled={loading}
                       minLength={6}
                     />
-                    {confirmPassword.length > 0 && (
+                    {confirmTouched && confirmPassword.length > 0 && (
                       <motion.p
                         initial={{ opacity: 0, y: -4 }}
                         animate={{ opacity: 1, y: 0 }}
