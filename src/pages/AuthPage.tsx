@@ -319,11 +319,6 @@ export default function AuthPage() {
                     required
                     disabled={loading}
                   />
-                  {mode === 'register' && (
-                    <p className={`text-[10px] mt-1.5 ${isDark ? 'text-slate-600' : 'text-slate-400'}`}>
-                      ใช้สำหรับกู้คืนรหัสผ่านเท่านั้น
-                    </p>
-                  )}
                 </div>
 
                 {/* Password Input */}

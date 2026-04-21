@@ -3,8 +3,6 @@ import { useFlashcardStore, type Deck } from '../store/store';
 import { useTheme } from '../contexts/ThemeContext';
 import ActivityHeatmap from '../components/ActivityHeatmap';
 
-const BTN = 'bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white font-semibold shadow-lg shadow-violet-200 hover:shadow-xl hover:shadow-violet-300 transition-all duration-300';
-
 const COLOR: Record<string, { 
   bg: string; 
   gradient: string;
@@ -200,7 +198,7 @@ export default function Dashboard({ onOpenDeck, onStartReview, onShowAddDeck, da
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }} 
             onClick={onShowAddDeck}
-            className={`inline-flex items-center gap-2 ${BTN} text-sm font-bold px-6 py-3 rounded-xl`}>
+            className={`inline-flex items-center gap-2 bg-gradient-to-r ${dayColor.gradient} hover:opacity-90 text-white text-sm font-bold px-6 py-3 rounded-xl transition-all`}>
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>

@@ -2,19 +2,19 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: 'auto',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'favicon-32x32.png', 'favicon-16x16.png'],
       manifest: {
         name: 'MemoKard - เมมโมการ์ด',
         short_name: 'MemoKard',
         description: 'เมมโมการ์ด - แอปพลิเคชันช่วยจำด้วยระบบ Active Recall และ Spaced Repetition',
         theme_color: '#8B5CF6',
-        background_color: '#F7F5FF',
+        background_color: '#020617',
         display: 'standalone',
         orientation: 'portrait',
         scope: '/',
@@ -51,7 +51,7 @@ export default defineConfig({
               cacheName: 'google-fonts-cache',
               expiration: {
                 maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
+                maxAgeSeconds: 60 * 60 * 24 * 365
               },
               cacheableResponse: {
                 statuses: [0, 200]
@@ -61,8 +61,7 @@ export default defineConfig({
         ]
       },
       devOptions: {
-        enabled: false,
-        type: 'module'
+        enabled: false
       }
     })
   ],
