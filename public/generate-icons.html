@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate PWA Icons</title>
+</head>
+<body>
+    <h1>PWA Icon Generator</h1>
+    <p>Open browser console and run the script below to download icons</p>
+    
+    <script>
+        // Generate a simple icon with text
+        function generateIcon(size, text) {
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#E3F2FD');
+            gradient.addColorStop(0.5, '#E8F5E9');
+            gradient.addColorStop(1, '#F3E5F5');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, size, size);
+            
+            // Add rounded corners effect
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.beginPath();
+            ctx.arc(size * 0.3, size * 0.3, size * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Text
+            ctx.fillStyle = '#333';
+            ctx.font = `bold ${size * 0.4}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, size / 2, size / 2);
+            
+            return canvas.toDataURL('image/png');
+        }
+        
+        // Download function
+        function downloadIcon(dataUrl, filename) {
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = dataUrl;
+            link.click();
+        }
+        
+        // Generate and download icons
+        console.log('Generating icons...');
+        downloadIcon(generateIcon(192, '🧠'), 'pwa-192x192.png');
+        setTimeout(() => {
+            downloadIcon(generateIcon(512, '🧠'), 'pwa-512x512.png');
+        }, 500);
+        
+        console.log('Icons generated! Check your downloads folder.');
+    </script>
+</body>
+</html>

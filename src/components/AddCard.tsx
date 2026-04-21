@@ -1,0 +1,213 @@
+import { useState, useRef } from 'react';
+import { motion } from 'framer-motion';
+import { useFlashcardStore } from '../store/store';
+import { compressImage } from '../utils/imageCompression';
+import { useTheme } from '../contexts/ThemeContext';
+
+interface AddCardProps {
+  deckId: string;
+  onClose: () => void;
+}
+
+export default function AddCard({ deckId, onClose }: AddCardProps) {
+  const [question, setQuestion] = useState('');
+  const [answer, setAnswer] = useState('');
+  const [questionImage, setQuestionImage] = useState<string | undefined>();
+  const [answerImage, setAnswerImage] = useState<string | undefined>();
+  const questionImageRef = useRef<HTMLInputElement>(null);
+  const answerImageRef = useRef<HTMLInputElement>(null);
+  const addCard = useFlashcardStore((state) => state.addCard);
+  const { isDark } = useTheme();
+
+  const handleImageUpload = async (file: File, type: 'question' | 'answer') => {
+    try {
+      const compressed = await compressImage(file);
+      if (type === 'question') {
+        setQuestionImage(compressed);
+      } else {
+        setAnswerImage(compressed);
+      }
+    } catch (error) {
+      console.error('Failed to compress image:', error);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (question.trim() && answer.trim()) {
+      await addCard(deckId, question.trim(), answer.trim(), questionImage, answerImage);
+      setQuestion('');
+      setAnswer('');
+      setQuestionImage(undefined);
+      setAnswerImage(undefined);
+      onClose();
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 z-50"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ y: 40, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 40, opacity: 0 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        onClick={(e) => e.stopPropagation()}
+        className={`backdrop-blur-xl rounded-3xl shadow-2xl w-full max-w-lg border ${
+          isDark 
+            ? 'bg-slate-900/98 border-slate-800' 
+            : 'bg-white/95 border-purple-100'
+        }`}
+      >
+        {/* Handle bar (mobile) */}
+        <div className="flex justify-center pt-4 pb-1 sm:hidden">
+          <div className="w-10 h-1 bg-purple-200 rounded-full" />
+        </div>
+
+        <div className="p-7">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className={`text-xl font-bold bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text ${
+              isDark ? 'text-transparent' : 'text-transparent'
+            }`}>เพิ่มการ์ดใหม่</h2>
+            <button onClick={onClose} className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
+              isDark 
+                ? 'bg-slate-700 hover:bg-slate-600 text-purple-400' 
+                : 'bg-purple-50 hover:bg-purple-100 text-purple-500'
+            }`}>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label htmlFor="question" className={`block text-xs font-bold uppercase tracking-wider mb-2 ${
+                isDark ? 'text-slate-400' : 'text-slate-500'
+              }`}>
+                คำถาม
+              </label>
+              <textarea id="question" value={question} onChange={(e) => setQuestion(e.target.value)}
+                placeholder="พิมพ์คำถามที่นี่..."
+                className={`w-full px-4 py-4 border-2 rounded-2xl placeholder-slate-400 focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100 transition-all resize-none text-sm font-medium ${
+                  isDark 
+                    ? 'bg-slate-900 border-slate-700 text-slate-200' 
+                    : 'bg-slate-50 border-slate-200 text-slate-800'
+                }`}
+                rows={3} required />
+              <div className="flex items-center gap-2 mt-2">
+                <input
+                  ref={questionImageRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0], 'question')}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => questionImageRef.current?.click()}
+                  className="text-xs font-semibold text-purple-600 hover:text-purple-700 flex items-center gap-1"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  เพิ่มรูป
+                </button>
+                {questionImage && (
+                  <button
+                    type="button"
+                    onClick={() => setQuestionImage(undefined)}
+                    className="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                  >
+                    ลบรูป
+                  </button>
+                )}
+              </div>
+              {questionImage && (
+                <img src={questionImage} alt="Question" className="mt-2 rounded-xl max-h-32 object-contain" />
+              )}
+              <p className={`text-[10px] mt-2 font-medium flex gap-1 items-center ${
+                isDark ? 'text-slate-500' : 'text-slate-400'
+              }`}>
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                รองรับการพิมพ์แบบ Markdown (ตัวหนา, ลิสต์, โค้ด)
+              </p>
+            </div>
+            <div>
+              <label htmlFor="answer" className={`block text-xs font-bold uppercase tracking-wider mb-2 ${
+                isDark ? 'text-slate-400' : 'text-slate-500'
+              }`}>
+                คำตอบ
+              </label>
+              <textarea id="answer" value={answer} onChange={(e) => setAnswer(e.target.value)}
+                placeholder="พิมพ์คำตอบที่นี่..."
+                className={`w-full px-4 py-4 border-2 rounded-2xl focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100 transition-all resize-none text-sm font-medium ${
+                  isDark 
+                    ? 'bg-purple-900/30 border-purple-800 text-slate-200 placeholder-purple-400/50' 
+                    : 'bg-purple-50 border-purple-200 text-slate-800 placeholder-purple-300'
+                }`}
+                rows={3} required />
+              <div className="flex items-center gap-2 mt-2">
+                <input
+                  ref={answerImageRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0], 'answer')}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => answerImageRef.current?.click()}
+                  className="text-xs font-semibold text-purple-600 hover:text-purple-700 flex items-center gap-1"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  เพิ่มรูป
+                </button>
+                {answerImage && (
+                  <button
+                    type="button"
+                    onClick={() => setAnswerImage(undefined)}
+                    className="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                  >
+                    ลบรูป
+                  </button>
+                )}
+              </div>
+              {answerImage && (
+                <img src={answerImage} alt="Answer" className="mt-2 rounded-xl max-h-32 object-contain" />
+              )}
+            </div>
+            <div className="flex gap-3 pt-2">
+              <motion.button 
+                type="button" 
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }} 
+                onClick={onClose}
+                className={`flex-1 py-3.5 rounded-xl font-semibold text-sm transition-colors ${
+                  isDark 
+                    ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' 
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                }`}>
+                ยกเลิก
+              </motion.button>
+              <motion.button 
+                type="submit" 
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="flex-1 py-3.5 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-purple-200 transition-all">
+                เพิ่มการ์ด
+              </motion.button>
+            </div>
+          </form>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
