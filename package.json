@@ -17,7 +17,7 @@
     "react-dom": "^19.2.5",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
-    "vite-plugin-pwa": "^1.2.0",
+    "vite-plugin-pwa": "^0.21.0",
     "workbox-window": "^7.4.0",
     "zustand": "^5.0.12"
   },
