@@ -8,8 +8,9 @@ interface ConfirmModalProps {
   confirmText?: string;
   cancelText?: string;
   onConfirm: () => void;
-  onCancel: () => void;
+  onCancel?: () => void;
   type?: 'warning' | 'danger' | 'info';
+  hideCancel?: boolean;
 }
 
 export default function ConfirmModal({
@@ -20,7 +21,8 @@ export default function ConfirmModal({
   cancelText = 'ยกเลิก',
   onConfirm,
   onCancel,
-  type = 'warning'
+  type = 'warning',
+  hideCancel = false
 }: ConfirmModalProps) {
   const { isDark } = useTheme();
 
@@ -67,7 +69,7 @@ export default function ConfirmModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-          onClick={onCancel}
+          onClick={onCancel || onConfirm}
         >
           <motion.div
             initial={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -102,16 +104,18 @@ export default function ConfirmModal({
 
             {/* Buttons Section */}
             <div className="px-8 pb-8 flex gap-3">
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={onCancel}
-                className={`flex-1 py-3.5 rounded-xl font-semibold text-base transition-colors ${
-                  isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                }`}
-              >
-                {cancelText}
-              </motion.button>
+              {!hideCancel && (
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={onCancel}
+                  className={`flex-1 py-3.5 rounded-xl font-semibold text-base transition-colors ${
+                    isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  {cancelText}
+                </motion.button>
+              )}
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}

@@ -88,7 +88,7 @@ function AppContent() {
   const isLoggedIn = !showSplash && !loading && (user || isDemo);
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 ${isDark ? 'bg-slate-950' : 'bg-gradient-to-br from-slate-50 via-purple-50 to-pink-50'}`}>
+    <div className={`flex flex-col min-h-screen transition-colors duration-300 ${isDark ? 'bg-slate-950' : 'bg-gradient-to-br from-slate-50 via-purple-50 to-pink-50'}`}>
 
       {/* ── Header — outside AnimatePresence, always instant ── */}
       {isLoggedIn && (
@@ -217,7 +217,7 @@ function AppContent() {
         ) : (
           <motion.main
             key="main"
-            className="max-w-3xl mx-auto px-5 py-8 pb-20"
+            className="flex-1 max-w-3xl w-full mx-auto px-5 py-8 pb-10"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
@@ -259,7 +259,7 @@ function AppContent() {
 
       {/* ── Modals ── */}
       <AnimatePresence>
-        {showAddDeck && <AddDeck onClose={() => setShowAddDeck(false)} onCreated={(id) => { const d = store.getDeckById(id); if (d) openDeck(d); }} />}
+        {showAddDeck && <AddDeck onClose={() => setShowAddDeck(false)} onCreated={(id) => { const d = store.getDeckById(id); if (d) openDeck(d); }} dayColor={dayColor} />}
         {showAddCard && activeDeck && <AddCard deckId={activeDeck.id} onClose={() => setShowAddCard(false)} />}
         {editingCard && <EditCard card={editingCard} onClose={() => setEditingCard(null)} />}
       </AnimatePresence>
@@ -290,8 +290,8 @@ function AppContent() {
 
       {/* ── Footer — outside AnimatePresence, always instant ── */}
       {isLoggedIn && (
-        <footer className={`fixed bottom-0 left-0 right-0 text-center py-4 text-xs font-medium ${
-          isDark ? 'text-slate-700 bg-slate-950' : 'text-slate-400 bg-transparent'
+        <footer className={`mt-auto text-center py-6 text-xs font-medium ${
+          isDark ? 'text-slate-700' : 'text-slate-400'
         }`}>
           MemoKard · เมมโมการ์ด
         </footer>

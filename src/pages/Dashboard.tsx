@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { useFlashcardStore, type Deck } from '../store/store';
 import { useTheme } from '../contexts/ThemeContext';
 import ActivityHeatmap from '../components/ActivityHeatmap';
+import { getDailyQuote } from '../utils/quotes';
 
 const COLOR: Record<string, { 
   bg: string; 
@@ -101,6 +102,13 @@ export default function Dashboard({ onOpenDeck, onStartReview, onShowAddDeck, da
       animate={{ opacity: 1, y: 0 }} 
       exit={{ opacity: 0 }}
     >
+      {/* Daily Quote */}
+      <div className="mb-6 px-2">
+        <p className={`text-sm font-medium italic ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+          "{getDailyQuote()}"
+        </p>
+      </div>
+
       {/* Stat Cards - Clean Glassmorphism Design */}
       <div className="grid grid-cols-2 gap-4 mb-10">
         {/* Stat 1: ทบทวนวันนี้ */}
@@ -179,15 +187,6 @@ export default function Dashboard({ onOpenDeck, onStartReview, onShowAddDeck, da
       {/* Empty State or Deck List */}
       {decks.length === 0 ? (
         <div className="text-center py-20">
-          <motion.div 
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: "spring", duration: 0.6 }}
-            className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-purple-500 to-pink-500 rounded-3xl flex items-center justify-center shadow-2xl shadow-purple-300">
-            <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
-          </motion.div>
           <h3 className={`text-xl font-bold mb-2 ${
             isDark ? 'text-slate-200' : 'text-slate-800'
           }`}>เริ่มต้นการเรียนรู้</h3>

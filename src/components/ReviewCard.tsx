@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -36,6 +36,35 @@ export default function ReviewCard({ card, onReview, dayColor }: ReviewCardProps
     }, 300);
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      
+      if (!isFlipped && (e.code === 'Space' || e.code === 'Enter')) {
+        e.preventDefault();
+        handleFlip();
+      } else if (isFlipped && !isExiting) {
+        if (e.key === '1') { e.preventDefault(); handleReview(0); }
+        else if (e.key === '2') { e.preventDefault(); handleReview(3); }
+        else if (e.key === '3') { e.preventDefault(); handleReview(5); }
+        else if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); handleReview(3); }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFlipped, isExiting, card.id]);
+
+  const handleDragEnd = (_e: any, info: any) => {
+    if (!isFlipped || isExiting) return;
+    const offset = info.offset.x;
+    const velocity = info.velocity.x;
+    if (offset > 100 || velocity > 500) {
+      handleReview(5); // Easy
+    } else if (offset < -100 || velocity < -500) {
+      handleReview(0); // Again
+    }
+  };
+
   const MarkdownComponents = (isBack: boolean) => ({
     p: ({ children }: any) => <p className={`mb-3 last:mb-0 ${isBack ? 'text-white' : isDark ? 'text-slate-200' : 'text-slate-800'}`}>{children}</p>,
     strong: ({ children }: any) => <strong className={`font-black ${isBack ? 'text-white' : isDark ? 'text-slate-100' : 'text-slate-900'}`}>{children}</strong>,
@@ -67,9 +96,13 @@ export default function ReviewCard({ card, onReview, dayColor }: ReviewCardProps
             transition={{ duration: 0.25 }}
           >
             {/* Card */}
-            <div
-              className="relative w-full h-[400px] cursor-pointer perspective-1000"
+            <motion.div
+              className="relative w-full h-[50dvh] min-h-[280px] max-h-[400px] cursor-pointer perspective-1000 touch-pan-y"
               onClick={handleFlip}
+              drag={isFlipped ? "x" : false}
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.7}
+              onDragEnd={handleDragEnd}
             >
               <motion.div
                 className="relative w-full h-full"
@@ -124,7 +157,7 @@ export default function ReviewCard({ card, onReview, dayColor }: ReviewCardProps
                   </div>
                 </div>
               </motion.div>
-            </div>
+            </motion.div>
 
             {/* Review Buttons */}
             <AnimatePresence>

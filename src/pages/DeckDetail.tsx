@@ -62,27 +62,30 @@ export default function DeckDetail({ deck, onStartReview, onShowAddCard, onEditC
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }} 
                 onClick={onShowAddCard}
-                className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white text-sm font-bold px-5 py-2.5 rounded-xl flex items-center gap-2 border border-white/30 transition-all">
+                className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white text-sm font-bold px-3 sm:px-5 py-2.5 rounded-xl flex items-center gap-2 border border-white/30 transition-all"
+                title="เพิ่มการ์ด">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                เพิ่มการ์ด
+                <span className="hidden sm:inline">เพิ่มการ์ด</span>
               </motion.button>
             )}
             <motion.button 
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }} 
               onClick={() => onStartReview(deck)}
-              className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white text-sm font-bold px-5 py-2.5 rounded-xl flex items-center gap-2 border border-white/30 transition-all">
+              className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white text-sm font-bold px-3 sm:px-5 py-2.5 rounded-xl flex items-center gap-2 border border-white/30 transition-all"
+              title="ทบทวนทั้งหมด">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              ทบทวนทั้งหมด
+              <span className="hidden sm:inline">ทบทวนทั้งหมด</span>
             </motion.button>
             <button
               onClick={() => onDeleteDeck(deck)}
-              className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 text-white hover:bg-white/30 flex items-center justify-center transition-all">
+              className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 text-white hover:bg-white/30 flex items-center justify-center transition-all"
+              title="ลบชุดการ์ด">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>

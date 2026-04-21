@@ -49,16 +49,16 @@ export default function AddCard({ deckId, onClose }: AddCardProps) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 z-50"
+      className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50"
       onClick={onClose}
     >
       <motion.div
-        initial={{ y: 40, opacity: 0 }}
+        initial={{ y: '100%', opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 40, opacity: 0 }}
+        exit={{ y: '100%', opacity: 0 }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         onClick={(e) => e.stopPropagation()}
-        className={`backdrop-blur-xl rounded-3xl shadow-2xl w-full max-w-lg border ${
+        className={`backdrop-blur-xl rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-lg border max-h-[95dvh] flex flex-col overflow-hidden ${
           isDark 
             ? 'bg-slate-900/98 border-slate-800' 
             : 'bg-white/95 border-purple-100'
@@ -66,10 +66,10 @@ export default function AddCard({ deckId, onClose }: AddCardProps) {
       >
         {/* Handle bar (mobile) */}
         <div className="flex justify-center pt-4 pb-1 sm:hidden">
-          <div className="w-10 h-1 bg-purple-200 rounded-full" />
+          <div className={`w-10 h-1 rounded-full ${isDark ? 'bg-slate-700' : 'bg-purple-200'}`} />
         </div>
 
-        <div className="p-7">
+        <div className="p-7 overflow-y-auto no-scrollbar">
           <div className="flex items-center justify-between mb-6">
             <h2 className={`text-xl font-bold bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text ${
               isDark ? 'text-transparent' : 'text-transparent'

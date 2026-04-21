@@ -15,6 +15,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   isDemo: boolean;
   setDemoMode: (demo: boolean) => void;
+  checkUsernameAvailable: (username: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -105,11 +106,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('demo-mode', demo.toString());
   };
 
+  const checkUsernameAvailable = async (username: string) => {
+    if (!username.trim() || !isSupabaseConfigured() || isDemo) return true;
+    
+    // Check if username exists via RPC
+    const { data } = await supabase
+      .rpc('get_email_by_username', { p_username: username.trim() });
+      
+    // If it returns an email (or any truthy data), the username is TAKEN.
+    if (data) {
+      return false;
+    }
+    return true;
+  };
+
   return (
     <AuthContext.Provider value={{
       user, session, loading,
       signUp, signIn, signInWithGoogle, signOut,
-      isDemo, setDemoMode,
+      isDemo, setDemoMode, checkUsernameAvailable,
     }}>
       {children}
     </AuthContext.Provider>

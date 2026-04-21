@@ -5,16 +5,27 @@
 @tailwind utilities;
 
 @layer base {
+  html, body {
+    overscroll-behavior-y: none;
+    min-height: 100dvh;
+  }
+
   body {
     @apply antialiased;
     font-family: 'Noto Sans Thai', 'Inter', sans-serif;
   }
   
   /* Dark mode background for body */
+  html.dark {
+    background-color: #020617; /* slate-950 */
+  }
   html.dark body {
     background-color: #020617; /* slate-950 */
   }
   
+  html {
+    background-color: #f8fafc; /* slate-50 */
+  }
   html body {
     background-color: transparent;
   }

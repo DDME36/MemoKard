@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useFlashcardStore, DECK_COLORS, type DeckColor } from '../store/store';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface AddDeckProps {
   onClose: () => void;
   onCreated: (deckId: string) => void;
+  dayColor: { gradient: string; shadow: string };
 }
 
 const COLOR_MAP: Record<DeckColor, { bg: string; ring: string; label: string }> = {
@@ -18,10 +20,30 @@ const COLOR_MAP: Record<DeckColor, { bg: string; ring: string; label: string }> 
   indigo: { bg: 'bg-indigo-400', ring: 'ring-indigo-400', label: 'คราม' },
 };
 
-export default function AddDeck({ onClose, onCreated }: AddDeckProps) {
+export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) {
   const [name, setName] = useState('');
   const [color, setColor] = useState<DeckColor>('violet');
   const addDeck = useFlashcardStore((s) => s.addDeck);
+  const { isDark } = useTheme();
+
+  // Extract color values from gradient for styling
+  const getColorValues = () => {
+    const colorMap: Record<string, { border: string; bg: string; bgHover: string; text: string; light: string }> = {
+      red: { border: '#f87171', bg: '#fef2f2', bgHover: '#fee2e2', text: '#ef4444', light: '#fecaca' },
+      yellow: { border: '#fbbf24', bg: '#fefce8', bgHover: '#fef3c7', text: '#f59e0b', light: '#fde68a' },
+      pink: { border: '#f472b6', bg: '#fdf2f8', bgHover: '#fce7f3', text: '#ec4899', light: '#fbcfe8' },
+      green: { border: '#4ade80', bg: '#f0fdf4', bgHover: '#dcfce7', text: '#22c55e', light: '#bbf7d0' },
+      orange: { border: '#fb923c', bg: '#fff7ed', bgHover: '#ffedd5', text: '#f97316', light: '#fed7aa' },
+      sky: { border: '#38bdf8', bg: '#f0f9ff', bgHover: '#e0f2fe', text: '#0ea5e9', light: '#bae6fd' },
+      purple: { border: '#a78bfa', bg: '#faf5ff', bgHover: '#f3e8ff', text: '#a855f7', light: '#e9d5ff' },
+    };
+    
+    const match = dayColor.gradient.match(/from-(\w+)-/);
+    const colorName = match ? match[1] : 'purple';
+    return colorMap[colorName] || colorMap.purple;
+  };
+
+  const colors = getColorValues();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,25 +58,46 @@ export default function AddDeck({ onClose, onCreated }: AddDeckProps) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 z-50"
+      className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50"
       onClick={onClose}
     >
       <motion.div
-        initial={{ y: 40, opacity: 0 }}
+        initial={{ y: '100%', opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 40, opacity: 0 }}
+        exit={{ y: '100%', opacity: 0 }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl w-full max-w-md border border-purple-100"
+        className={`backdrop-blur-xl rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-md border max-h-[90dvh] flex flex-col overflow-hidden ${
+          isDark
+            ? 'bg-slate-900/98 border-slate-800'
+            : 'bg-white/95'
+        }`}
+        style={!isDark ? { borderColor: colors.light } : undefined}
       >
         <div className="flex justify-center pt-4 pb-1 sm:hidden">
-          <div className="w-10 h-1 bg-purple-200 rounded-full" />
+          <div 
+            className={`w-10 h-1 rounded-full ${isDark ? 'bg-slate-700' : ''}`}
+            style={!isDark ? { backgroundColor: colors.light } : undefined}
+          />
         </div>
-        <div className="p-7">
+        <div className="p-7 overflow-y-auto no-scrollbar">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent">สร้างชุดการ์ดใหม่</h2>
-            <button onClick={onClose} className="w-9 h-9 rounded-xl bg-purple-50 hover:bg-purple-100 flex items-center justify-center transition-colors">
-              <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <h2 className={`text-xl font-bold bg-gradient-to-r ${dayColor.gradient} bg-clip-text text-transparent`}>สร้างชุดการ์ดใหม่</h2>
+            <button 
+              onClick={onClose} 
+              className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
+                isDark 
+                  ? 'bg-slate-800 hover:bg-slate-700' 
+                  : ''
+              }`}
+              style={!isDark ? { 
+                backgroundColor: colors.bg, 
+                color: colors.text 
+              } : { color: colors.text }}
+              onMouseEnter={(e) => !isDark && (e.currentTarget.style.backgroundColor = colors.bgHover)}
+              onMouseLeave={(e) => !isDark && (e.currentTarget.style.backgroundColor = colors.bg)}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -62,20 +105,32 @@ export default function AddDeck({ onClose, onCreated }: AddDeckProps) {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">ชื่อชุดการ์ด</label>
+              <label className={`block text-xs font-bold uppercase tracking-wider mb-2 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>ชื่อชุดการ์ด</label>
               <input
                 autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="เช่น ภาษาอังกฤษ, คณิตศาสตร์..."
-                className="w-full px-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-2xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100 transition-all text-sm font-medium"
+                className={`w-full px-4 py-4 border-2 rounded-2xl placeholder-slate-400 focus:outline-none transition-all text-sm font-medium ${
+                  isDark
+                    ? 'bg-slate-800 border-slate-700 text-slate-200'
+                    : 'bg-slate-50 border-slate-200 text-slate-800'
+                }`}
+                onFocus={(e) => {
+                  e.target.style.borderColor = colors.border;
+                  e.target.style.boxShadow = `0 0 0 4px ${colors.border}20`;
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = '';
+                  e.target.style.boxShadow = '';
+                }}
                 required
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">เลือกสี</label>
-              <div className="flex gap-3 flex-wrap">
+              <label className={`block text-xs font-bold uppercase tracking-wider mb-3 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>เลือกสี</label>
+              <div className="grid grid-cols-4 gap-3">
                 {DECK_COLORS.map((c) => (
                   <motion.button
                     key={c}
@@ -83,27 +138,33 @@ export default function AddDeck({ onClose, onCreated }: AddDeckProps) {
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => setColor(c)}
-                    className={`w-10 h-10 rounded-xl ${COLOR_MAP[c].bg} transition-all shadow-md ${color === c ? `ring-4 ring-offset-2 ${COLOR_MAP[c].ring} scale-110` : 'opacity-70 hover:opacity-100'}`}
+                    className={`w-full aspect-square rounded-xl ${COLOR_MAP[c].bg} transition-all shadow-md flex items-center justify-center ${color === c ? `ring-4 ring-offset-2 ${COLOR_MAP[c].ring} ${isDark ? 'ring-offset-slate-900' : ''} scale-110` : 'opacity-70 hover:opacity-100'}`}
                     title={COLOR_MAP[c].label}
                   />
                 ))}
               </div>
             </div>
 
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-3 pt-4">
               <motion.button 
                 type="button" 
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }} 
                 onClick={onClose}
-                className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-semibold text-sm transition-colors">
+                className={`flex-1 py-3.5 rounded-xl font-semibold text-sm transition-colors ${
+                  isDark 
+                    ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' 
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                }`}>
                 ยกเลิก
               </motion.button>
               <motion.button 
                 type="submit" 
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className="flex-1 py-3.5 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-purple-200 transition-all">
+                className={`flex-1 py-3.5 bg-gradient-to-r ${dayColor.gradient} hover:opacity-90 text-white rounded-xl font-bold text-sm shadow-lg transition-all ${
+                  isDark ? 'shadow-purple-900/50' : dayColor.shadow
+                }`}>
                 สร้างชุดการ์ด
               </motion.button>
             </div>
