@@ -16,10 +16,13 @@
     "canvas-confetti": "^1.9.4",
     "dotenv": "^16.4.7",
     "framer-motion": "^12.38.0",
+    "katex": "^0.16.45",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-markdown": "^10.1.0",
+    "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
     "vite-plugin-pwa": "^0.21.0",
     "workbox-window": "^7.4.0",
     "zustand": "^5.0.12"

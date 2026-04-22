@@ -8,6 +8,7 @@ import { communityStore, type PublicDeck, type DeckCategory } from '../store/com
 import ShareDeckModal from '../components/ShareDeckModal';
 import DeckStatsPanel from '../components/DeckStatsPanel';
 import ConfirmModal from '../components/ConfirmModal';
+import MathText from '../components/MathText';
 
 const COLOR: Record<string, { 
   bg: string; 
@@ -338,12 +339,16 @@ export default function DeckDetail({ deck, onStartReview, onShowAddCard, onEditC
                 }`}
                 onClick={() => canEdit && onEditCard(card)}>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-base font-bold truncate mb-1 ${
+                  <div className={`text-base font-bold mb-1 line-clamp-1 ${
                     isDark ? 'text-slate-200' : 'text-slate-800'
-                  }`}>{card.question}</p>
-                  <p className={`text-sm truncate ${
+                  }`}>
+                    <MathText className="[&_p]:mb-0 [&_.katex]:text-[0.95em]">{card.question}</MathText>
+                  </div>
+                  <div className={`text-sm line-clamp-1 ${
                     isDark ? 'text-slate-400' : 'text-slate-500'
-                  }`}>{card.answer}</p>
+                  }`}>
+                    <MathText className="[&_p]:mb-0 [&_.katex]:text-[0.85em]">{card.answer}</MathText>
+                  </div>
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
                   {isDue && (

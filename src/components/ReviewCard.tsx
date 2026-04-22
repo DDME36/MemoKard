@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import MathText from './MathText';
 import type { Flashcard } from '../store/store';
 import { useTheme } from '../contexts/ThemeContext';
 import { haptics, sounds } from '../utils/haptics';
@@ -82,6 +81,13 @@ export default function ReviewCard({ card, onReview, dayColor }: ReviewCardProps
     ul: ({ children }: any) => <ul className="list-disc pl-5 mb-3 text-left space-y-1 w-full max-w-sm">{children}</ul>,
     ol: ({ children }: any) => <ol className="list-decimal pl-5 mb-3 text-left space-y-1 w-full max-w-sm">{children}</ol>,
     li: ({ children }: any) => <li className={isBack ? 'text-white/90' : isDark ? 'text-slate-300' : 'text-slate-700'}>{children}</li>,
+    // KaTeX math elements inherit text color
+    span: ({ className, children, ...props }: any) => {
+      if (className?.includes('katex')) {
+        return <span className={`${className} ${isBack ? 'text-white' : ''}`} {...props}>{children}</span>;
+      }
+      return <span className={className} {...props}>{children}</span>;
+    },
   });
 
   return (
@@ -122,9 +128,9 @@ export default function ReviewCard({ card, onReview, dayColor }: ReviewCardProps
                       คำถาม
                     </span>
                     <div className="text-xl md:text-2xl font-bold text-center leading-relaxed relative z-10 w-full flex flex-col items-center max-h-full overflow-y-auto overflow-x-hidden no-scrollbar pb-6 pt-4">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents(false)}>
+                      <MathText components={MarkdownComponents(false)}>
                         {card.question}
-                      </ReactMarkdown>
+                      </MathText>
                       {card.questionImage && (
                         <img src={card.questionImage} alt="Question" className="mt-4 rounded-xl max-h-48 object-contain" />
                       )}
@@ -147,9 +153,9 @@ export default function ReviewCard({ card, onReview, dayColor }: ReviewCardProps
                       คำตอบ
                     </span>
                     <div className="text-xl md:text-2xl font-bold text-center leading-relaxed relative z-10 w-full flex flex-col items-center max-h-full overflow-y-auto overflow-x-hidden no-scrollbar pt-4 pb-4">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents(true)}>
+                      <MathText components={MarkdownComponents(true)}>
                         {card.answer}
-                      </ReactMarkdown>
+                      </MathText>
                       {card.answerImage && (
                         <img src={card.answerImage} alt="Answer" className="mt-4 rounded-xl max-h-48 object-contain" />
                       )}
