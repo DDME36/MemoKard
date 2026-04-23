@@ -43,7 +43,7 @@ export const exportDeck = (deck: Deck, cards: Array<{ question: string; answer: 
   
   const link = document.createElement('a');
   link.href = url;
-  link.download = `${deck.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_deck.json`;
+  link.download = `${deck.name.replace(/[\\/:*?"<>|]/g, '_')}_deck.json`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -90,6 +90,89 @@ export const importDeck = (file: File): Promise<ExportedDeck> => {
     
     reader.readAsText(file);
   });
+};
+
+/**
+ * Import a deck from raw text (JSON, CSV, TSV)
+ */
+export const importDeckFromText = (text: string, defaultName = 'Imported Deck', defaultColor = 'violet'): ExportedDeck => {
+  let t = text.trim();
+  
+  // 1. Try parsing as JSON first (Handle markdown code blocks)
+  try {
+    // Strip markdown code blocks if present
+    if (t.includes('```json')) {
+      const match = t.match(/```json\s*([\s\S]*?)\s*```/);
+      if (match && match[1]) {
+        t = match[1].trim();
+      }
+    } else if (t.includes('```')) {
+      const match = t.match(/```\s*([\s\S]*?)\s*```/);
+      if (match && match[1]) {
+        t = match[1].trim();
+      }
+    }
+
+    if (t.startsWith('{')) {
+      const data = JSON.parse(t);
+      if (validateDeckData(data)) {
+        return data;
+      }
+    }
+  } catch (e) {
+    // Ignore JSON error, fallback to text parsing
+  }
+
+  // 2. Parse as Text (TSV, CSV, Pipe)
+  const cards: Array<{question: string, answer: string}> = [];
+  const lines = t.split('\n');
+  
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    
+    // TSV (Excel/Sheets copy-paste)
+    if (trimmed.includes('\t')) {
+      const parts = trimmed.split('\t');
+      if (parts.length >= 2) {
+        cards.push({ question: parts[0].trim(), answer: parts.slice(1).join('\t').trim() });
+        continue;
+      }
+    }
+    
+    // Pipe separated
+    if (trimmed.includes('|')) {
+      const parts = trimmed.split('|');
+      if (parts.length >= 2) {
+        cards.push({ question: parts[0].trim(), answer: parts.slice(1).join('|').trim() });
+        continue;
+      }
+    }
+
+    // CSV (basic)
+    if (trimmed.includes(',')) {
+      const parts = trimmed.split(',');
+      if (parts.length >= 2) {
+        cards.push({ question: parts[0].trim(), answer: parts.slice(1).join(',').trim() });
+        continue;
+      }
+    }
+  }
+
+  if (cards.length === 0) {
+    throw new Error('ไม่พบข้อมูลการ์ด กรุณาคั่นคำถามและคำตอบด้วย Tab, | (Pipe) หรือ , (Comma)');
+  }
+
+  return {
+    version: '1.0.0',
+    exportedAt: new Date().toISOString(),
+    deck: {
+      name: defaultName,
+      color: defaultColor,
+      description: 'Imported from text/table'
+    },
+    cards
+  };
 };
 
 /**
