@@ -61,7 +61,7 @@ function AppContent() {
   useEffect(() => {
     const metaThemeColor = document.querySelector('meta[name="theme-color"]');
     if (metaThemeColor) {
-      metaThemeColor.setAttribute('content', isDark ? '#1e1b4b' : '#a855f7');
+      metaThemeColor.setAttribute('content', isDark ? '#0f172a' : '#a855f7');
     }
   }, [isDark]);
 
@@ -108,7 +108,12 @@ function AppContent() {
   const isLoggedIn = !showSplash && !loading && (user || isDemo);
 
   return (
-    <div className={`flex flex-col min-h-screen transition-colors duration-300 ${isDark ? 'bg-slate-950' : 'bg-gradient-to-br from-slate-50 via-purple-50 to-pink-50'}`}>
+    <div className={`flex flex-col min-h-screen transition-colors duration-300 ${isDark ? 'bg-slate-950' : 'bg-gradient-to-br from-slate-50 via-purple-50 to-pink-50'}`} style={{
+      paddingTop: 'env(safe-area-inset-top)',
+      paddingBottom: 'env(safe-area-inset-bottom)',
+      paddingLeft: 'env(safe-area-inset-left)',
+      paddingRight: 'env(safe-area-inset-right)'
+    }}>
 
       {/* ── Header — outside AnimatePresence, always instant ── */}
       {isLoggedIn && (
