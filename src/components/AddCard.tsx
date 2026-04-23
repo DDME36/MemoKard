@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useFlashcardStore } from '../store/store';
 import { compressImage } from '../utils/imageCompression';
 import { useTheme } from '../contexts/ThemeContext';
+import { haptics } from '../utils/haptics';
 
 interface AddCardProps {
   deckId: string;
@@ -40,6 +41,7 @@ export default function AddCard({ deckId, onClose }: AddCardProps) {
       setAnswer('');
       setQuestionImage(undefined);
       setAnswerImage(undefined);
+      haptics.success();
       onClose();
     }
   };

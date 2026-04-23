@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useFlashcardStore, DECK_COLORS, type DeckColor } from '../store/store';
 import { useTheme } from '../contexts/ThemeContext';
 import { importDeckFromText, importDeck } from '../utils/deckIO';
+import { haptics } from '../utils/haptics';
 
 interface AddDeckProps {
   onClose: () => void;
@@ -84,6 +85,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
       }
       
       onCreated(deck.id);
+      haptics.success();
       onClose();
     } catch (err: any) {
       setImportError(err.message || 'เกิดข้อผิดพลาดในการนำเข้า');
@@ -110,6 +112,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
       }
       
       onCreated(deck.id);
+      haptics.success();
       onClose();
     } catch (err: any) {
       setImportError(err.message || 'ไม่สามารถอ่านไฟล์ได้');

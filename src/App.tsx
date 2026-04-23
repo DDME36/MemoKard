@@ -17,6 +17,8 @@ import EditCard from './components/EditCard';
 import ConfirmModal from './components/ConfirmModal';
 import HandwritingLogo from './components/HandwritingLogo';
 import SplashScreen from './components/SplashScreen';
+import InstallPrompt from './components/InstallPrompt';
+import { haptics } from './utils/haptics';
 
 // สีประจำวันแบบไทย (ตามเวลาประเทศไทย UTC+7)
 const THAI_DAY_COLORS = {
@@ -156,7 +158,7 @@ function AppContent() {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={goExplore}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-colors ${
+                  className={`flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-4 sm:py-2 gap-2 rounded-xl font-bold text-sm transition-colors ${
                     isDark
                       ? 'bg-slate-800 text-white hover:bg-slate-700'
                       : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -175,7 +177,7 @@ function AppContent() {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={goAdmin}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-colors ${
+                  className={`flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-4 sm:py-2 gap-2 rounded-xl font-bold text-sm transition-colors ${
                     isDark
                       ? 'bg-rose-900/30 text-rose-400 hover:bg-rose-900/50 border border-rose-800/30'
                       : 'bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200'
@@ -235,8 +237,8 @@ function AppContent() {
                 <motion.button
                   whileHover={{ scale: 1.05, y: -1 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => setShowAddDeck(true)}
-                  className={`flex items-center gap-2 px-4 py-2 bg-gradient-to-r ${dayColor.gradient} text-white rounded-xl font-bold transition-all ${
+                  onClick={() => { haptics.medium(); setShowAddDeck(true); }}
+                  className={`hidden sm:flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-4 sm:py-2 gap-2 bg-gradient-to-r ${dayColor.gradient} text-white rounded-xl font-bold transition-all ${
                     isDark ? '' : 'shadow-md hover:shadow-lg'
                   }`}>
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -382,6 +384,28 @@ function AppContent() {
           MemoKard · เมมโมการ์ด
         </footer>
       )}
+
+      {/* ── Mobile FAB (Floating Action Button) ── */}
+      <AnimatePresence>
+        {isLoggedIn && view === 'home' && (
+          <motion.button
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => { haptics.medium(); setShowAddDeck(true); }}
+            className={`sm:hidden fixed bottom-6 right-6 z-40 w-14 h-14 flex items-center justify-center rounded-2xl bg-gradient-to-r ${dayColor.gradient} text-white shadow-xl ${
+              isDark ? 'shadow-purple-900/50' : dayColor.shadow
+            }`}
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+            </svg>
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      <InstallPrompt dayColor={dayColor} />
     </div>
   );
 }

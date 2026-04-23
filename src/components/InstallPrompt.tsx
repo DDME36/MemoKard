@@ -19,9 +19,8 @@ declare global {
 
 interface InstallPromptProps {
   dayColor: {
-    from: string;
-    to: string;
     gradient: string;
+    shadow?: string;
   };
 }
 
