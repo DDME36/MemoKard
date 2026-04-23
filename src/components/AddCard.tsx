@@ -18,7 +18,6 @@ export default function AddCard({ deckId, onClose }: AddCardProps) {
   const answerImageRef = useRef<HTMLInputElement>(null);
   const addCard = useFlashcardStore((state) => state.addCard);
   const { isDark } = useTheme();
-  const mouseDownOnBackdrop = useRef(false);
 
   const handleImageUpload = async (file: File, type: 'question' | 'answer') => {
     try {
@@ -51,8 +50,11 @@ export default function AddCard({ deckId, onClose }: AddCardProps) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50"
-      onMouseDown={(e) => { mouseDownOnBackdrop.current = e.target === e.currentTarget; }}
-      onClick={(e) => { if (mouseDownOnBackdrop.current) onClose(); }}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
     >
       <motion.div
         initial={{ y: '100%', opacity: 0 }}
