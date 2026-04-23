@@ -31,12 +31,13 @@
     background-color: #020617; /* slate-950 */
   }
   html.dark body {
-    background-color: #020617; /* slate-950 */
+    background-color: transparent; /* ให้ inherit gradient จาก html */
   }
   
-  /* Light mode - match app gradient top color */
+  /* Light mode - match app gradient */
   html {
-    background-color: #f1f5f9; /* slate-100 - matches app gradient */
+    background: linear-gradient(to bottom right, #f8fafc, #faf5ff, #fdf2f8);
+    /* from-slate-50 → via-purple-50 → to-pink-50 */
   }
   html body {
     background-color: transparent;
