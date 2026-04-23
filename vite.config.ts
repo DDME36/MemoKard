@@ -14,7 +14,7 @@ export default defineConfig({
         short_name: 'MemoKard',
         description: 'เมมโมการ์ด - แอปพลิเคชันช่วยจำด้วยระบบ Active Recall และ Spaced Repetition',
         theme_color: '#a855f7',
-        background_color: '#a855f7',
+        background_color: '#f8fafc',
         display: 'standalone',
         orientation: 'portrait',
         scope: '/',
