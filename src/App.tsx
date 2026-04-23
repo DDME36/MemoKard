@@ -394,9 +394,7 @@ function AppContent() {
             exit={{ scale: 0, opacity: 0 }}
             whileTap={{ scale: 0.9 }}
             onClick={() => { haptics.medium(); setShowAddDeck(true); }}
-            className={`sm:hidden fixed bottom-6 right-6 z-40 w-14 h-14 flex items-center justify-center rounded-2xl bg-gradient-to-r ${dayColor.gradient} text-white shadow-xl ${
-              isDark ? 'shadow-purple-900/50' : dayColor.shadow
-            }`}
+            className={`sm:hidden fixed bottom-6 right-6 z-40 w-14 h-14 flex items-center justify-center rounded-2xl bg-gradient-to-r ${dayColor.gradient} text-white`}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
