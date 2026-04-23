@@ -8,9 +8,9 @@
   html, body {
     overscroll-behavior-y: none;
     overscroll-behavior-x: none;
-    overflow-x: hidden;
-    min-height: 100dvh;
-    max-width: 100vw;
+    overflow: hidden;
+    height: 100dvh;
+    width: 100vw;
   }
 
   body {
@@ -18,10 +18,12 @@
     font-family: 'Noto Sans Thai', 'Inter', sans-serif;
   }
   
-  /* Prevent horizontal scroll */
+  /* Root container handles scrolling to prevent iOS rubber-banding */
   #root {
+    height: 100dvh;
+    width: 100vw;
+    overflow-y: auto;
     overflow-x: hidden;
-    max-width: 100vw;
   }
   
   /* Dark mode background for body */
@@ -32,8 +34,9 @@
     background-color: #020617; /* slate-950 */
   }
   
+  /* Light mode - match app gradient top color */
   html {
-    background-color: #f8fafc; /* slate-50 */
+    background-color: #f1f5f9; /* slate-100 - matches app gradient */
   }
   html body {
     background-color: transparent;
