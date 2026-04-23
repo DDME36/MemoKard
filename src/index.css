@@ -19,11 +19,12 @@
 
   /* 2. Set solid background color matching app bottom */
   html {
-    background-color: #fdf2f8; /* pink-50 - matches gradient end */
+    /* Matches the app's bg-gradient-to-br from-slate-50 via-purple-50 to-pink-50 */
+    background: linear-gradient(to bottom right, #f8fafc, #faf5ff, #fdf2f8);
   }
   
   html.dark {
-    background-color: #020617; /* slate-950 */
+    background: #020617; /* slate-950 */
   }
 
   body {
@@ -39,6 +40,7 @@
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch; /* Smooth momentum scrolling on iOS */
+    overscroll-behavior-y: none;
   }
   
   /* Disable text selection for better UX */
@@ -58,6 +60,14 @@
     -moz-user-select: text;
     -ms-user-select: text;
     user-select: text;
+    touch-action: manipulation;
+  }
+  
+  /* Prevent iOS Safari from zooming when focusing inputs */
+  @media screen and (max-width: 768px) {
+    input, textarea, select {
+      font-size: 16px !important;
+    }
   }
   
   /* Allow text selection for card content when reviewing */

@@ -46,6 +46,7 @@ interface FlashcardStore {
   // Sync actions
   setAuthState: (userId: string | null, isDemo: boolean) => void;
   syncFromSupabase: () => Promise<void>;
+  clearStore: () => void;
 
   // Deck actions
   addDeck: (name: string, color: string) => Promise<Deck>;
@@ -109,6 +110,18 @@ export const useFlashcardStore = create<FlashcardStore>()(
         } catch (error) {
           console.error('Error syncing from Supabase:', error);
         }
+      },
+
+      clearStore: () => {
+        set({
+          cards: [],
+          decks: [],
+          streak: 0,
+          lastStudyDate: null,
+          reviewHistory: {},
+          userId: null,
+          isDemo: true,
+        });
       },
 
       // ── Deck Actions ──

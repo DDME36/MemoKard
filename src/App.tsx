@@ -61,7 +61,7 @@ function AppContent() {
   useEffect(() => {
     const metaThemeColor = document.querySelector('meta[name="theme-color"]');
     if (metaThemeColor) {
-      metaThemeColor.setAttribute('content', isDark ? '#0f172a' : '#a855f7');
+      metaThemeColor.setAttribute('content', isDark ? '#0f172a' : '#ffffff');
     }
   }, [isDark]);
 

@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { useFlashcardStore } from '../store/store';
 
 interface AuthContextType {
   user: User | null;
@@ -99,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);
+    useFlashcardStore.getState().clearStore();
   };
 
   const setDemoMode = (demo: boolean) => {

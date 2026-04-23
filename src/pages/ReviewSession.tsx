@@ -21,9 +21,18 @@ export default function ReviewSession({ activeDeck, onGoHome, dayColor, deckColo
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [showCelebration, setShowCelebration] = useState(false);
 
-  // ถ้ามี deck → ทบทวนทุกการ์ดใน deck นั้น ใช้สี deck
-  // ถ้าไม่มี deck (กดจาก Dashboard) → ทบทวนเฉพาะการ์ดที่ถึงเวลาทั้งหมด ใช้สีวัน
-  const reviewCards = activeDeck ? getCardsByDeck(activeDeck.id) : getDueCards();
+  // Freeze the review list when session starts so it doesn't shrink dynamically
+  const [reviewCards, setReviewCards] = useState(() => 
+    activeDeck ? getCardsByDeck(activeDeck.id) : getDueCards()
+  );
+
+  // Reset when switching decks
+  useEffect(() => {
+    setReviewCards(activeDeck ? getCardsByDeck(activeDeck.id) : getDueCards());
+    setCurrentCardIndex(0);
+    setShowCelebration(false);
+  }, [activeDeck?.id]);
+
   const activeColor = (activeDeck && deckColor) ? deckColor : dayColor;
   const currentCard = reviewCards[currentCardIndex];
 

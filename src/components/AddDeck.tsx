@@ -207,7 +207,6 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
               <div>
                 <label className={`block text-xs font-bold uppercase tracking-wider mb-2 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>ชื่อชุดการ์ด</label>
                 <input
-                  autoFocus
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="เช่น ภาษาอังกฤษ, คณิตศาสตร์..."
