@@ -117,7 +117,11 @@ export default function ReviewCard({ card, onReview, dayColor }: ReviewCardProps
                 style={{ transformStyle: 'preserve-3d', WebkitTransformStyle: 'preserve-3d' }}
               >
                 {/* Front — Question */}
-                <div className="absolute w-full h-full backface-hidden" style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}>
+                <div className="absolute w-full h-full backface-hidden" style={{ 
+                  backfaceVisibility: 'hidden', 
+                  WebkitBackfaceVisibility: 'hidden',
+                  zIndex: isFlipped ? 1 : 2
+                }}>
                   <div className={`w-full h-full rounded-3xl border p-8 sm:p-10 flex flex-col items-center justify-center relative overflow-hidden ${
                     isDark
                       ? 'bg-slate-800 border-slate-700'
@@ -146,7 +150,13 @@ export default function ReviewCard({ card, onReview, dayColor }: ReviewCardProps
 
                 {/* Back — Answer */}
                 <div className="absolute w-full h-full backface-hidden"
-                  style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
+                  style={{ 
+                    backfaceVisibility: 'hidden', 
+                    WebkitBackfaceVisibility: 'hidden', 
+                    transform: 'rotateY(180deg)',
+                    WebkitTransform: 'rotateY(180deg)',
+                    zIndex: isFlipped ? 2 : 1
+                  }}>
                   <div className={`w-full h-full bg-gradient-to-br ${dayColor.gradient} rounded-3xl p-8 sm:p-10 flex flex-col items-center justify-center relative overflow-hidden`}>
                     <div className="absolute top-0 left-0 w-40 h-40 bg-white/10 rounded-full blur-3xl" />
                     <span className="absolute top-6 left-6 text-xs font-bold text-white/80 uppercase tracking-widest">
