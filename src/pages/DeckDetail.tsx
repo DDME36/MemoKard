@@ -191,7 +191,7 @@ export default function DeckDetail({ deck, onStartReview, onShowAddCard, onEditC
         <div className="flex flex-wrap sm:items-start justify-between relative z-10 gap-x-4 gap-y-4">
           <div className="flex-auto max-w-full">
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-1">
-              <h2 className="text-2xl font-bold text-white break-words">{deck.name}</h2>
+              <h2 className="text-2xl font-bold text-white break-all">{deck.name}</h2>
               {isSynced && (
                 <span className="self-start sm:self-auto px-2 py-1 bg-white/20 backdrop-blur-sm border border-white/30 rounded-lg text-xs font-bold text-white flex items-center gap-1 flex-shrink-0">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
