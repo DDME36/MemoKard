@@ -57,6 +57,14 @@ function AppContent() {
   const { isDark, toggleTheme } = useTheme();
   const dayColor = getThaiDayColor();
 
+  // Update theme-color meta tag dynamically based on dark mode
+  useEffect(() => {
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (metaThemeColor) {
+      metaThemeColor.setAttribute('content', isDark ? '#1e1b4b' : '#a855f7');
+    }
+  }, [isDark]);
+
   const [showSplash, setShowSplash] = useState(() => {
     return !sessionStorage.getItem('hasSeenSplash');
   });
