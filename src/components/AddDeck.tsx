@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useFlashcardStore, DECK_COLORS, type DeckColor } from '../store/store';
 import { useTheme } from '../contexts/ThemeContext';
+import { importDeckFromText, importDeck } from '../utils/deckIO';
 
 interface AddDeckProps {
   onClose: () => void;
@@ -21,9 +22,20 @@ const COLOR_MAP: Record<DeckColor, { bg: string; ring: string; label: string }> 
 };
 
 export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) {
+  const [mode, setMode] = useState<'create' | 'import'>('create');
+  
+  // Create state
   const [name, setName] = useState('');
   const [color, setColor] = useState<DeckColor>('violet');
+  
+  // Import state
+  const [importText, setImportText] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+  const [importError, setImportError] = useState('');
+  const [isCopied, setIsCopied] = useState(false);
+
   const addDeck = useFlashcardStore((s) => s.addDeck);
+  const addCard = useFlashcardStore((s) => s.addCard);
   const { isDark } = useTheme();
 
   // Extract color values from gradient for styling
@@ -45,12 +57,66 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
 
   const colors = getColorValues();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
     const deck = await addDeck(name.trim(), color);
     onCreated(deck.id);
     onClose();
+  };
+
+  const handleImportSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!importText.trim()) return;
+    
+    setIsImporting(true);
+    setImportError('');
+    
+    try {
+      const parsedData = importDeckFromText(importText);
+      const colorToUse = DECK_COLORS.includes(parsedData.deck.color as DeckColor) ? (parsedData.deck.color as DeckColor) : 'violet';
+      
+      const deck = await addDeck(parsedData.deck.name, colorToUse);
+      
+      // Add cards sequentially
+      for (const card of parsedData.cards) {
+        await addCard(deck.id, card.question, card.answer);
+      }
+      
+      onCreated(deck.id);
+      onClose();
+    } catch (err: any) {
+      setImportError(err.message || 'เกิดข้อผิดพลาดในการนำเข้า');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    setImportError('');
+
+    try {
+      const parsedData = await importDeck(file);
+      const colorToUse = DECK_COLORS.includes(parsedData.deck.color as DeckColor) ? (parsedData.deck.color as DeckColor) : 'violet';
+      
+      const deck = await addDeck(parsedData.deck.name, colorToUse);
+      
+      for (const card of parsedData.cards) {
+        await addCard(deck.id, card.question, card.answer);
+      }
+      
+      onCreated(deck.id);
+      onClose();
+    } catch (err: any) {
+      setImportError(err.message || 'ไม่สามารถอ่านไฟล์ได้');
+    } finally {
+      setIsImporting(false);
+      if (e.target) e.target.value = '';
+    }
   };
 
   return (
@@ -59,7 +125,11 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50"
-      onClick={onClose}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget && !isImporting) {
+          onClose();
+        }
+      }}
     >
       <motion.div
         initial={{ y: '100%', opacity: 0 }}
@@ -82,20 +152,23 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
         </div>
         <div className="p-7 overflow-y-auto no-scrollbar">
           <div className="flex items-center justify-between mb-6">
-            <h2 className={`text-xl font-bold bg-gradient-to-r ${dayColor.gradient} bg-clip-text text-transparent`}>สร้างชุดการ์ดใหม่</h2>
+            <h2 className={`text-xl font-bold bg-gradient-to-r ${dayColor.gradient} bg-clip-text text-transparent`}>
+              ชุดการ์ดใหม่
+            </h2>
             <button 
               onClick={onClose} 
+              disabled={isImporting}
               className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
                 isDark 
                   ? 'bg-slate-800 hover:bg-slate-700' 
                   : ''
-              }`}
+              } ${isImporting ? 'opacity-50 cursor-not-allowed' : ''}`}
               style={!isDark ? { 
                 backgroundColor: colors.bg, 
                 color: colors.text 
               } : { color: colors.text }}
-              onMouseEnter={(e) => !isDark && (e.currentTarget.style.backgroundColor = colors.bgHover)}
-              onMouseLeave={(e) => !isDark && (e.currentTarget.style.backgroundColor = colors.bg)}
+              onMouseEnter={(e) => !isDark && !isImporting && (e.currentTarget.style.backgroundColor = colors.bgHover)}
+              onMouseLeave={(e) => !isDark && !isImporting && (e.currentTarget.style.backgroundColor = colors.bg)}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -103,72 +176,206 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className={`block text-xs font-bold uppercase tracking-wider mb-2 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>ชื่อชุดการ์ด</label>
-              <input
-                autoFocus
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="เช่น ภาษาอังกฤษ, คณิตศาสตร์..."
-                className={`w-full px-4 py-4 border-2 rounded-2xl placeholder-slate-400 focus:outline-none transition-all text-sm font-medium ${
-                  isDark
-                    ? 'bg-slate-800 border-slate-700 text-slate-200'
-                    : 'bg-slate-50 border-slate-200 text-slate-800'
-                }`}
-                onFocus={(e) => {
-                  e.target.style.borderColor = colors.border;
-                  e.target.style.boxShadow = `0 0 0 4px ${colors.border}20`;
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = '';
-                  e.target.style.boxShadow = '';
-                }}
-                required
-              />
-            </div>
+          {/* Tabs */}
+          <div className="flex mb-6 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setMode('create')}
+              className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
+                mode === 'create' 
+                  ? 'bg-white dark:bg-slate-700 shadow text-slate-800 dark:text-white' 
+                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+              }`}
+            >
+              สร้างใหม่
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('import')}
+              className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
+                mode === 'import' 
+                  ? 'bg-white dark:bg-slate-700 shadow text-slate-800 dark:text-white' 
+                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+              }`}
+            >
+              นำเข้า (AI)
+            </button>
+          </div>
 
-            <div>
-              <label className={`block text-xs font-bold uppercase tracking-wider mb-3 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>เลือกสี</label>
-              <div className="grid grid-cols-4 gap-3">
-                {DECK_COLORS.map((c) => (
-                  <motion.button
-                    key={c}
-                    type="button"
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setColor(c)}
-                    className={`w-full aspect-square rounded-xl ${COLOR_MAP[c].bg} transition-all shadow-md flex items-center justify-center ${color === c ? `ring-4 ring-offset-2 ${COLOR_MAP[c].ring} ${isDark ? 'ring-offset-slate-900' : ''} scale-110` : 'opacity-70 hover:opacity-100'}`}
-                    title={COLOR_MAP[c].label}
-                  />
-                ))}
+          {mode === 'create' ? (
+            <form onSubmit={handleCreateSubmit} className="space-y-5">
+              <div>
+                <label className={`block text-xs font-bold uppercase tracking-wider mb-2 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>ชื่อชุดการ์ด</label>
+                <input
+                  autoFocus
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="เช่น ภาษาอังกฤษ, คณิตศาสตร์..."
+                  className={`w-full px-4 py-4 border-2 rounded-2xl placeholder-slate-400 focus:outline-none transition-all text-sm font-medium ${
+                    isDark
+                      ? 'bg-slate-800 border-slate-700 text-slate-200'
+                      : 'bg-slate-50 border-slate-200 text-slate-800'
+                  }`}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = colors.border;
+                    e.target.style.boxShadow = `0 0 0 4px ${colors.border}20`;
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '';
+                    e.target.style.boxShadow = '';
+                  }}
+                  required
+                />
               </div>
-            </div>
 
-            <div className="flex gap-3 pt-4">
-              <motion.button 
-                type="button" 
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }} 
-                onClick={onClose}
-                className={`flex-1 py-3.5 rounded-xl font-semibold text-sm transition-colors ${
-                  isDark 
-                    ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' 
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+              <div>
+                <label className={`block text-xs font-bold uppercase tracking-wider mb-3 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>เลือกสี</label>
+                <div className="grid grid-cols-4 gap-3">
+                  {DECK_COLORS.map((c) => (
+                    <motion.button
+                      key={c}
+                      type="button"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setColor(c)}
+                      className={`w-full aspect-square rounded-xl ${COLOR_MAP[c].bg} transition-all shadow-md flex items-center justify-center ${color === c ? `ring-4 ring-offset-2 ${COLOR_MAP[c].ring} ${isDark ? 'ring-offset-slate-900' : ''} scale-110` : 'opacity-70 hover:opacity-100'}`}
+                      title={COLOR_MAP[c].label}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <motion.button 
+                  type="button" 
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }} 
+                  onClick={onClose}
+                  className={`flex-1 py-3.5 rounded-xl font-semibold text-sm transition-colors ${
+                    isDark 
+                      ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' 
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                  }`}>
+                  ยกเลิก
+                </motion.button>
+                <motion.button 
+                  type="submit" 
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={`flex-1 py-3.5 bg-gradient-to-r ${dayColor.gradient} hover:opacity-90 text-white rounded-xl font-bold text-sm shadow-lg transition-all ${
+                    isDark ? 'shadow-purple-900/50' : dayColor.shadow
+                  }`}>
+                  สร้างชุดการ์ด
+                </motion.button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleImportSubmit} className="space-y-4">
+              <div className={`p-3 rounded-xl border ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-sky-50 border-sky-100'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <label className={`block text-xs font-bold uppercase tracking-wider ${isDark ? 'text-sky-400' : 'text-sky-600'}`}>
+                    1. คัดลอกคำสั่งไปให้ AI (ChatGPT, Gemini)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText('สร้าง Flashcard เรื่อง [ใส่หัวข้อที่ต้องการ] จำนวน [X] ข้อ (หากไม่ระบุจำนวน ให้สรุปเนื้อหาสำคัญมาให้ครบถ้วน) โดยให้ผลลัพธ์เป็น JSON format ตามโครงสร้างนี้เท่านั้น ห้ามมีคำอธิบายอื่น\n\nกฎสำคัญ:\n- ชื่อชุดการ์ด (name): ต้องสั้นกระชับ ไม่เกิน 40 ตัวอักษร ใช้คำย่อถ้าจำเป็น\n- หากมีสมการหรือตัวเลขคณิตศาสตร์ให้ใช้ LaTeX ครอบด้วย $...$ (เช่น $E=mc^2$) หรือ $$...$$\n\nรูปแบบ JSON:\n{"deck":{"name":"ชื่อชุดการ์ด","color":"violet"},"cards":[{"question":"คำถาม","answer":"คำตอบ"}]}');
+                      setIsCopied(true);
+                      setTimeout(() => setIsCopied(false), 2000);
+                    }}
+                    className={`text-[10px] font-bold px-3 py-1.5 rounded-lg border transition-all duration-300 ${
+                      isCopied 
+                        ? 'bg-green-500 border-green-500 text-white' 
+                        : isDark ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-sky-200 text-sky-700 hover:bg-sky-100'
+                    }`}
+                  >
+                    {isCopied ? '✓ คัดลอกแล้ว' : 'คัดลอก'}
+                  </button>
+                </div>
+                <div className={`text-[11px] p-3 rounded-lg break-all leading-relaxed border ${
+                  isDark ? 'bg-slate-900/80 border-slate-700/50 text-slate-400' : 'bg-white border-sky-100/50 text-slate-600'
                 }`}>
-                ยกเลิก
-              </motion.button>
-              <motion.button 
-                type="submit" 
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className={`flex-1 py-3.5 bg-gradient-to-r ${dayColor.gradient} hover:opacity-90 text-white rounded-xl font-bold text-sm shadow-lg transition-all ${
-                  isDark ? 'shadow-purple-900/50' : dayColor.shadow
-                }`}>
-                สร้างชุดการ์ด
-              </motion.button>
-            </div>
-          </form>
+                  <span className={isDark ? "text-emerald-400" : "text-emerald-600"}>สร้าง Flashcard เรื่อง [ใส่หัวข้อที่ต้องการ] จำนวน [X] ข้อ (หากไม่ระบุจำนวน ให้สรุปเนื้อหาสำคัญมาให้ครบถ้วน) โดยให้ผลลัพธ์เป็น JSON format ตามโครงสร้างนี้เท่านั้น ห้ามมีคำอธิบายอื่น</span>
+                  <br/><br/>
+                  <span className={isDark ? "text-sky-400" : "text-sky-600"}>กฎสำคัญ:</span>
+                  <br/>
+                  <span className={isDark ? "text-slate-300" : "text-slate-700"}>- ชื่อชุดการ์ด (name): ต้องสั้นกระชับ ไม่เกิน 40 ตัวอักษร ใช้คำย่อถ้าจำเป็น</span>
+                  <br/>
+                  <span className={isDark ? "text-slate-300" : "text-slate-700"}>- หากมีสมการหรือตัวเลขคณิตศาสตร์ให้ใช้ LaTeX ครอบด้วย $...$ (เช่น $E=mc^2$) หรือ $$...$$</span>
+                  <br/><br/>
+                  <span className={isDark ? "text-sky-400" : "text-sky-600"}>รูปแบบ JSON:</span>
+                  <br/>
+                  <span className={isDark ? "text-amber-400" : "text-amber-600"}>{`{"deck":{"name":"ชื่อชุดการ์ด","color":"violet"},"cards":[{"question":"คำถาม","answer":"คำตอบ"}]}`}</span>
+                </div>
+              </div>
+
+              <div>
+                <label className={`block text-xs font-bold uppercase tracking-wider mb-2 mt-4 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                  2. วางผลลัพธ์ (JSON) ที่ได้จาก AI
+                </label>
+                <textarea
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  placeholder={`{\n  "deck": { "name": "...", "color": "violet" },\n  "cards": [\n    { "question": "...", "answer": "..." }\n  ]\n}`}
+                  rows={6}
+                  className={`w-full px-4 py-3 border-2 rounded-xl placeholder-slate-400 focus:outline-none transition-all text-xs font-mono resize-none ${
+                    isDark
+                      ? 'bg-slate-800 border-slate-700 text-slate-200'
+                      : 'bg-slate-50 border-slate-200 text-slate-800'
+                  }`}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = colors.border;
+                    e.target.style.boxShadow = `0 0 0 4px ${colors.border}20`;
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '';
+                    e.target.style.boxShadow = '';
+                  }}
+                  required
+                />
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <span className={`text-[10px] font-medium ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>หรืออัปโหลดเป็นไฟล์ .json</span>
+                <label className={`cursor-pointer text-xs font-bold text-sky-500 hover:text-sky-600 transition-colors`}>
+                  เลือกไฟล์...
+                  <input type="file" accept=".json,.txt,.csv,.tsv" className="hidden" onChange={handleFileUpload} />
+                </label>
+              </div>
+
+              {importError && (
+                <div className="p-3 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs rounded-xl font-medium">
+                  {importError}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <motion.button 
+                  type="button" 
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }} 
+                  onClick={onClose}
+                  disabled={isImporting}
+                  className={`flex-1 py-3.5 rounded-xl font-semibold text-sm transition-colors ${
+                    isDark 
+                      ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' 
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                  } ${isImporting ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                  ยกเลิก
+                </motion.button>
+                <motion.button 
+                  type="submit" 
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  disabled={isImporting}
+                  className={`flex-1 py-3.5 bg-gradient-to-r ${dayColor.gradient} hover:opacity-90 text-white rounded-xl font-bold text-sm shadow-lg transition-all ${
+                    isDark ? 'shadow-purple-900/50' : dayColor.shadow
+                  } ${isImporting ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                  {isImporting ? 'กำลังนำเข้า...' : 'ตรวจสอบและสร้าง'}
+                </motion.button>
+              </div>
+            </form>
+          )}
         </div>
       </motion.div>
     </motion.div>
