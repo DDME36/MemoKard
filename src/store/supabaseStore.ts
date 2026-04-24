@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import type { Deck, Flashcard } from './store';
+import { createInitialFSRSState } from '../utils/fsrs';
 
 // ============================================
 // Supabase Operations
@@ -102,6 +103,7 @@ export const supabaseStore = {
       nextReviewDate: new Date(c.next_review),
       createdAt: new Date(c.created_at),
       lastReviewDate: new Date(c.updated_at),
+      fsrsState: createInitialFSRSState(),
     }));
   },
 
@@ -145,6 +147,7 @@ export const supabaseStore = {
       nextReviewDate: new Date(data.next_review),
       createdAt: new Date(data.created_at),
       lastReviewDate: new Date(data.updated_at),
+      fsrsState: createInitialFSRSState(),
     };
   },
 

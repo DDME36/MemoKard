@@ -58,7 +58,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
 
   const colors = getColorValues();
 
-  const handleCreateSubmit = async (e: React.FormEvent) => {
+  const handleCreateSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!name.trim()) return;
     const deck = await addDeck(name.trim(), color);
@@ -66,7 +66,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
     onClose();
   };
 
-  const handleImportSubmit = async (e: React.FormEvent) => {
+  const handleImportSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!importText.trim()) return;
     
@@ -122,6 +122,46 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
     }
   };
 
+  const AI_PROMPT = `สร้าง Flashcard เรื่อง [ใส่หัวข้อที่ต้องการ] จำนวน [ใส่ตัวเลข หรือเว้นว่างไว้] ข้อ
+
+*เงื่อนไขพิเศษเกี่ยวกับจำนวนการ์ด: หากฉันไม่ได้ระบุตัวเลข หรือพิมพ์ข้อความว่า "ทั้งหมด" ให้คุณวิเคราะห์และสกัดเนื้อหา สร้างการ์ดออกมาให้ครอบคลุมทฤษฎี นิยาม และสูตรสำคัญของเรื่องนี้มาให้ครบถ้วนที่สุดเท่าที่ทำได้
+
+ให้แสดงผลลัพธ์เป็น Code Block JSON format ตามโครงสร้างด้านล่างเท่านั้น ห้ามมีข้อความอื่นหรือคำเกริ่นนำใดๆ
+
+กฎการสร้างเนื้อหา (บังคับใช้เคร่งครัด):
+1. คำถาม (question): ต้องเป็น "ประโยคคำถาม" ที่อ่านแล้วรู้ทันทีว่าต้องการอะไร ห้ามพิมพ์มาแค่คำโดดๆ หรือคีย์เวิร์ด
+   (ตัวอย่าง: ❌ "Impedance" ✅ "จงอธิบายความหมายของ Impedance" หรือ ✅ "สูตรคำนวณหาค่า Impedance ในวงจร RLC คืออะไร?")
+2. คำตอบ (answer): ต้องให้คำตอบที่ตรงประเด็นและเข้าใจง่าย หากคำตอบมี "สูตรคณิตศาสตร์" ต้องอธิบายความหมายของตัวแปรแต่ละตัวสั้นๆ ต่อท้ายสูตรด้วยเสมอ
+3. ชื่อชุดการ์ด (name): สั้นกระชับ ไม่เกิน 40 ตัวอักษร สี (color) ให้เลือกจาก: violet, sky, teal, rose, amber, emerald, pink, indigo
+4. รูปแบบสมการคณิตศาสตร์และฟิสิกส์ (บังคับขั้นเด็ดขาด):
+   - ห้ามใช้ตัวอักษรพิเศษ (Unicode Math) เช่น ∑, ², ³, α, β, Δ เด็ดขาด!
+   - ห้ามจัดรูปแบบเศษส่วนแบบตัวหนังสือ เช่น 1/2 หรือ ½ ให้ใช้ \\frac{1}{2} เท่านั้น
+   - ต้องเขียนเป็น "Raw LaTeX Code" ล้วนๆ เท่านั้น เช่น \\sum, ^2, \\alpha, \\Delta
+   - ต้องครอบสมการและตัวแปรทุกตัวด้วยเครื่องหมาย $...$ (สำหรับบรรทัดเดียวกัน) หรือ $$...$$ (สำหรับแยกบรรทัด) เสมอ
+5. การเขียน Backslash ใน JSON (สำคัญมาก):
+   - เนื่องจากผลลัพธ์เป็น JSON string เครื่องหมาย Backslash ทุกตัวในคำสั่ง LaTeX จะต้องถูก "Double Escape" (พิมพ์เบิ้ล 2 ตัว) เสมอ เพื่อไม่ให้ JSON พัง
+   - ตัวอย่างที่ถูก ✅: "\\\\sum", "\\\\frac{1}{2}", "\\\\vec{F}", "\\\\pi"
+   - ตัวอย่างที่ผิด ❌: "\\sum", "\\frac{1}{2}", "\\vec{F}", "\\pi"
+6. การทำช่องว่างให้ทาย (Cloze Deletion): หากต้องการสร้างคำถามแบบ "เติมคำในช่องว่าง" ให้ใช้ {{...}} ครอบ "คำตอบ" ลงไปในฟิลด์ "question" ได้เลย (ห้ามใส่ใน answer)
+   - ⚠️ คำเตือนสุดสำคัญ: ประโยคที่อยู่นอก {{...}} ต้องมีบริบทชัดเจนเพียงพอให้ตอบได้ ห้ามซ่อนคีย์เวิร์ดที่เป็นประธานหรือบริบทหลักจนคำถามกำกวมเด็ดขาด!
+   - 📝 ช่อง "answer" ของโหมดนี้ ให้ใช้สำหรับอธิบายความรู้เพิ่มเติม (Extra Info) หรือขยายความเท่านั้น
+   - ✅ ตัวอย่างที่ถูก: {"question": "พื้นที่รับผิดชอบของ การไฟฟ้านครหลวง (MEA) ครอบคลุม 3 จังหวัด ได้แก่ {{กรุงเทพฯ นนทบุรี และสมุทรปราการ}}", "answer": "MEA ดูแลแค่ 3 จังหวัดนี้ ส่วนที่เหลือเป็นของ PEA"}
+   - ❌ ตัวอย่างที่ผิด (กำกวม): {"question": "พื้นที่รับผิดชอบของ {{MEA}} ครอบคลุมจังหวัดใดบ้าง?", "answer": "กรุงเทพ นนทบุรี สมุทรปราการ"} (ผิดเพราะผู้ใช้จะไม่รู้ว่าถามถึงหน่วยงานไหน)
+
+รูปแบบ JSON ที่ต้องการ:
+{
+  "deck": {
+    "name": "ชื่อชุดการ์ด",
+    "color": "violet"
+  },
+  "cards": [
+    {
+      "question": "คำถามที่ระบุความต้องการชัดเจน...",
+      "answer": "คำตอบที่ถูกต้อง พร้อมคำอธิบายตัวแปรหรือขยายความสั้นๆ..."
+    }
+  ]
+}`;
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -140,10 +180,10 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
         exit={{ y: '100%', opacity: 0 }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         onClick={(e) => e.stopPropagation()}
-        className={`backdrop-blur-xl rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-md border max-h-[90dvh] flex flex-col overflow-hidden ${
+        className={`rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-md border max-h-[90dvh] flex flex-col overflow-hidden ${
           isDark
-            ? 'bg-slate-900/98 border-slate-800'
-            : 'bg-white/95'
+            ? 'bg-slate-900 border-slate-800'
+            : 'bg-white'
         }`}
         style={!isDark ? { borderColor: colors.light } : undefined}
       >
@@ -281,7 +321,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
                   <button
                     type="button"
                     onClick={() => {
-                      navigator.clipboard.writeText('สร้าง Flashcard เรื่อง [ใส่หัวข้อที่ต้องการ] จำนวน [X] ข้อ (หากไม่ระบุจำนวน ให้สรุปเนื้อหาสำคัญมาให้ครบถ้วน) โดยให้ผลลัพธ์เป็น JSON format ตามโครงสร้างนี้เท่านั้น ห้ามมีคำอธิบายอื่น\n\nกฎสำคัญ:\n- ชื่อชุดการ์ด (name): ต้องสั้นกระชับ ไม่เกิน 40 ตัวอักษร ใช้คำย่อถ้าจำเป็น\n- หากมีสมการหรือตัวเลขคณิตศาสตร์ให้ใช้ LaTeX ครอบด้วย $...$ (เช่น $E=mc^2$) หรือ $$...$$\n\nรูปแบบ JSON:\n{"deck":{"name":"ชื่อชุดการ์ด","color":"violet"},"cards":[{"question":"คำถาม","answer":"คำตอบ"}]}');
+                      navigator.clipboard.writeText(AI_PROMPT);
                       setIsCopied(true);
                       setTimeout(() => setIsCopied(false), 2000);
                     }}
@@ -294,27 +334,69 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
                     {isCopied ? '✓ คัดลอกแล้ว' : 'คัดลอก'}
                   </button>
                 </div>
-                <div className={`text-[11px] p-3 rounded-lg break-all leading-relaxed border ${
+                <div className={`text-[11px] p-3 rounded-lg break-all leading-relaxed border max-h-40 overflow-y-auto ${
                   isDark ? 'bg-slate-900/80 border-slate-700/50 text-slate-400' : 'bg-white border-sky-100/50 text-slate-600'
                 }`}>
-                  <span className={isDark ? "text-emerald-400" : "text-emerald-600"}>สร้าง Flashcard เรื่อง [ใส่หัวข้อที่ต้องการ] จำนวน [X] ข้อ (หากไม่ระบุจำนวน ให้สรุปเนื้อหาสำคัญมาให้ครบถ้วน) โดยให้ผลลัพธ์เป็น JSON format ตามโครงสร้างนี้เท่านั้น ห้ามมีคำอธิบายอื่น</span>
+                  <span className={isDark ? "text-emerald-400" : "text-emerald-600"}>สร้าง Flashcard เรื่อง [ใส่หัวข้อที่ต้องการ] จำนวน [ใส่ตัวเลข หรือเว้นว่างไว้] ข้อ</span>
                   <br/><br/>
-                  <span className={isDark ? "text-sky-400" : "text-sky-600"}>กฎสำคัญ:</span>
+                  <span className={isDark ? "text-amber-400" : "text-amber-600"}>*เงื่อนไขพิเศษเกี่ยวกับจำนวนการ์ด: หากฉันไม่ได้ระบุตัวเลข หรือพิมพ์ข้อความว่า "ทั้งหมด" ให้คุณวิเคราะห์และสกัดเนื้อหา สร้างการ์ดออกมาให้ครอบคลุมทฤษฎี นิยาม และสูตรสำคัญของเรื่องนี้มาให้ครบถ้วนที่สุดเท่าที่ทำได้</span>
+                  <br/><br/>
+                  <span className={isDark ? "text-slate-300" : "text-slate-700"}>ให้แสดงผลลัพธ์เป็น JSON format ตามโครงสร้างด้านล่างเท่านั้น ห้ามมีข้อความอื่นหรือคำเกริ่นนำใดๆ</span>
+                  <br/><br/>
+                  <span className={isDark ? "text-sky-400" : "text-sky-600"}>กฎการสร้างเนื้อหา (บังคับใช้เคร่งครัด):</span>
                   <br/>
-                  <span className={isDark ? "text-slate-300" : "text-slate-700"}>- ชื่อชุดการ์ด (name): ต้องสั้นกระชับ ไม่เกิน 40 ตัวอักษร ใช้คำย่อถ้าจำเป็น</span>
+                  <span className={isDark ? "text-slate-300" : "text-slate-700"}>1. คำถาม (question): ต้องเป็น "ประโยคคำถาม" ที่อ่านแล้วรู้ทันทีว่าต้องการอะไร ห้ามพิมพ์มาแค่คำโดดๆ หรือคีย์เวิร์ด</span>
                   <br/>
-                  <span className={isDark ? "text-slate-300" : "text-slate-700"}>- หากมีสมการหรือตัวเลขคณิตศาสตร์ให้ใช้ LaTeX ครอบด้วย $...$ (เช่น $E=mc^2$) หรือ $$...$$</span>
+                  <span className={isDark ? "text-slate-300" : "text-slate-700"}>&nbsp;&nbsp;&nbsp;(ตัวอย่าง: ❌ "Impedance" ✅ "จงอธิบายความหมายของ Impedance")</span>
+                  <br/>
+                  <span className={isDark ? "text-slate-300" : "text-slate-700"}>2. คำตอบ (answer): ต้องให้คำตอบที่ตรงประเด็นและเข้าใจง่าย หากคำตอบมี "สูตรคณิตศาสตร์" ต้องอธิบายความหมายของตัวแปรแต่ละตัวสั้นๆ ต่อท้ายสูตรด้วยเสมอ</span>
+                  <br/>
+                  <span className={isDark ? "text-slate-300" : "text-slate-700"}>3. ชื่อชุดการ์ด (name): สั้นกระชับ ไม่เกิน 40 ตัวอักษร</span>
+                  <br/>
+                  <span className={isDark ? "text-slate-300" : "text-slate-700"}>4. รูปแบบสมการ: ห้ามใช้สัญลักษณ์พิเศษ ให้ใช้ Raw LaTeX เท่านั้น (เช่น \\sum, \\frac)</span>
+                  <br/>
+                  <span className={isDark ? "text-purple-400" : "text-purple-600"}>5. การเขียน Backslash: ต้องพิมพ์เบิ้ล 2 ตัวเสมอเพื่อไม่ให้ JSON พัง (เช่น \\\\sum)</span>
+                  <br/>
+                  <span className={isDark ? "text-purple-400" : "text-purple-600"}>6. Cloze Deletion: ใช้ {'{{'} ... {'}}'}  ครอบคำตอบสำคัญใน "question" เท่านั้น (ห้ามใส่ใน answer)</span>
+                  <br/>
+                  <span className={isDark ? "text-amber-500" : "text-amber-600"}>&nbsp;&nbsp;&nbsp;⚠️ ห้ามซ่อนคีย์เวิร์ด/ประธานหลักจนคำถามกำกวม! (เช่น ไม่รู้ว่าถามถึงบริษัทไหน)</span>
+                  <br/>
+                  <span className={isDark ? "text-slate-400" : "text-slate-500"}>&nbsp;&nbsp;&nbsp;✅ {`{"question": "พื้นที่ของ MEA คือ {{กทม. นนทบุรี}}", "answer": "..."}`}</span>
+                  <br/>
+                  <span className={isDark ? "text-rose-400" : "text-rose-600"}>&nbsp;&nbsp;&nbsp;❌ {`{"question": "พื้นที่ของ {{MEA}} คือจังหวัดใด?", "answer": "กทม. นนทบุรี"}`}</span>
                   <br/><br/>
                   <span className={isDark ? "text-sky-400" : "text-sky-600"}>รูปแบบ JSON:</span>
                   <br/>
-                  <span className={isDark ? "text-amber-400" : "text-amber-600"}>{`{"deck":{"name":"ชื่อชุดการ์ด","color":"violet"},"cards":[{"question":"คำถาม","answer":"คำตอบ"}]}`}</span>
+                  <span className={isDark ? "text-amber-400" : "text-amber-600"}>{`{"deck": {"name": "ชื่อชุดการ์ด","color": "violet"},"cards": [{"question": "คำถามที่ระบุความต้องการชัดเจน...","answer": "คำตอบที่ถูกต้อง พร้อมคำอธิบายตัวแปรหรือขยายความสั้นๆ..."}]}`}</span>
                 </div>
               </div>
 
               <div>
-                <label className={`block text-xs font-bold uppercase tracking-wider mb-2 mt-4 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                  2. วางผลลัพธ์ (JSON) ที่ได้จาก AI
-                </label>
+                <div className="flex items-center justify-between mb-2 mt-4">
+                  <label className={`block text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                    2. วางผลลัพธ์ (JSON) ที่ได้จาก AI
+                  </label>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const text = await navigator.clipboard.readText();
+                        setImportText(text);
+                      } catch (err) {
+                        console.error('Failed to read clipboard: ', err);
+                        alert('ไม่สามารถดึงข้อมูลจาก Clipboard ได้ โปรดกดวาง (Ctrl+V) ด้วยตนเอง');
+                      }
+                    }}
+                    className={`text-[10px] font-bold px-3 py-1.5 rounded-lg border transition-all duration-300 flex items-center gap-1.5 ${
+                      isDark ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    วาง (Paste)
+                  </button>
+                </div>
                 <textarea
                   value={importText}
                   onChange={(e) => setImportText(e.target.value)}

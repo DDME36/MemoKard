@@ -93,8 +93,14 @@ function AppContent() {
 
   const { streak, deleteDeck } = store;
 
+  const [isCramMode, setIsCramMode] = useState(false);
+
   const openDeck = (deck: Deck) => { setActiveDeck(deck); setView('deck'); };
-  const startReview = (deck?: Deck) => { setActiveDeck(deck ?? null); setView('review'); };
+  const startReview = (deck?: Deck, cramMode?: boolean) => { 
+    setActiveDeck(deck ?? null); 
+    setIsCramMode(cramMode ?? false);
+    setView('review'); 
+  };
   const goHome = () => { setView('home'); setActiveDeck(null); setActivePublicDeckId(null); };
   const goExplore = () => { setView('explore'); setActiveDeck(null); setActivePublicDeckId(null); };
   const goAdmin = () => { setView('admin'); setActiveDeck(null); setActivePublicDeckId(null); };
@@ -312,6 +318,7 @@ function AppContent() {
                 <ReviewSession
                   key="review"
                   activeDeck={activeDeck}
+                  isCramMode={isCramMode}
                   onGoHome={goHome}
                   dayColor={dayColor}
                   deckColor={deckColor}

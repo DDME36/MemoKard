@@ -114,9 +114,17 @@ export const importDeckFromText = (text: string, defaultName = 'Imported Deck', 
     }
 
     if (t.startsWith('{')) {
-      const data = JSON.parse(t);
-      if (validateDeckData(data)) {
-        return data;
+      try {
+        // Fix single backslashes (e.g. \frac, \sum) from LLM output before parsing
+        // Negative lookbehind (?<!\\) ensures we don't match already escaped backslashes.
+        // Negative lookahead (?!["\\/]) ensures we don't touch valid quote/slash escapes.
+        const fixedJson = t.replace(/(?<!\\)\\(?!["\\/])/g, '\\\\');
+        const data = JSON.parse(fixedJson);
+        if (validateDeckData(data)) {
+          return data;
+        }
+      } catch (err) {
+        // Ignore JSON error, fallback to text parsing
       }
     }
   } catch (e) {

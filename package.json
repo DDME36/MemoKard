@@ -23,6 +23,7 @@
     "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
+    "ts-fsrs": "5.3.2",
     "vite-plugin-pwa": "^0.21.0",
     "workbox-window": "^7.4.0",
     "zustand": "^5.0.12"

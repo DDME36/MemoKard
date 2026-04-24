@@ -8,12 +8,23 @@ import { haptics, sounds } from '../utils/haptics';
 
 interface ReviewSessionProps {
   activeDeck: Deck | null;
+  isCramMode?: boolean;
   onGoHome: () => void;
   dayColor: { gradient: string; shadow: string };
   deckColor?: { gradient: string; shadow: string };
 }
 
-export default function ReviewSession({ activeDeck, onGoHome, dayColor, deckColor }: ReviewSessionProps) {
+// Utility function to shuffle an array (Fisher-Yates)
+const shuffleArray = <T,>(array: T[]): T[] => {
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+  }
+  return newArray;
+};
+
+export default function ReviewSession({ activeDeck, isCramMode = false, onGoHome, dayColor, deckColor }: ReviewSessionProps) {
   const store = useFlashcardStore();
   const { getCardsByDeck, getDueCards, reviewCard } = store;
   const { isDark } = useTheme();
@@ -22,16 +33,41 @@ export default function ReviewSession({ activeDeck, onGoHome, dayColor, deckColo
   const [showCelebration, setShowCelebration] = useState(false);
 
   // Freeze the review list when session starts so it doesn't shrink dynamically
-  const [reviewCards, setReviewCards] = useState(() => 
-    activeDeck ? getCardsByDeck(activeDeck.id) : getDueCards()
-  );
+  const [reviewCards, setReviewCards] = useState(() => {
+    let initialCards = [];
+    if (activeDeck) {
+      const allCards = getCardsByDeck(activeDeck.id);
+      // ถ้าเป็น Cram Mode ให้ดึงการ์ดทั้งหมด ไม่กรองตามเวลา
+      if (isCramMode) {
+        initialCards = allCards;
+      } else {
+        // ถ้าไม่ใช่ Cram Mode ให้กรองเฉพาะการ์ดที่ถึงเวลาทบทวน
+        initialCards = allCards.filter(card => new Date(card.nextReviewDate) <= new Date());
+      }
+    } else {
+      initialCards = getDueCards();
+    }
+    // สุ่มลำดับการ์ดเพื่อให้ไม่ต้องจำตามลำดับ
+    return shuffleArray(initialCards);
+  });
 
   // Reset when switching decks
   useEffect(() => {
-    setReviewCards(activeDeck ? getCardsByDeck(activeDeck.id) : getDueCards());
+    let newCards = [];
+    if (activeDeck) {
+      const allCards = getCardsByDeck(activeDeck.id);
+      if (isCramMode) {
+        newCards = allCards;
+      } else {
+        newCards = allCards.filter(card => new Date(card.nextReviewDate) <= new Date());
+      }
+    } else {
+      newCards = getDueCards();
+    }
+    setReviewCards(shuffleArray(newCards));
     setCurrentCardIndex(0);
     setShowCelebration(false);
-  }, [activeDeck?.id]);
+  }, [activeDeck?.id, isCramMode]);
 
   const activeColor = (activeDeck && deckColor) ? deckColor : dayColor;
   const currentCard = reviewCards[currentCardIndex];
@@ -42,7 +78,7 @@ export default function ReviewSession({ activeDeck, onGoHome, dayColor, deckColo
   const handleReview = async (quality: number) => {
     if (!currentCard) return;
     
-    await reviewCard(currentCard.id, quality);
+    await reviewCard(currentCard.id, quality, isCramMode);
     
     // Check if this was the last card
     if (currentCardIndex >= reviewCards.length - 1) {

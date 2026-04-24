@@ -103,6 +103,9 @@ export default function EditCard({ card, onClose }: EditCardProps) {
                 rows={3}
                 required
               />
+              <p className={`text-xs mt-1 font-medium ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                💡 พิมพ์ {'{{ข้อความ}}'} เพื่อทำช่องว่างให้ทาย (Cloze Deletion)
+              </p>
               <div className="flex items-center gap-2 mt-2">
                 <input ref={questionImageRef} type="file" accept="image/*"
                   onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0], 'question')}

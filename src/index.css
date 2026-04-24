@@ -125,6 +125,15 @@
     -webkit-backdrop-filter: blur(10px);
   }
   
+  /* Bento Grid Glassmorphism Panel */
+  .glass-panel {
+    @apply bg-white/10 backdrop-blur-lg border border-white/20 rounded-3xl shadow-xl overflow-hidden;
+  }
+  
+  .glass-panel.dark {
+    @apply bg-slate-800/50 border-slate-700/50;
+  }
+  
   /* Shimmer effect */
   @keyframes shimmer {
     0% {

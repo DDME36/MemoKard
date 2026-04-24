@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import MathText from './MathText';
 import type { Flashcard } from '../store/store';
 import { useTheme } from '../contexts/ThemeContext';
@@ -15,6 +15,24 @@ export default function ReviewCard({ card, onReview, dayColor }: ReviewCardProps
   const [isFlipped, setIsFlipped] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
   const { isDark } = useTheme();
+
+  // Motion values for swipe gestures
+  const x = useMotionValue(0);
+  const rotate = useTransform(x, [-200, 200], [-10, 10]);
+  
+  // Opacity indicators for swipe
+  const swipeRightOpacity = useTransform(x, [20, 100], [0, 1]);
+  const swipeLeftOpacity = useTransform(x, [-20, -100], [0, 1]);
+
+  // Cloze Deletion: แปลง {{text}} เป็น [...] สำหรับหน้าคำถาม
+  const renderClozeText = (text: string, showAnswer: boolean) => {
+    if (showAnswer) {
+      // หน้าคำตอบ: ลบ {{ }} ออก แต่แสดงข้อความข้างใน
+      return text.replace(/\{\{(.*?)\}\}/g, '$1');
+    }
+    // หน้าคำถาม: แทนที่ {{...}} ด้วย [...]
+    return text.replace(/\{\{(.*?)\}\}/g, '[...]');
+  };
 
   const handleFlip = () => {
     if (!isFlipped) {
@@ -32,6 +50,7 @@ export default function ReviewCard({ card, onReview, dayColor }: ReviewCardProps
       await onReview(quality);
       setIsFlipped(false);
       setIsExiting(false);
+      x.set(0); // Reset drag position
     }, 300);
   };
 
@@ -43,10 +62,11 @@ export default function ReviewCard({ card, onReview, dayColor }: ReviewCardProps
         e.preventDefault();
         handleFlip();
       } else if (isFlipped && !isExiting) {
-        if (e.key === '1') { e.preventDefault(); handleReview(0); }
-        else if (e.key === '2') { e.preventDefault(); handleReview(3); }
-        else if (e.key === '3') { e.preventDefault(); handleReview(5); }
-        else if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); handleReview(3); }
+        if (e.key === '1') { e.preventDefault(); handleReview(1); } // Again
+        else if (e.key === '2') { e.preventDefault(); handleReview(2); } // Hard
+        else if (e.key === '3') { e.preventDefault(); handleReview(3); } // Good
+        else if (e.key === '4') { e.preventDefault(); handleReview(4); } // Easy
+        else if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); handleReview(3); } // Default: Good
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -58,9 +78,12 @@ export default function ReviewCard({ card, onReview, dayColor }: ReviewCardProps
     const offset = info.offset.x;
     const velocity = info.velocity.x;
     if (offset > 100 || velocity > 500) {
-      handleReview(5); // Easy
+      handleReview(4); // Easy
     } else if (offset < -100 || velocity < -500) {
-      handleReview(0); // Again
+      handleReview(1); // Again
+    } else {
+      // Return to center if not dragged far enough
+      x.set(0);
     }
   };
 
@@ -109,7 +132,30 @@ export default function ReviewCard({ card, onReview, dayColor }: ReviewCardProps
               dragConstraints={{ left: 0, right: 0 }}
               dragElastic={0.7}
               onDragEnd={handleDragEnd}
+              style={{ x, rotate }}
             >
+              {/* Drag Indicators */}
+              {isFlipped && (
+                <>
+                  <motion.div 
+                    style={{ opacity: swipeRightOpacity }}
+                    className="absolute inset-0 bg-green-500/20 rounded-3xl z-50 flex items-center justify-center pointer-events-none"
+                  >
+                    <div className="bg-green-500 text-white font-bold px-6 py-3 rounded-full text-xl shadow-lg border-4 border-green-400 rotate-12">
+                      ง่าย (Easy)
+                    </div>
+                  </motion.div>
+                  <motion.div 
+                    style={{ opacity: swipeLeftOpacity }}
+                    className="absolute inset-0 bg-rose-500/20 rounded-3xl z-50 flex items-center justify-center pointer-events-none"
+                  >
+                    <div className="bg-rose-500 text-white font-bold px-6 py-3 rounded-full text-xl shadow-lg border-4 border-rose-400 -rotate-12">
+                      ทำใหม่ (Again)
+                    </div>
+                  </motion.div>
+                </>
+              )}
+
               <motion.div
                 className="relative w-full h-full"
                 animate={{ rotateY: isFlipped ? 180 : 0 }}
@@ -133,7 +179,7 @@ export default function ReviewCard({ card, onReview, dayColor }: ReviewCardProps
                     </span>
                     <div className="text-xl md:text-2xl font-bold text-center leading-relaxed relative z-10 w-full flex flex-col items-center max-h-full overflow-y-auto overflow-x-hidden no-scrollbar pb-6 pt-4">
                       <MathText components={MarkdownComponents(false)}>
-                        {card.question}
+                        {renderClozeText(card.question, false)}
                       </MathText>
                       {card.questionImage && (
                         <img src={card.questionImage} alt="Question" className="mt-4 rounded-xl max-h-48 object-contain" />
@@ -163,8 +209,17 @@ export default function ReviewCard({ card, onReview, dayColor }: ReviewCardProps
                       คำตอบ
                     </span>
                     <div className="text-xl md:text-2xl font-bold text-center leading-relaxed relative z-10 w-full flex flex-col items-center max-h-full overflow-y-auto overflow-x-hidden no-scrollbar pt-4 pb-4">
+                      {/* Show the revealed question text as context on the back */}
+                      {card.question.includes('{{') && (
+                        <div className="mb-4 w-full text-left text-sm md:text-base opacity-80 border-b border-white/20 pb-4">
+                          <MathText components={MarkdownComponents(true)}>
+                            {renderClozeText(card.question, true)}
+                          </MathText>
+                        </div>
+                      )}
+                      {/* Show the actual answer */}
                       <MathText components={MarkdownComponents(true)}>
-                        {card.answer}
+                        {renderClozeText(card.answer, true)}
                       </MathText>
                       {card.answerImage && (
                         <img src={card.answerImage} alt="Answer" className="mt-4 rounded-xl max-h-48 object-contain" />
@@ -175,7 +230,7 @@ export default function ReviewCard({ card, onReview, dayColor }: ReviewCardProps
               </motion.div>
             </motion.div>
 
-            {/* Review Buttons */}
+            {/* Review Buttons - 2x2 Grid */}
             <AnimatePresence>
               {isFlipped && (
                 <motion.div
@@ -183,56 +238,66 @@ export default function ReviewCard({ card, onReview, dayColor }: ReviewCardProps
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
                   transition={{ delay: 0.25 }}
-                  className="mt-6 space-y-3"
+                  className="mt-6"
                 >
                   <p className={`text-center text-xs font-bold mb-4 uppercase tracking-wider ${
                     isDark ? 'text-slate-400' : 'text-slate-600'
                   }`}>คุณจำได้แค่ไหน?</p>
 
-                  {/* Easy */}
-                  <motion.button
-                    whileHover={{ scale: 1.03, y: -2 }}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => handleReview(5)}
-                    className="w-full py-4 px-6 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white rounded-2xl font-bold text-base flex items-center justify-between transition-all duration-300">
-                    <span>นึกออกทันที</span>
-                    <div className="flex items-center gap-2">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span className="text-sm font-semibold">ง่าย</span>
-                    </div>
-                  </motion.button>
-
-                  {/* Good */}
-                  <motion.button
-                    whileHover={{ scale: 1.03, y: -2 }}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => handleReview(3)}
-                    className="w-full py-4 px-6 bg-gradient-to-r from-sky-500 to-blue-500 hover:from-sky-600 hover:to-blue-600 text-white rounded-2xl font-bold text-base flex items-center justify-between transition-all duration-300">
-                    <span>นึกออกช้า</span>
-                    <div className="flex items-center gap-2">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span className="text-sm font-semibold">พอได้</span>
-                    </div>
-                  </motion.button>
-
-                  {/* Again */}
-                  <motion.button
-                    whileHover={{ scale: 1.03, y: -2 }}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => handleReview(0)}
-                    className="w-full py-4 px-6 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white rounded-2xl font-bold text-base flex items-center justify-between transition-all duration-300">
-                    <span>จำไม่ได้</span>
-                    <div className="flex items-center gap-2">
+                  {/* Grid 2x2 Layout */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Again - ทำใหม่ */}
+                    <motion.button
+                      whileHover={{ scale: 1.03, y: -2 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => handleReview(1)}
+                      className="py-4 px-4 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white rounded-2xl font-bold text-sm flex flex-col items-center justify-center gap-2 transition-all duration-300">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
-                      <span className="text-sm font-semibold">ทำใหม่</span>
-                    </div>
-                  </motion.button>
+                      <span>ทำใหม่</span>
+                      <span className="text-xs opacity-80">จำไม่ได้</span>
+                    </motion.button>
+
+                    {/* Hard - ยาก */}
+                    <motion.button
+                      whileHover={{ scale: 1.03, y: -2 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => handleReview(2)}
+                      className="py-4 px-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-2xl font-bold text-sm flex flex-col items-center justify-center gap-2 transition-all duration-300">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <span>ยาก</span>
+                      <span className="text-xs opacity-80">นึกนาน</span>
+                    </motion.button>
+
+                    {/* Good - พอได้ */}
+                    <motion.button
+                      whileHover={{ scale: 1.03, y: -2 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => handleReview(3)}
+                      className="py-4 px-4 bg-gradient-to-r from-sky-500 to-blue-500 hover:from-sky-600 hover:to-blue-600 text-white rounded-2xl font-bold text-sm flex flex-col items-center justify-center gap-2 transition-all duration-300">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span>พอได้</span>
+                      <span className="text-xs opacity-80">ปกติ</span>
+                    </motion.button>
+
+                    {/* Easy - ง่าย */}
+                    <motion.button
+                      whileHover={{ scale: 1.03, y: -2 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => handleReview(4)}
+                      className="py-4 px-4 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white rounded-2xl font-bold text-sm flex flex-col items-center justify-center gap-2 transition-all duration-300">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span>ง่าย</span>
+                      <span className="text-xs opacity-80">ทันที</span>
+                    </motion.button>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>

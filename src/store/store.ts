@@ -1,17 +1,16 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { calculateSM2, initializeSM2, isCardDue } from '../utils/sm2';
+import { calculateFSRS, createInitialFSRSState, type FSRSState } from '../utils/fsrs';
 import { supabaseStore } from './supabaseStore';
 
 export interface Deck {
   id: string;
   name: string;
-  color: string; // tailwind color key e.g. 'violet', 'sky', 'teal'
+  color: string;
   createdAt: Date;
-  // Sync model fields
-  linkedPublicDeckId?: string | null; // Reference to public_decks.id
-  isSynced?: boolean; // True if synced with public deck (read-only)
-  originalCreatorUsername?: string | null; // Original creator for synced decks
+  linkedPublicDeckId?: string | null;
+  isSynced?: boolean;
+  originalCreatorUsername?: string | null;
 }
 
 export interface Flashcard {
@@ -19,14 +18,17 @@ export interface Flashcard {
   deckId: string;
   question: string;
   answer: string;
-  questionImage?: string; // base64 encoded image
-  answerImage?: string; // base64 encoded image
+  questionImage?: string;
+  answerImage?: string;
+  // Keep these for Supabase compatibility (mapped from FSRS values)
   interval: number;
   repetition: number;
   easeFactor: number;
   nextReviewDate: Date;
   createdAt: Date;
   lastReviewDate: Date;
+  // FSRS state (source of truth for scheduling)
+  fsrsState: FSRSState;
 }
 
 export const DECK_COLORS = ['violet', 'sky', 'teal', 'rose', 'amber', 'emerald', 'pink', 'indigo'] as const;
@@ -37,12 +39,12 @@ interface FlashcardStore {
   decks: Deck[];
   streak: number;
   lastStudyDate: string | null;
-  reviewHistory: Record<string, number>; // { "2026-04-21": 5 } // ISO date string YYYY-MM-DD
-  
+  reviewHistory: Record<string, number>;
+
   // Auth state
   userId: string | null;
   isDemo: boolean;
-  
+
   // Sync actions
   setAuthState: (userId: string | null, isDemo: boolean) => void;
   syncFromSupabase: () => Promise<void>;
@@ -56,7 +58,7 @@ interface FlashcardStore {
   addCard: (deckId: string, question: string, answer: string, questionImage?: string, answerImage?: string) => Promise<void>;
   editCard: (id: string, question: string, answer: string, questionImage?: string, answerImage?: string) => Promise<void>;
   deleteCard: (id: string) => Promise<void>;
-  reviewCard: (id: string, quality: number) => Promise<void>;
+  reviewCard: (id: string, quality: number, isCramMode?: boolean) => Promise<void>;
 
   // Getters
   getDueCards: (deckId?: string) => Flashcard[];
@@ -83,7 +85,6 @@ export const useFlashcardStore = create<FlashcardStore>()(
       // ── Auth State Management ──
       setAuthState: (userId, isDemo) => {
         set({ userId, isDemo });
-        // Auto-sync when user logs in
         if (userId && !isDemo) {
           get().syncFromSupabase();
         }
@@ -94,16 +95,21 @@ export const useFlashcardStore = create<FlashcardStore>()(
         if (isDemo || !userId) return;
 
         try {
-          // Fetch all data from Supabase
           const [decks, cards, stats] = await Promise.all([
             supabaseStore.fetchDecks(userId),
             supabaseStore.fetchCards(userId),
             supabaseStore.fetchUserStats(userId),
           ]);
 
+          // Ensure every card has fsrsState (migrate old cards that don't have it)
+          const migratedCards = cards.map((c) => ({
+            ...c,
+            fsrsState: (c as any).fsrsState ?? createInitialFSRSState(),
+          }));
+
           set({
             decks,
-            cards,
+            cards: migratedCards,
             streak: stats.streak,
             lastStudyDate: stats.lastStudyDate,
           });
@@ -127,8 +133,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
       // ── Deck Actions ──
       addDeck: async (name, color) => {
         const { userId, isDemo } = get();
-        
-        // Create deck locally first
+
         const newDeck: Deck = {
           id: crypto.randomUUID(),
           name,
@@ -138,11 +143,9 @@ export const useFlashcardStore = create<FlashcardStore>()(
 
         set((state) => ({ decks: [...state.decks, newDeck] }));
 
-        // Sync to Supabase if authenticated
         if (!isDemo && userId) {
           const supabaseDeck = await supabaseStore.createDeck(userId, name, color);
           if (supabaseDeck) {
-            // Update with Supabase-generated ID
             set((state) => ({
               decks: state.decks.map((d) => d.id === newDeck.id ? supabaseDeck : d),
             }));
@@ -156,13 +159,11 @@ export const useFlashcardStore = create<FlashcardStore>()(
       deleteDeck: async (id) => {
         const { userId, isDemo } = get();
 
-        // Delete locally
         set((state) => ({
           decks: state.decks.filter((d) => d.id !== id),
           cards: state.cards.filter((c) => c.deckId !== id),
         }));
 
-        // Sync to Supabase if authenticated
         if (!isDemo && userId) {
           await supabaseStore.deleteDeck(id);
         }
@@ -171,10 +172,9 @@ export const useFlashcardStore = create<FlashcardStore>()(
       // ── Card Actions ──
       addCard: async (deckId, question, answer, questionImage, answerImage) => {
         const { userId, isDemo } = get();
-        const sm2Data = initializeSM2();
+        const fsrsState = createInitialFSRSState();
         const now = new Date();
 
-        // Create card locally first
         const newCard: Flashcard = {
           id: crypto.randomUUID(),
           deckId,
@@ -182,29 +182,30 @@ export const useFlashcardStore = create<FlashcardStore>()(
           answer,
           questionImage,
           answerImage,
-          interval: sm2Data.interval,
-          repetition: sm2Data.repetition,
-          easeFactor: sm2Data.easeFactor,
+          interval: 0,
+          repetition: 0,
+          easeFactor: 2.5,
           nextReviewDate: now,
           createdAt: now,
           lastReviewDate: now,
+          fsrsState,
         };
 
         set((state) => ({ cards: [...state.cards, newCard] }));
 
-        // Sync to Supabase if authenticated
         if (!isDemo && userId) {
           const supabaseCard = await supabaseStore.createCard(
             userId,
             deckId,
             question,
             answer,
-            sm2Data
+            { interval: 0, repetition: 0, easeFactor: 2.5 }
           );
           if (supabaseCard) {
-            // Update with Supabase-generated ID
             set((state) => ({
-              cards: state.cards.map((c) => c.id === newCard.id ? supabaseCard : c),
+              cards: state.cards.map((c) =>
+                c.id === newCard.id ? { ...supabaseCard, fsrsState } : c
+              ),
             }));
           }
         }
@@ -213,12 +214,12 @@ export const useFlashcardStore = create<FlashcardStore>()(
       editCard: async (id, question, answer, questionImage, answerImage) => {
         const { userId, isDemo } = get();
 
-        // Update locally
         set((state) => ({
-          cards: state.cards.map((c) => c.id === id ? { ...c, question, answer, questionImage, answerImage } : c),
+          cards: state.cards.map((c) =>
+            c.id === id ? { ...c, question, answer, questionImage, answerImage } : c
+          ),
         }));
 
-        // Sync to Supabase if authenticated
         if (!isDemo && userId) {
           await supabaseStore.updateCard(id, { question, answer });
         }
@@ -227,38 +228,47 @@ export const useFlashcardStore = create<FlashcardStore>()(
       deleteCard: async (id) => {
         const { userId, isDemo } = get();
 
-        // Delete locally
         set((state) => ({ cards: state.cards.filter((c) => c.id !== id) }));
 
-        // Sync to Supabase if authenticated
         if (!isDemo && userId) {
           await supabaseStore.deleteCard(id);
         }
       },
 
-      reviewCard: async (id, quality) => {
+      reviewCard: async (id, quality, isCramMode) => {
         const { userId, isDemo } = get();
 
-        // Update locally
         set((state) => {
           const card = state.cards.find((c) => c.id === id);
           if (!card) return state;
-          
-          const sm2Result = calculateSM2(quality, {
-            interval: card.interval,
-            repetition: card.repetition,
-            easeFactor: card.easeFactor,
-            lastReviewDate: card.lastReviewDate,
-          });
 
-          // Update review history
           const today = new Date().toISOString().slice(0, 10);
           const currentCount = state.reviewHistory[today] ?? 0;
+
+          if (isCramMode) {
+            // Skip FSRS state update in Cram Mode, only update history
+            return {
+              reviewHistory: {
+                ...state.reviewHistory,
+                [today]: currentCount + 1,
+              },
+            };
+          }
+
+          const prevFsrs = card.fsrsState ?? createInitialFSRSState();
+          const { newState, nextReviewDate, interval } = calculateFSRS(prevFsrs, quality);
 
           return {
             cards: state.cards.map((c) =>
               c.id === id
-                ? { ...c, ...sm2Result, lastReviewDate: new Date() }
+                ? {
+                    ...c,
+                    interval,
+                    repetition: c.repetition + 1,
+                    nextReviewDate,
+                    lastReviewDate: new Date(),
+                    fsrsState: newState,
+                  }
                 : c
             ),
             reviewHistory: {
@@ -268,8 +278,8 @@ export const useFlashcardStore = create<FlashcardStore>()(
           };
         });
 
-        // Sync to Supabase if authenticated
-        if (!isDemo && userId) {
+        // Skip Supabase sync for Cram Mode because card state wasn't changed
+        if (!isCramMode && !isDemo && userId) {
           const card = get().cards.find((c) => c.id === id);
           if (card) {
             await Promise.all([
@@ -289,8 +299,9 @@ export const useFlashcardStore = create<FlashcardStore>()(
 
       // ── Getters ──
       getDueCards: (deckId) => {
+        const now = new Date();
         const cards = get().cards.filter((c) => {
-          const due = isCardDue(new Date(c.nextReviewDate));
+          const due = new Date(c.nextReviewDate) <= now;
           return deckId ? due && c.deckId === deckId : due;
         });
         return cards.sort(
@@ -298,9 +309,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
         );
       },
 
-      getCardsByDeck: (deckId) => {
-        return get().cards.filter((c) => c.deckId === deckId);
-      },
+      getCardsByDeck: (deckId) => get().cards.filter((c) => c.deckId === deckId),
 
       getDeckById: (id) => get().decks.find((d) => d.id === id),
 
@@ -315,18 +324,14 @@ export const useFlashcardStore = create<FlashcardStore>()(
       updateStreak: async () => {
         const { userId, isDemo, lastStudyDate, streak } = get();
         const today = new Date().toISOString().slice(0, 10);
-        
+
         if (lastStudyDate === today) return;
 
         const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
         const newStreak = lastStudyDate === yesterday ? streak + 1 : 1;
 
-        set({
-          streak: newStreak,
-          lastStudyDate: today,
-        });
+        set({ streak: newStreak, lastStudyDate: today });
 
-        // Sync to Supabase if authenticated
         if (!isDemo && userId) {
           await supabaseStore.updateUserStats(userId, newStreak, today);
         }
@@ -362,6 +367,8 @@ export const useFlashcardStore = create<FlashcardStore>()(
           nextReviewDate: new Date(c.nextReviewDate),
           createdAt: new Date(c.createdAt),
           lastReviewDate: new Date(c.lastReviewDate),
+          // Migrate old cards without fsrsState
+          fsrsState: c.fsrsState ?? createInitialFSRSState(),
         }));
       },
     }
