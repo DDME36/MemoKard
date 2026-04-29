@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useFlashcardStore, type Flashcard } from '../store/store';
 import { compressImage } from '../utils/imageCompression';
 import { useTheme } from '../contexts/ThemeContext';
+import { useToast } from '../contexts/ToastContext';
 
 interface EditCardProps {
   card: Flashcard;
@@ -16,8 +17,8 @@ export default function EditCard({ card, onClose }: EditCardProps) {
   const [answerImage, setAnswerImage] = useState<string | undefined>(card.answerImage);
   const questionImageRef = useRef<HTMLInputElement>(null);
   const answerImageRef = useRef<HTMLInputElement>(null);
-  const { editCard, deleteCard } = useFlashcardStore();
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const { editCard, deleteCard, undoDeleteCard } = useFlashcardStore();
+  const { showUndoToast } = useToast();
   const { isDark } = useTheme();
 
   const handleImageUpload = async (file: File, type: 'question' | 'answer') => {
@@ -39,12 +40,9 @@ export default function EditCard({ card, onClose }: EditCardProps) {
   };
 
   const handleDelete = async () => {
-    if (confirmDelete) {
-      await deleteCard(card.id);
-      onClose();
-    } else {
-      setConfirmDelete(true);
-    }
+    await deleteCard(card.id); // Soft delete
+    onClose();
+    showUndoToast('ลบการ์ดแล้ว', () => undoDeleteCard(card.id));
   };
 
   return (
@@ -170,12 +168,10 @@ export default function EditCard({ card, onClose }: EditCardProps) {
                 whileTap={{ scale: 0.95 }}
                 onClick={handleDelete}
                 className={`py-3.5 px-5 rounded-xl font-bold text-sm transition-all ${
-                  confirmDelete
-                    ? 'bg-gradient-to-r from-rose-500 to-red-500 text-white'
-                    : isDark ? 'bg-rose-900/30 text-rose-400 hover:bg-rose-900/50' : 'bg-rose-50 text-rose-600 hover:bg-rose-100'
+                  isDark ? 'bg-rose-900/30 text-rose-400 hover:bg-rose-900/50' : 'bg-rose-50 text-rose-600 hover:bg-rose-100'
                 }`}
               >
-                {confirmDelete ? 'ยืนยันลบ?' : 'ลบ'}
+                ลบ
               </motion.button>
               <motion.button
                 type="button"

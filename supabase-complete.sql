@@ -1,9 +1,8 @@
 -- ============================================
 -- MemoKard - Complete Supabase Database Schema
--- Version: 3.0.0 (Merged Complete)
+-- Version: 2.1.0
 -- ============================================
 -- รันไฟล์นี้ใน Supabase SQL Editor เพื่อสร้าง database ทั้งหมด
--- รวม: Core Tables + Community Sharing + Achievements System
 -- ============================================
 
 -- Enable UUID extension
@@ -129,29 +128,6 @@ CREATE TABLE IF NOT EXISTS public.deck_imports (
 );
 
 -- ============================================
--- ACHIEVEMENTS SYSTEM
--- ============================================
-
--- User Achievements Table
-CREATE TABLE IF NOT EXISTS public.user_achievements (
-  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  
-  -- Achievement Progress
-  unlocked_achievements TEXT[] DEFAULT '{}',
-  
-  -- Stats for Achievement Calculation
-  perfect_reviews INTEGER NOT NULL DEFAULT 0,
-  total_study_time INTEGER NOT NULL DEFAULT 0, -- in minutes
-  decks_shared INTEGER NOT NULL DEFAULT 0,
-  decks_imported INTEGER NOT NULL DEFAULT 0,
-  max_streak INTEGER NOT NULL DEFAULT 0,
-  
-  -- Metadata
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ============================================
 -- INDEXES
 -- ============================================
 
@@ -178,10 +154,6 @@ CREATE INDEX IF NOT EXISTS idx_deck_reports_public_deck_id ON public.deck_report
 CREATE INDEX IF NOT EXISTS idx_deck_imports_public_deck_id ON public.deck_imports(public_deck_id);
 CREATE INDEX IF NOT EXISTS idx_deck_imports_user_id ON public.deck_imports(user_id);
 
--- Achievements indexes
-CREATE INDEX IF NOT EXISTS idx_user_achievements_user_id ON public.user_achievements(user_id);
-CREATE INDEX IF NOT EXISTS idx_user_achievements_unlocked ON public.user_achievements USING GIN(unlocked_achievements);
-
 -- ============================================
 -- ROW LEVEL SECURITY (RLS)
 -- ============================================
@@ -197,7 +169,6 @@ ALTER TABLE public.public_deck_cards ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.deck_ratings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.deck_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.deck_imports ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_achievements ENABLE ROW LEVEL SECURITY;
 
 -- Core tables policies
 CREATE POLICY "Users can view their own decks" ON public.decks FOR SELECT USING (auth.uid() = user_id);
@@ -245,142 +216,69 @@ CREATE POLICY "Authenticated users can insert their own reports" ON public.deck_
 CREATE POLICY "Users can view their own imports" ON public.deck_imports FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Authenticated users can insert their own imports" ON public.deck_imports FOR INSERT WITH CHECK (auth.uid() = user_id);
 
--- Achievements policies
-CREATE POLICY "Users can view their own achievements" ON public.user_achievements FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert their own achievements" ON public.user_achievements FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update their own achievements" ON public.user_achievements FOR UPDATE USING (auth.uid() = user_id);
-
 -- ============================================
 -- FUNCTIONS & TRIGGERS
 -- ============================================
 
 -- Update updated_at timestamp
-CREATE OR REPLACE FUNCTION update_updated_at_column() RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION update_updated_at_column() RETURNS TRIGGER AS $
 BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$ LANGUAGE plpgsql;
 
 CREATE TRIGGER update_decks_updated_at BEFORE UPDATE ON public.decks FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_cards_updated_at BEFORE UPDATE ON public.cards FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_user_stats_updated_at BEFORE UPDATE ON public.user_stats FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_public_decks_updated_at BEFORE UPDATE ON public.public_decks FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_deck_ratings_updated_at BEFORE UPDATE ON public.deck_ratings FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_user_achievements_updated_at BEFORE UPDATE ON public.user_achievements FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Initialize user stats, profile, and achievements on signup
-CREATE OR REPLACE FUNCTION public.handle_new_user() RETURNS TRIGGER AS $$
+-- Initialize user stats and profile on signup
+CREATE OR REPLACE FUNCTION public.handle_new_user() RETURNS TRIGGER AS $
 BEGIN
-  -- Initialize user stats
-  INSERT INTO public.user_stats (user_id, streak, total_reviews) 
-  VALUES (NEW.id, 0, 0) 
-  ON CONFLICT (user_id) DO NOTHING;
-  
-  -- Initialize profile if username provided
+  INSERT INTO public.user_stats (user_id, streak, total_reviews) VALUES (NEW.id, 0, 0) ON CONFLICT (user_id) DO NOTHING;
   IF NEW.raw_user_meta_data->>'username' IS NOT NULL THEN
-    INSERT INTO public.profiles (id, username) 
-    VALUES (NEW.id, NEW.raw_user_meta_data->>'username') 
-    ON CONFLICT (id) DO NOTHING;
+    INSERT INTO public.profiles (id, username) VALUES (NEW.id, NEW.raw_user_meta_data->>'username') ON CONFLICT (id) DO NOTHING;
   END IF;
-  
-  -- Initialize achievements
-  INSERT INTO public.user_achievements (
-    user_id, 
-    perfect_reviews, 
-    total_study_time, 
-    decks_shared, 
-    decks_imported,
-    max_streak
-  ) VALUES (
-    NEW.id, 
-    0, 
-    0, 
-    0, 
-    0,
-    0
-  ) ON CONFLICT (user_id) DO NOTHING;
-  
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$ LANGUAGE plpgsql SECURITY DEFINER;
 
 CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- Lookup email by username
-CREATE OR REPLACE FUNCTION public.get_email_by_username(p_username TEXT) RETURNS TEXT AS $$
+CREATE OR REPLACE FUNCTION public.get_email_by_username(p_username TEXT) RETURNS TEXT AS $
 DECLARE
   v_email TEXT;
 BEGIN
-  SELECT au.email INTO v_email 
-  FROM public.profiles p 
-  JOIN auth.users au ON au.id = p.id 
-  WHERE LOWER(p.username) = LOWER(p_username) 
-  LIMIT 1;
+  SELECT au.email INTO v_email FROM public.profiles p JOIN auth.users au ON au.id = p.id WHERE LOWER(p.username) = LOWER(p_username) LIMIT 1;
   RETURN v_email;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Increment import count
-CREATE OR REPLACE FUNCTION increment_import_count() RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION increment_import_count() RETURNS TRIGGER AS $
 BEGIN
-  UPDATE public.public_decks 
-  SET import_count = import_count + 1 
-  WHERE id = NEW.public_deck_id;
+  UPDATE public.public_decks SET import_count = import_count + 1 WHERE id = NEW.public_deck_id;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$ LANGUAGE plpgsql;
 
 CREATE TRIGGER on_deck_imported AFTER INSERT ON public.deck_imports FOR EACH ROW EXECUTE FUNCTION increment_import_count();
 
--- Auto-increment decks_shared when sharing a deck
-CREATE OR REPLACE FUNCTION increment_decks_shared() RETURNS TRIGGER AS $$
-BEGIN
-  INSERT INTO public.user_achievements (user_id, decks_shared)
-  VALUES (NEW.creator_id, 1)
-  ON CONFLICT (user_id) 
-  DO UPDATE SET 
-    decks_shared = user_achievements.decks_shared + 1,
-    updated_at = NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER on_public_deck_created AFTER INSERT ON public.public_decks FOR EACH ROW EXECUTE FUNCTION increment_decks_shared();
-
--- Auto-increment decks_imported when importing a deck
-CREATE OR REPLACE FUNCTION increment_decks_imported() RETURNS TRIGGER AS $$
-BEGIN
-  INSERT INTO public.user_achievements (user_id, decks_imported)
-  VALUES (NEW.user_id, 1)
-  ON CONFLICT (user_id) 
-  DO UPDATE SET 
-    decks_imported = user_achievements.decks_imported + 1,
-    updated_at = NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER on_deck_imported_achievements AFTER INSERT ON public.deck_imports FOR EACH ROW EXECUTE FUNCTION increment_decks_imported();
-
 -- Auto-hide deck after 5 reports
-CREATE OR REPLACE FUNCTION check_report_threshold() RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION check_report_threshold() RETURNS TRIGGER AS $
 DECLARE
   report_count INTEGER;
 BEGIN
-  SELECT COUNT(*) INTO report_count 
-  FROM public.deck_reports 
-  WHERE public_deck_id = NEW.public_deck_id;
-  
+  SELECT COUNT(*) INTO report_count FROM public.deck_reports WHERE public_deck_id = NEW.public_deck_id;
   IF report_count >= 5 THEN
-    UPDATE public.public_decks 
-    SET is_active = false 
-    WHERE id = NEW.public_deck_id;
+    UPDATE public.public_decks SET is_active = false WHERE id = NEW.public_deck_id;
   END IF;
-  
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$ LANGUAGE plpgsql;
 
 CREATE TRIGGER on_deck_reported AFTER INSERT ON public.deck_reports FOR EACH ROW EXECUTE FUNCTION check_report_threshold();
 
@@ -434,9 +332,7 @@ WHERE di.is_synced = true AND pd.is_active = true;
 -- STORAGE (for card images)
 -- ============================================
 
-INSERT INTO storage.buckets (id, name, public) 
-VALUES ('card-images', 'card-images', true) 
-ON CONFLICT (id) DO NOTHING;
+INSERT INTO storage.buckets (id, name, public) VALUES ('card-images', 'card-images', true) ON CONFLICT (id) DO NOTHING;
 
 CREATE POLICY "Users can upload their own images" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'card-images' AND auth.uid()::text = (storage.foldername(name))[1]);
 CREATE POLICY "Users can view their own images" ON storage.objects FOR SELECT USING (bucket_id = 'card-images' AND auth.uid()::text = (storage.foldername(name))[1]);
@@ -451,23 +347,6 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.cards;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.user_stats;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.public_decks;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.deck_ratings;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.user_achievements;
-
--- ============================================
--- MIGRATION FOR EXISTING USERS
--- ============================================
-
--- สร้าง achievements record สำหรับ users ที่มีอยู่แล้ว
-INSERT INTO public.user_achievements (user_id, perfect_reviews, total_study_time, decks_shared, decks_imported, max_streak)
-SELECT 
-  id,
-  0,
-  0,
-  COALESCE((SELECT COUNT(*) FROM public.public_decks WHERE creator_id = auth.users.id), 0),
-  COALESCE((SELECT COUNT(*) FROM public.deck_imports WHERE user_id = auth.users.id), 0),
-  COALESCE((SELECT streak FROM public.user_stats WHERE user_id = auth.users.id), 0)
-FROM auth.users
-ON CONFLICT (user_id) DO NOTHING;
 
 -- ============================================
 -- ADMIN POLICIES (Optional)
@@ -480,11 +359,4 @@ ON CONFLICT (user_id) DO NOTHING;
 
 -- ============================================
 -- COMPLETE! 🎉
--- ============================================
--- ไฟล์นี้รวม:
--- ✅ Core Tables (decks, cards, user_stats, review_logs, profiles)
--- ✅ Community Sharing (public_decks, ratings, reports, imports)
--- ✅ Achievements System (user_achievements)
--- ✅ All Indexes, RLS Policies, Functions, Triggers
--- ✅ Views, Storage, Realtime
 -- ============================================

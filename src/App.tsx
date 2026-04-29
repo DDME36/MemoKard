@@ -3,7 +3,10 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useFlashcardStore, type Deck, type Flashcard } from './store/store';
 import { useAuth } from './contexts/AuthContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
-import { ToastProvider } from './contexts/ToastContext';
+import { ToastProvider, useToast } from './contexts/ToastContext';
+import ErrorBoundary from './components/ErrorBoundary';
+import AchievementToast from './components/AchievementToast';
+import type { Achievement } from './components/AchievementToast';
 import AuthPage from './pages/AuthPage';
 import Dashboard from './pages/Dashboard';
 import DeckDetail from './pages/DeckDetail';
@@ -11,6 +14,8 @@ import ReviewSession from './pages/ReviewSession';
 import ExplorePage from './pages/ExplorePage';
 import PublicDeckDetail from './pages/PublicDeckDetail';
 import AdminPage from './pages/AdminPage';
+import AchievementsPage from './pages/AchievementsPage';
+import StatisticsPage from './pages/StatisticsPage';
 import AddCard from './components/AddCard';
 import AddDeck from './components/AddDeck';
 import EditCard from './components/EditCard';
@@ -19,11 +24,12 @@ import HandwritingLogo from './components/HandwritingLogo';
 import SplashScreen from './components/SplashScreen';
 import InstallPrompt from './components/InstallPrompt';
 import { haptics } from './utils/haptics';
+import { getDeckColorStyles } from './utils/colorUtils';
 
 // สีประจำวันแบบไทย (ตามเวลาประเทศไทย UTC+7)
 const THAI_DAY_COLORS = {
   0: { gradient: 'from-red-600 to-rose-600', shadow: 'shadow-red-200' },
-  1: { gradient: 'from-yellow-600 to-amber-600', shadow: 'shadow-yellow-200' },
+  1: { gradient: 'from-yellow-400 to-amber-500', shadow: 'shadow-amber-200' },
   2: { gradient: 'from-pink-600 to-rose-600', shadow: 'shadow-pink-200' },
   3: { gradient: 'from-green-600 to-emerald-600', shadow: 'shadow-green-200' },
   4: { gradient: 'from-orange-600 to-amber-600', shadow: 'shadow-orange-200' },
@@ -50,13 +56,14 @@ const DECK_COLOR_MAP: Record<string, { gradient: string; shadow: string }> = {
   indigo:  { gradient: 'from-indigo-500 to-blue-600',   shadow: 'shadow-indigo-200' },
 };
 
-type View = 'home' | 'deck' | 'review' | 'explore' | 'public-deck' | 'admin';
+type View = 'home' | 'deck' | 'review' | 'explore' | 'public-deck' | 'admin' | 'achievements' | 'statistics';
 
 function AppContent() {
   const { user, loading, isDemo, signOut, setDemoMode } = useAuth();
   const store = useFlashcardStore();
   const setAuthState = useFlashcardStore((state) => state.setAuthState);
   const { isDark, toggleTheme } = useTheme();
+  const { showUndoToast } = useToast();
   const dayColor = getThaiDayColor();
 
   // Update theme-color meta tag dynamically based on dark mode
@@ -83,27 +90,54 @@ function AppContent() {
   const [showAddDeck, setShowAddDeck] = useState(false);
   const [editingCard, setEditingCard] = useState<Flashcard | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [showDeleteDeckConfirm, setShowDeleteDeckConfirm] = useState(false);
-  const [deckToDelete, setDeckToDelete] = useState<Deck | null>(null);
+  const [currentAchievement, setCurrentAchievement] = useState<Achievement | null>(null);
+
+  // Poll for achievements from the queue
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!currentAchievement) {
+        const achievement = store.popAchievement();
+        if (achievement) {
+          setCurrentAchievement(achievement);
+        }
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, [currentAchievement, store]);
 
   useEffect(() => {
     const userId = user?.id || null;
     setAuthState(userId, isDemo);
   }, [user?.id, isDemo, setAuthState]);
 
-  const { streak, deleteDeck } = store;
+  const { deleteDeck, undoDeleteDeck } = store;
+
+  const handleDeleteDeck = async (deck: Deck) => {
+    await deleteDeck(deck.id); // Soft delete
+    goHome();
+    showUndoToast(`ลบชุด "${deck.name}" แล้ว`, () => undoDeleteDeck(deck.id));
+  };
 
   const [isCramMode, setIsCramMode] = useState(false);
+  const [skipModeSelector, setSkipModeSelector] = useState(false);
 
   const openDeck = (deck: Deck) => { setActiveDeck(deck); setView('deck'); };
-  const startReview = (deck?: Deck, cramMode?: boolean) => { 
+  const startReview = (deck?: Deck, cramMode?: boolean, skipMode?: boolean) => { 
     setActiveDeck(deck ?? null); 
     setIsCramMode(cramMode ?? false);
+    setSkipModeSelector(skipMode ?? false);
     setView('review'); 
   };
-  const goHome = () => { setView('home'); setActiveDeck(null); setActivePublicDeckId(null); };
+  const goHome = () => { 
+    setView('home'); 
+    setActiveDeck(null); 
+    setActivePublicDeckId(null);
+    setSkipModeSelector(false); // Reset skip mode selector
+  };
   const goExplore = () => { setView('explore'); setActiveDeck(null); setActivePublicDeckId(null); };
   const goAdmin = () => { setView('admin'); setActiveDeck(null); setActivePublicDeckId(null); };
+  const goAchievements = () => { setView('achievements'); setActiveDeck(null); setActivePublicDeckId(null); };
+  const goStatistics = () => { setView('statistics'); setActiveDeck(null); setActivePublicDeckId(null); };
   const openPublicDeck = (publicDeckId: string) => { setActivePublicDeckId(publicDeckId); setView('public-deck'); };
   const closePublicDeck = () => { setView('explore'); setActivePublicDeckId(null); };
 
@@ -111,7 +145,10 @@ function AppContent() {
   const isAdmin = user?.id === ADMIN_USER_ID && !!ADMIN_USER_ID;
 
   // deckColor = สีของ deck ที่กำลัง review (ถ้ามี)
-  const deckColor = activeDeck ? DECK_COLOR_MAP[activeDeck.color] ?? undefined : undefined;
+  const liveActiveDeck = activeDeck ? store.decks.find(d => d.id === activeDeck.id) || activeDeck : null;
+  const deckColor = liveActiveDeck 
+    ? (DECK_COLOR_MAP[liveActiveDeck.color] ?? getDeckColorStyles(liveActiveDeck.color))
+    : undefined;
 
   const isLoggedIn = !showSplash && !loading && (user || isDemo);
 
@@ -147,110 +184,136 @@ function AppContent() {
             </button>
 
             <div className="flex items-center gap-2">
-              {isDemo && (
-                <div className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 border rounded-full text-xs font-bold ${
-                  isDark ? 'bg-amber-900/30 border-amber-800/50 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-600'
-                }`}>
-                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.381z" />
-                  </svg>
-                  ทดลองใช้
-                </div>
-              )}
-
-              {/* Explore Button */}
-              {view !== 'explore' && view !== 'public-deck' && (
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={goExplore}
-                  className={`flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-4 sm:py-2 gap-2 rounded-xl font-bold text-sm transition-colors ${
-                    isDark
-                      ? 'bg-slate-800 text-white hover:bg-slate-700'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  <span className="hidden sm:inline">สำรวจ</span>
-                </motion.button>
-              )}
-
-              {/* Admin Button */}
-              {isAdmin && view !== 'admin' && (
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={goAdmin}
-                  className={`flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-4 sm:py-2 gap-2 rounded-xl font-bold text-sm transition-colors ${
-                    isDark
-                      ? 'bg-rose-900/30 text-rose-400 hover:bg-rose-900/50 border border-rose-800/30'
-                      : 'bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200'
-                  }`}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                  </svg>
-                  <span className="hidden sm:inline">Admin</span>
-                </motion.button>
-              )}
-
-              {streak > 0 && (
-                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold ${
-                  isDark ? 'bg-orange-900/30 border border-orange-800/50 text-orange-400' : 'bg-orange-50 text-orange-600'
-                }`}>
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0113 13a2.99 2.99 0 01-.879 2.121z" clipRule="evenodd" />
-                  </svg>
-                  {streak}
-                </div>
-              )}
-
-              <button
-                onClick={toggleTheme}
-                className={`p-2 rounded-xl transition-colors ${
-                  isDark ? 'text-slate-400 hover:text-violet-400 hover:bg-slate-800' : 'text-slate-400 hover:text-violet-500 hover:bg-violet-50'
-                }`}
-                title={isDark ? 'โหมดสว่าง' : 'โหมดมืด'}
-              >
-                {isDark ? (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                  </svg>
-                ) : (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                  </svg>
+              {/* Icon Buttons Group */}
+              <div className="flex items-center gap-1">
+                {/* Achievements */}
+                {view !== 'achievements' && (
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={goAchievements}
+                    className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
+                      isDark
+                        ? 'text-amber-400 hover:bg-slate-800'
+                        : 'text-amber-600 hover:bg-amber-50'
+                    }`}
+                    title="Achievements"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                  </motion.button>
                 )}
-              </button>
 
-              {(user || isDemo) && (
+                {/* Statistics */}
+                {view !== 'statistics' && (
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={goStatistics}
+                    className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
+                      isDark
+                        ? 'text-blue-400 hover:bg-slate-800'
+                        : 'text-blue-600 hover:bg-blue-50'
+                    }`}
+                    title="สถิติ"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                  </motion.button>
+                )}
+
+                {/* Explore */}
+                {view !== 'explore' && view !== 'public-deck' && (
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={goExplore}
+                    className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
+                      isDark
+                        ? 'text-slate-400 hover:bg-slate-800'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                    title="สำรวจ"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </motion.button>
+                )}
+
+                {/* Admin */}
+                {isAdmin && view !== 'admin' && (
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={goAdmin}
+                    className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
+                      isDark
+                        ? 'text-rose-400 hover:bg-slate-800'
+                        : 'text-rose-600 hover:bg-rose-50'
+                    }`}
+                    title="Admin"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                  </motion.button>
+                )}
+
+                {/* Divider */}
+                <div className={`w-px h-5 mx-1 ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`} />
+
+                {/* Theme Toggle */}
                 <button
-                  onClick={isDemo ? () => setShowLogoutConfirm(true) : signOut}
-                  className={`p-2 rounded-xl transition-colors ${
-                    isDark ? 'text-slate-400 hover:text-rose-400 hover:bg-slate-800' : 'text-slate-400 hover:text-rose-500 hover:bg-rose-50'
+                  onClick={toggleTheme}
+                  className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
+                    isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'
                   }`}
-                  title={isDemo ? 'ออกจากโหมดทดลอง' : 'ออกจากระบบ'}
+                  title={isDark ? 'โหมดสว่าง' : 'โหมดมืด'}
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
+                  {isDark ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                  )}
                 </button>
-              )}
 
+                {/* Logout */}
+                {(user || isDemo) && (
+                  <button
+                    onClick={isDemo ? () => setShowLogoutConfirm(true) : signOut}
+                    className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
+                      isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                    title={isDemo ? 'ออกจากโหมดทดลอง' : 'ออกจากระบบ'}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+
+              {/* New Deck Button */}
               {view === 'home' && (
                 <motion.button
-                  whileHover={{ scale: 1.05, y: -1 }}
+                  whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => { haptics.medium(); setShowAddDeck(true); }}
-                  className={`hidden sm:flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-4 sm:py-2 gap-2 bg-gradient-to-r ${dayColor.gradient} text-white rounded-xl font-bold transition-all ${
+                  className={`flex items-center gap-2 px-3 py-2 bg-gradient-to-r ${dayColor.gradient} text-white rounded-lg font-semibold text-sm transition-all ${
                     isDark ? '' : 'shadow-md hover:shadow-lg'
-                  }`}>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                   </svg>
-                  <span className="hidden sm:inline">ชุดใหม่</span>
+                  <span>ชุดใหม่</span>
                 </motion.button>
               )}
             </div>
@@ -299,29 +362,31 @@ function AppContent() {
                 <Dashboard
                   key="home"
                   onOpenDeck={openDeck}
-                  onStartReview={() => startReview()}
+                  onStartReview={() => startReview(undefined, false, true)}
                   onShowAddDeck={() => setShowAddDeck(true)}
                   dayColor={dayColor}
                 />
               )}
-              {view === 'deck' && activeDeck && (
+              {view === 'deck' && liveActiveDeck && (
                 <DeckDetail
                   key="deck"
-                  deck={activeDeck}
+                  deck={liveActiveDeck}
                   onStartReview={startReview}
                   onShowAddCard={() => setShowAddCard(true)}
                   onEditCard={setEditingCard}
-                  onDeleteDeck={(deck) => { setDeckToDelete(deck); setShowDeleteDeckConfirm(true); }}
+                  onDeleteDeck={handleDeleteDeck}
                 />
               )}
               {view === 'review' && (
                 <ReviewSession
                   key="review"
-                  activeDeck={activeDeck}
+                  activeDeck={liveActiveDeck}
                   isCramMode={isCramMode}
                   onGoHome={goHome}
+                  onEditCard={setEditingCard}
                   dayColor={dayColor}
                   deckColor={deckColor}
+                  skipModeSelector={skipModeSelector}
                 />
               )}
               {view === 'explore' && (
@@ -347,6 +412,12 @@ function AppContent() {
               {view === 'admin' && isAdmin && (
                 <AdminPage key="admin" />
               )}
+              {view === 'achievements' && (
+                <AchievementsPage key="achievements" dayColor={dayColor} />
+              )}
+              {view === 'statistics' && (
+                <StatisticsPage key="statistics" dayColor={dayColor} />
+              )}
             </AnimatePresence>
           </motion.main>
         )}
@@ -366,21 +437,6 @@ function AppContent() {
         confirmText="ออกจากระบบ" cancelText="ยกเลิก" type="warning"
         onConfirm={() => { setDemoMode(false); window.location.reload(); }}
         onCancel={() => setShowLogoutConfirm(false)}
-      />
-      <ConfirmModal
-        isOpen={showDeleteDeckConfirm}
-        title="ลบชุดการ์ด?"
-        message={`คุณต้องการลบชุด "${deckToDelete?.name}" และการ์ดทั้งหมดในชุดนี้ใช่ไหม?\n\nการกระทำนี้ไม่สามารถย้อนกลับได้`}
-        confirmText="ลบชุดการ์ด" cancelText="ยกเลิก" type="danger"
-        onConfirm={async () => {
-          if (deckToDelete) {
-            await deleteDeck(deckToDelete.id);
-            setShowDeleteDeckConfirm(false);
-            setDeckToDelete(null);
-            goHome();
-          }
-        }}
-        onCancel={() => { setShowDeleteDeckConfirm(false); setDeckToDelete(null); }}
       />
 
       {/* ── Footer — outside AnimatePresence, always instant ── */}
@@ -411,16 +467,24 @@ function AppContent() {
       </AnimatePresence>
 
       <InstallPrompt dayColor={dayColor} />
+      
+      {/* Achievement Toast */}
+      <AchievementToast 
+        achievement={currentAchievement} 
+        onClose={() => setCurrentAchievement(null)} 
+      />
     </div>
   );
 }
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <ToastProvider>
-        <AppContent />
-      </ToastProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <ToastProvider>
+          <AppContent />
+        </ToastProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }

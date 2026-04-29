@@ -56,6 +56,22 @@ export const supabaseStore = {
     };
   },
 
+  async updateDeck(deckId: string, updates: { name?: string; color?: string }): Promise<boolean> {
+    if (!isSupabaseConfigured()) return false;
+
+    const { error } = await supabase
+      .from('decks')
+      .update(updates)
+      .eq('id', deckId);
+
+    if (error) {
+      console.error('Error updating deck:', error);
+      return false;
+    }
+
+    return true;
+  },
+
   async deleteDeck(deckId: string): Promise<boolean> {
     if (!isSupabaseConfigured()) return false;
 
@@ -255,6 +271,190 @@ export const supabaseStore = {
     if (error) {
       console.error('Error logging review:', error);
       return false;
+    }
+
+    return true;
+  },
+
+  // ── User Achievements ──
+  async fetchUserAchievements(userId: string): Promise<{
+    unlockedAchievements: string[];
+    perfectReviews: number;
+    totalStudyTime: number;
+    decksShared: number;
+    decksImported: number;
+    maxStreak: number;
+  }> {
+    if (!isSupabaseConfigured()) {
+      return {
+        unlockedAchievements: [],
+        perfectReviews: 0,
+        totalStudyTime: 0,
+        decksShared: 0,
+        decksImported: 0,
+        maxStreak: 0,
+      };
+    }
+
+    const { data, error } = await supabase
+      .from('user_achievements')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+
+    if (error || !data) {
+      // Create initial record if not exists
+      await supabase.from('user_achievements').insert({
+        user_id: userId,
+        unlocked_achievements: [],
+        perfect_reviews: 0,
+        total_study_time: 0,
+        decks_shared: 0,
+        decks_imported: 0,
+        max_streak: 0,
+      });
+
+      return {
+        unlockedAchievements: [],
+        perfectReviews: 0,
+        totalStudyTime: 0,
+        decksShared: 0,
+        decksImported: 0,
+        maxStreak: 0,
+      };
+    }
+
+    return {
+      unlockedAchievements: data.unlocked_achievements || [],
+      perfectReviews: data.perfect_reviews || 0,
+      totalStudyTime: data.total_study_time || 0,
+      decksShared: data.decks_shared || 0,
+      decksImported: data.decks_imported || 0,
+      maxStreak: data.max_streak || 0,
+    };
+  },
+
+  async updateUserAchievements(
+    userId: string,
+    updates: {
+      unlockedAchievements?: string[];
+      perfectReviews?: number;
+      totalStudyTime?: number;
+      maxStreak?: number;
+    }
+  ): Promise<boolean> {
+    if (!isSupabaseConfigured()) return false;
+
+    const dbUpdates: any = {};
+    if (updates.unlockedAchievements !== undefined) {
+      dbUpdates.unlocked_achievements = updates.unlockedAchievements;
+    }
+    if (updates.perfectReviews !== undefined) {
+      dbUpdates.perfect_reviews = updates.perfectReviews;
+    }
+    if (updates.totalStudyTime !== undefined) {
+      dbUpdates.total_study_time = updates.totalStudyTime;
+    }
+    if (updates.maxStreak !== undefined) {
+      dbUpdates.max_streak = updates.maxStreak;
+    }
+
+    const { error } = await supabase
+      .from('user_achievements')
+      .upsert({
+        user_id: userId,
+        ...dbUpdates,
+      });
+
+    if (error) {
+      console.error('Error updating user achievements:', error);
+      return false;
+    }
+
+    return true;
+  },
+
+  async unlockAchievement(userId: string, achievementId: string): Promise<boolean> {
+    if (!isSupabaseConfigured()) return false;
+
+    // Fetch current achievements
+    const { data } = await supabase
+      .from('user_achievements')
+      .select('unlocked_achievements')
+      .eq('user_id', userId)
+      .single();
+
+    const currentAchievements = data?.unlocked_achievements || [];
+    
+    // Don't add if already unlocked
+    if (currentAchievements.includes(achievementId)) {
+      return true;
+    }
+
+    const newAchievements = [...currentAchievements, achievementId];
+
+    const { error } = await supabase
+      .from('user_achievements')
+      .upsert({
+        user_id: userId,
+        unlocked_achievements: newAchievements,
+      });
+
+    if (error) {
+      console.error('Error unlocking achievement:', error);
+      return false;
+    }
+
+    return true;
+  },
+
+  async incrementPerfectReviews(userId: string): Promise<boolean> {
+    if (!isSupabaseConfigured()) return false;
+
+    const { data } = await supabase
+      .from('user_achievements')
+      .select('perfect_reviews')
+      .eq('user_id', userId)
+      .single();
+
+    const currentCount = data?.perfect_reviews || 0;
+
+    return await this.updateUserAchievements(userId, {
+      perfectReviews: currentCount + 1,
+    });
+  },
+
+  async addStudyTime(userId: string, minutes: number): Promise<boolean> {
+    if (!isSupabaseConfigured()) return false;
+
+    const { data } = await supabase
+      .from('user_achievements')
+      .select('total_study_time')
+      .eq('user_id', userId)
+      .single();
+
+    const currentTime = data?.total_study_time || 0;
+
+    return await this.updateUserAchievements(userId, {
+      totalStudyTime: currentTime + minutes,
+    });
+  },
+
+  async updateMaxStreak(userId: string, streak: number): Promise<boolean> {
+    if (!isSupabaseConfigured()) return false;
+
+    const { data } = await supabase
+      .from('user_achievements')
+      .select('max_streak')
+      .eq('user_id', userId)
+      .single();
+
+    const currentMax = data?.max_streak || 0;
+
+    if (streak > currentMax) {
+      return await this.updateUserAchievements(userId, {
+        maxStreak: streak,
+      });
     }
 
     return true;

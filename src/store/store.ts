@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { calculateFSRS, createInitialFSRSState, type FSRSState } from '../utils/fsrs';
 import { supabaseStore } from './supabaseStore';
+import { checkAchievements, type UserProgress } from '../utils/achievements';
+import type { Achievement } from '../components/AchievementToast';
 
 export interface Deck {
   id: string;
@@ -45,6 +47,21 @@ interface FlashcardStore {
   userId: string | null;
   isDemo: boolean;
 
+  // Achievement tracking
+  userProgress: UserProgress;
+  unlockedAchievements: string[];
+  achievementQueue: Achievement[];
+  perfectReviewStreak: number;
+  totalStudyTime: number;
+  maxStreak: number; // Track max streak separately
+  
+  // Previous progress snapshot for achievement checking
+  previousProgress: UserProgress | null;
+
+  // Pending deletes for undo functionality
+  pendingDeleteDecks: Map<string, { deck: Deck; cards: Flashcard[] }>;
+  pendingDeleteCards: Map<string, Flashcard>;
+
   // Sync actions
   setAuthState: (userId: string | null, isDemo: boolean) => void;
   syncFromSupabase: () => Promise<void>;
@@ -52,12 +69,15 @@ interface FlashcardStore {
 
   // Deck actions
   addDeck: (name: string, color: string) => Promise<Deck>;
-  deleteDeck: (id: string) => Promise<void>;
+  editDeck: (id: string, name: string, color: string) => Promise<void>;
+  deleteDeck: (id: string, immediate?: boolean) => Promise<void>;
+  undoDeleteDeck: (id: string) => void;
 
   // Card actions
   addCard: (deckId: string, question: string, answer: string, questionImage?: string, answerImage?: string) => Promise<void>;
   editCard: (id: string, question: string, answer: string, questionImage?: string, answerImage?: string) => Promise<void>;
-  deleteCard: (id: string) => Promise<void>;
+  deleteCard: (id: string, immediate?: boolean) => Promise<void>;
+  undoDeleteCard: (id: string) => void;
   reviewCard: (id: string, quality: number, isCramMode?: boolean) => Promise<void>;
 
   // Getters
@@ -69,6 +89,11 @@ interface FlashcardStore {
 
   // Streak
   updateStreak: () => Promise<void>;
+
+  // Achievement actions
+  checkAndUnlockAchievements: () => void;
+  popAchievement: () => Achievement | null;
+  trackStudyTime: (minutes: number) => void;
 }
 
 export const useFlashcardStore = create<FlashcardStore>()(
@@ -81,6 +106,25 @@ export const useFlashcardStore = create<FlashcardStore>()(
       reviewHistory: {},
       userId: null,
       isDemo: true,
+      userProgress: {
+        cardsCreated: 0,
+        decksCreated: 0,
+        reviewsCompleted: 0,
+        currentStreak: 0,
+        maxStreak: 0,
+        perfectReviews: 0,
+        totalStudyTime: 0,
+        decksShared: 0,
+        decksImported: 0,
+      },
+      unlockedAchievements: [],
+      achievementQueue: [],
+      perfectReviewStreak: 0,
+      totalStudyTime: 0,
+      maxStreak: 0,
+      previousProgress: null,
+      pendingDeleteDecks: new Map(),
+      pendingDeleteCards: new Map(),
 
       // ── Auth State Management ──
       setAuthState: (userId, isDemo) => {
@@ -95,10 +139,11 @@ export const useFlashcardStore = create<FlashcardStore>()(
         if (isDemo || !userId) return;
 
         try {
-          const [decks, cards, stats] = await Promise.all([
+          const [decks, cards, stats, achievements] = await Promise.all([
             supabaseStore.fetchDecks(userId),
             supabaseStore.fetchCards(userId),
             supabaseStore.fetchUserStats(userId),
+            supabaseStore.fetchUserAchievements(userId),
           ]);
 
           // Ensure every card has fsrsState (migrate old cards that don't have it)
@@ -112,6 +157,17 @@ export const useFlashcardStore = create<FlashcardStore>()(
             cards: migratedCards,
             streak: stats.streak,
             lastStudyDate: stats.lastStudyDate,
+            unlockedAchievements: achievements.unlockedAchievements,
+            perfectReviewStreak: achievements.perfectReviews,
+            totalStudyTime: achievements.totalStudyTime,
+            userProgress: {
+              ...get().userProgress,
+              perfectReviews: achievements.perfectReviews,
+              totalStudyTime: achievements.totalStudyTime,
+              decksShared: achievements.decksShared,
+              decksImported: achievements.decksImported,
+              maxStreak: achievements.maxStreak,
+            },
           });
         } catch (error) {
           console.error('Error syncing from Supabase:', error);
@@ -127,6 +183,23 @@ export const useFlashcardStore = create<FlashcardStore>()(
           reviewHistory: {},
           userId: null,
           isDemo: true,
+          userProgress: {
+            cardsCreated: 0,
+            decksCreated: 0,
+            reviewsCompleted: 0,
+            currentStreak: 0,
+            maxStreak: 0,
+            perfectReviews: 0,
+            totalStudyTime: 0,
+            decksShared: 0,
+            decksImported: 0,
+          },
+          unlockedAchievements: [],
+          achievementQueue: [],
+          perfectReviewStreak: 0,
+          totalStudyTime: 0,
+          maxStreak: 0,
+          previousProgress: null,
         });
       },
 
@@ -141,7 +214,16 @@ export const useFlashcardStore = create<FlashcardStore>()(
           createdAt: new Date(),
         };
 
-        set((state) => ({ decks: [...state.decks, newDeck] }));
+        set((state) => ({ 
+          decks: [...state.decks, newDeck],
+          userProgress: {
+            ...state.userProgress,
+            decksCreated: state.userProgress.decksCreated + 1,
+          }
+        }));
+
+        // Check for achievements
+        get().checkAndUnlockAchievements();
 
         if (!isDemo && userId) {
           const supabaseDeck = await supabaseStore.createDeck(userId, name, color);
@@ -156,16 +238,72 @@ export const useFlashcardStore = create<FlashcardStore>()(
         return newDeck;
       },
 
-      deleteDeck: async (id) => {
+      editDeck: async (id, name, color) => {
         const { userId, isDemo } = get();
 
         set((state) => ({
-          decks: state.decks.filter((d) => d.id !== id),
-          cards: state.cards.filter((c) => c.deckId !== id),
+          decks: state.decks.map((d) =>
+            d.id === id ? { ...d, name, color } : d
+          ),
         }));
 
         if (!isDemo && userId) {
-          await supabaseStore.deleteDeck(id);
+          await supabaseStore.updateDeck(id, { name, color });
+        }
+      },
+
+      deleteDeck: async (id, immediate = false) => {
+        const { userId, isDemo } = get();
+        const deck = get().decks.find((d) => d.id === id);
+        const deckCards = get().cards.filter((c) => c.deckId === id);
+
+        if (!deck) return;
+
+        if (immediate) {
+          // Immediate delete (no undo)
+          set((state) => ({
+            decks: state.decks.filter((d) => d.id !== id),
+            cards: state.cards.filter((c) => c.deckId !== id),
+          }));
+
+          if (!isDemo && userId) {
+            await supabaseStore.deleteDeck(id);
+          }
+        } else {
+          // Soft delete (can undo)
+          set((state) => ({
+            decks: state.decks.filter((d) => d.id !== id),
+            cards: state.cards.filter((c) => c.deckId !== id),
+            pendingDeleteDecks: new Map(state.pendingDeleteDecks).set(id, { deck, cards: deckCards }),
+          }));
+
+          // Schedule permanent delete after 5 seconds
+          setTimeout(async () => {
+            const stillPending = get().pendingDeleteDecks.has(id);
+            if (stillPending && !isDemo && userId) {
+              await supabaseStore.deleteDeck(id);
+              set((state) => {
+                const newPending = new Map(state.pendingDeleteDecks);
+                newPending.delete(id);
+                return { pendingDeleteDecks: newPending };
+              });
+            }
+          }, 5000);
+        }
+      },
+
+      undoDeleteDeck: (id) => {
+        const pending = get().pendingDeleteDecks.get(id);
+        if (pending) {
+          set((state) => {
+            const newPending = new Map(state.pendingDeleteDecks);
+            newPending.delete(id);
+            return {
+              decks: [...state.decks, pending.deck],
+              cards: [...state.cards, ...pending.cards],
+              pendingDeleteDecks: newPending,
+            };
+          });
         }
       },
 
@@ -191,7 +329,16 @@ export const useFlashcardStore = create<FlashcardStore>()(
           fsrsState,
         };
 
-        set((state) => ({ cards: [...state.cards, newCard] }));
+        set((state) => ({ 
+          cards: [...state.cards, newCard],
+          userProgress: {
+            ...state.userProgress,
+            cardsCreated: state.userProgress.cardsCreated + 1,
+          }
+        }));
+
+        // Check for achievements
+        get().checkAndUnlockAchievements();
 
         if (!isDemo && userId) {
           const supabaseCard = await supabaseStore.createCard(
@@ -225,13 +372,54 @@ export const useFlashcardStore = create<FlashcardStore>()(
         }
       },
 
-      deleteCard: async (id) => {
+      deleteCard: async (id, immediate = false) => {
         const { userId, isDemo } = get();
+        const card = get().cards.find((c) => c.id === id);
 
-        set((state) => ({ cards: state.cards.filter((c) => c.id !== id) }));
+        if (!card) return;
 
-        if (!isDemo && userId) {
-          await supabaseStore.deleteCard(id);
+        if (immediate) {
+          // Immediate delete (no undo)
+          set((state) => ({
+            cards: state.cards.filter((c) => c.id !== id),
+          }));
+
+          if (!isDemo && userId) {
+            await supabaseStore.deleteCard(id);
+          }
+        } else {
+          // Soft delete (can undo)
+          set((state) => ({
+            cards: state.cards.filter((c) => c.id !== id),
+            pendingDeleteCards: new Map(state.pendingDeleteCards).set(id, card),
+          }));
+
+          // Schedule permanent delete after 5 seconds
+          setTimeout(async () => {
+            const stillPending = get().pendingDeleteCards.has(id);
+            if (stillPending && !isDemo && userId) {
+              await supabaseStore.deleteCard(id);
+              set((state) => {
+                const newPending = new Map(state.pendingDeleteCards);
+                newPending.delete(id);
+                return { pendingDeleteCards: newPending };
+              });
+            }
+          }, 5000);
+        }
+      },
+
+      undoDeleteCard: (id) => {
+        const pending = get().pendingDeleteCards.get(id);
+        if (pending) {
+          set((state) => {
+            const newPending = new Map(state.pendingDeleteCards);
+            newPending.delete(id);
+            return {
+              cards: [...state.cards, pending],
+              pendingDeleteCards: newPending,
+            };
+          });
         }
       },
 
@@ -245,6 +433,14 @@ export const useFlashcardStore = create<FlashcardStore>()(
           const today = new Date().toISOString().slice(0, 10);
           const currentCount = state.reviewHistory[today] ?? 0;
 
+          // Track perfect review streak
+          let newPerfectStreak = state.perfectReviewStreak;
+          if (quality === 4) {
+            newPerfectStreak += 1;
+          } else {
+            newPerfectStreak = 0;
+          }
+
           if (isCramMode) {
             // Skip FSRS state update in Cram Mode, only update history
             return {
@@ -252,6 +448,11 @@ export const useFlashcardStore = create<FlashcardStore>()(
                 ...state.reviewHistory,
                 [today]: currentCount + 1,
               },
+              userProgress: {
+                ...state.userProgress,
+                reviewsCompleted: state.userProgress.reviewsCompleted + 1,
+              },
+              perfectReviewStreak: newPerfectStreak,
             };
           }
 
@@ -275,8 +476,32 @@ export const useFlashcardStore = create<FlashcardStore>()(
               ...state.reviewHistory,
               [today]: currentCount + 1,
             },
+            userProgress: {
+              ...state.userProgress,
+              reviewsCompleted: state.userProgress.reviewsCompleted + 1,
+              perfectReviews: quality === 4 ? state.userProgress.perfectReviews + 1 : state.userProgress.perfectReviews,
+            },
+            perfectReviewStreak: newPerfectStreak,
           };
         });
+
+        // Check for achievements
+        get().checkAndUnlockAchievements();
+
+        // Sync perfect reviews and max streak to Supabase
+        if (!isDemo && userId) {
+          const { perfectReviewStreak, userProgress } = get();
+          
+          // Update perfect reviews count
+          if (quality === 4) {
+            await supabaseStore.updateUserAchievements(userId, {
+              perfectReviews: perfectReviewStreak,
+            });
+          }
+          
+          // Update max streak if needed
+          await supabaseStore.updateMaxStreak(userId, userProgress.currentStreak);
+        }
 
         // Skip Supabase sync for Cram Mode because card state wasn't changed
         if (!isCramMode && !isDemo && userId) {
@@ -322,18 +547,111 @@ export const useFlashcardStore = create<FlashcardStore>()(
 
       // ── Streak ──
       updateStreak: async () => {
-        const { userId, isDemo, lastStudyDate, streak } = get();
+        const { userId, isDemo, lastStudyDate, streak, maxStreak } = get();
         const today = new Date().toISOString().slice(0, 10);
 
         if (lastStudyDate === today) return;
 
         const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
         const newStreak = lastStudyDate === yesterday ? streak + 1 : 1;
+        const newMaxStreak = Math.max(maxStreak, newStreak);
 
-        set({ streak: newStreak, lastStudyDate: today });
+        set((state) => ({ 
+          streak: newStreak, 
+          lastStudyDate: today,
+          maxStreak: newMaxStreak,
+          userProgress: {
+            ...state.userProgress,
+            currentStreak: newStreak,
+            maxStreak: newMaxStreak,
+          }
+        }));
+
+        // Check for achievements
+        get().checkAndUnlockAchievements();
 
         if (!isDemo && userId) {
-          await supabaseStore.updateUserStats(userId, newStreak, today);
+          await Promise.all([
+            supabaseStore.updateUserStats(userId, newStreak, today),
+            supabaseStore.updateUserAchievements(userId, { maxStreak: newMaxStreak }),
+          ]);
+        }
+      },
+
+      // ── Achievement Actions ──
+      checkAndUnlockAchievements: async () => {
+        const { userProgress, unlockedAchievements, perfectReviewStreak, userId, isDemo, previousProgress } = get();
+        
+        // Create current progress snapshot
+        const currentProgress: UserProgress = {
+          ...userProgress,
+          perfectReviews: perfectReviewStreak,
+        };
+
+        // Use previous snapshot or assume all zeros if first time
+        const prevProgress: UserProgress = previousProgress || {
+          cardsCreated: 0,
+          decksCreated: 0,
+          reviewsCompleted: 0,
+          currentStreak: 0,
+          maxStreak: 0,
+          perfectReviews: 0,
+          totalStudyTime: 0,
+          decksShared: 0,
+          decksImported: 0,
+        };
+
+        const newAchievements = checkAchievements(currentProgress, prevProgress);
+        
+        if (newAchievements.length > 0) {
+          const unlockedIds = newAchievements.map(a => a.id).filter(id => !unlockedAchievements.includes(id));
+          const newUnlocked = newAchievements.filter(a => unlockedIds.includes(a.id));
+          
+          if (newUnlocked.length > 0) {
+            set((state) => ({
+              unlockedAchievements: [...state.unlockedAchievements, ...unlockedIds],
+              achievementQueue: [...state.achievementQueue, ...newUnlocked],
+            }));
+
+            // Sync to Supabase
+            if (!isDemo && userId) {
+              const updatedUnlocked = [...unlockedAchievements, ...unlockedIds];
+              await supabaseStore.updateUserAchievements(userId, {
+                unlockedAchievements: updatedUnlocked,
+              });
+            }
+          }
+        }
+        
+        // Update previous progress snapshot for next check
+        set({ previousProgress: currentProgress });
+      },
+
+      popAchievement: () => {
+        const { achievementQueue } = get();
+        if (achievementQueue.length === 0) return null;
+        
+        const [first, ...rest] = achievementQueue;
+        set({ achievementQueue: rest });
+        return first;
+      },
+
+      trackStudyTime: async (minutes) => {
+        const { userId, isDemo } = get();
+        
+        set((state) => ({
+          userProgress: {
+            ...state.userProgress,
+            totalStudyTime: state.userProgress.totalStudyTime + minutes,
+          },
+          totalStudyTime: state.totalStudyTime + minutes,
+        }));
+        
+        get().checkAndUnlockAchievements();
+
+        // Sync to Supabase
+        if (!isDemo && userId) {
+          await supabaseStore.addStudyTime(userId, minutes);
         }
       },
     }),
@@ -355,6 +673,13 @@ export const useFlashcardStore = create<FlashcardStore>()(
         reviewHistory: state.reviewHistory,
         userId: state.userId,
         isDemo: state.isDemo,
+        userProgress: state.userProgress,
+        unlockedAchievements: state.unlockedAchievements,
+        achievementQueue: state.achievementQueue,
+        perfectReviewStreak: state.perfectReviewStreak,
+        totalStudyTime: state.totalStudyTime,
+        maxStreak: state.maxStreak,
+        previousProgress: state.previousProgress,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;

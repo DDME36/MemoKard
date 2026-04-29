@@ -108,6 +108,41 @@ export default function PublicDeckDetail({ publicDeckId, onClose, onImported }: 
     }
   };
 
+  const handleDuplicate = async () => {
+    if (isDemo || !user) {
+      setShowAuthPrompt(true);
+      return;
+    }
+
+    if (!deck) return;
+
+    setImporting(true);
+    try {
+      const newDeckId = await communityStore.duplicatePublicDeck(
+        publicDeckId,
+        user.id,
+        `${deck.name} (Copy)`
+      );
+
+      if (!newDeckId) {
+        showToast('เกิดข้อผิดพลาดในการคัดลอก', 'error');
+        return;
+      }
+
+      setHasImported(true);
+      showToast('คัดลอกชุดการ์ดสำเร็จ', 'success');
+
+      if (onImported) {
+        onImported(newDeckId);
+      }
+    } catch (error) {
+      console.error('Error duplicating deck:', error);
+      showToast('เกิดข้อผิดพลาดในการคัดลอก', 'error');
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const handleRate = async (rating: number) => {
     if (isDemo || !user) {
       setShowAuthPrompt(true);
@@ -327,35 +362,55 @@ export default function PublicDeckDetail({ publicDeckId, onClose, onImported }: 
 
             {/* Actions */}
             <div className="space-y-3">
-              {/* Subscribe Button */}
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={handleSubscribe}
-                disabled={importing || hasImported}
-                className="w-full px-6 py-4 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-xl font-bold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {importing ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    กำลังติดตาม...
-                  </>
-                ) : hasImported ? (
-                  <>
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                    ติดตามแล้ว
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    ติดตามชุดการ์ด
-                  </>
-                )}
-              </motion.button>
+              <div className="flex gap-3">
+                {/* Subscribe Button */}
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleSubscribe}
+                  disabled={importing || hasImported}
+                  className="flex-1 px-4 py-4 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-xl font-bold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {importing ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      กำลังติดตาม...
+                    </>
+                  ) : hasImported ? (
+                    <>
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      ติดตามแล้ว
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      ติดตาม
+                    </>
+                  )}
+                </motion.button>
+
+                {/* Duplicate Button */}
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleDuplicate}
+                  disabled={importing || hasImported}
+                  className={`flex-1 px-4 py-4 rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
+                    isDark 
+                      ? 'bg-slate-800 text-white hover:bg-slate-700' 
+                      : 'bg-slate-100 text-slate-800 hover:bg-slate-200'
+                  }`}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  คัดลอกมาแก้เอง
+                </motion.button>
+              </div>
 
               {/* Info Box - Compact */}
               {!hasImported && (

@@ -10,6 +10,7 @@ interface ToastProps {
   type?: ToastType;
   duration?: number;
   onClose: () => void;
+  onUndo?: () => void;
 }
 
 export default function Toast({
@@ -18,15 +19,21 @@ export default function Toast({
   type = 'info',
   duration = 3000,
   onClose,
+  onUndo,
 }: ToastProps) {
   const { isDark } = useTheme();
 
   useEffect(() => {
-    if (isOpen && duration > 0) {
+    if (isOpen && duration > 0 && !onUndo) {
       const timer = setTimeout(onClose, duration);
       return () => clearTimeout(timer);
     }
-  }, [isOpen, duration, onClose]);
+    // If onUndo exists, auto-close after duration
+    if (isOpen && duration > 0 && onUndo) {
+      const timer = setTimeout(onClose, duration);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, duration, onClose, onUndo]);
 
   const typeStyles = {
     success: {
@@ -108,6 +115,18 @@ export default function Toast({
           >
             <div className={style.iconColor}>{style.icon}</div>
             <p className="flex-1 font-medium text-sm">{message}</p>
+            {onUndo && (
+              <button
+                onClick={onUndo}
+                className={`px-4 py-1.5 rounded-lg font-bold text-sm transition-all ${
+                  isDark
+                    ? 'bg-white/20 hover:bg-white/30 text-white'
+                    : 'bg-black/10 hover:bg-black/20 text-slate-800'
+                }`}
+              >
+                เลิกทำ
+              </button>
+            )}
             <button
               onClick={onClose}
               className={`p-1 rounded-lg transition-colors ${

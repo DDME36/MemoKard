@@ -1,83 +1,10 @@
+import { useMemo, memo } from 'react';
 import { motion } from 'framer-motion';
 import { useFlashcardStore, type Deck } from '../store/store';
 import { useTheme } from '../contexts/ThemeContext';
-import ActivityHeatmap from '../components/ActivityHeatmap';
+import ReviewForecast from '../components/ReviewForecast';
 import { getDailyQuote } from '../utils/quotes';
-
-const COLOR: Record<string, { 
-  bg: string; 
-  gradient: string;
-  text: string; 
-  border: string; 
-  light: string;
-  shadow: string;
-}> = {
-  violet:  { 
-    bg: 'bg-gradient-to-br from-purple-500 to-purple-600', 
-    gradient: 'from-purple-500 to-purple-600',
-    text: 'text-purple-700', 
-    border: 'border-purple-200', 
-    light: 'bg-gradient-to-br from-purple-50 to-purple-100',
-    shadow: 'shadow-purple-200'
-  },
-  sky:     { 
-    bg: 'bg-gradient-to-br from-sky-500 to-blue-600', 
-    gradient: 'from-sky-500 to-blue-600',
-    text: 'text-sky-700', 
-    border: 'border-sky-200', 
-    light: 'bg-gradient-to-br from-sky-50 to-blue-100',
-    shadow: 'shadow-sky-200'
-  },
-  teal:    { 
-    bg: 'bg-gradient-to-br from-teal-500 to-emerald-600', 
-    gradient: 'from-teal-500 to-emerald-600',
-    text: 'text-teal-700', 
-    border: 'border-teal-200', 
-    light: 'bg-gradient-to-br from-teal-50 to-emerald-100',
-    shadow: 'shadow-teal-200'
-  },
-  rose:    { 
-    bg: 'bg-gradient-to-br from-rose-500 to-pink-600', 
-    gradient: 'from-rose-500 to-pink-600',
-    text: 'text-rose-700', 
-    border: 'border-rose-200', 
-    light: 'bg-gradient-to-br from-rose-50 to-pink-100',
-    shadow: 'shadow-rose-200'
-  },
-  amber:   { 
-    bg: 'bg-gradient-to-br from-amber-500 to-orange-600', 
-    gradient: 'from-amber-500 to-orange-600',
-    text: 'text-amber-700', 
-    border: 'border-amber-200', 
-    light: 'bg-gradient-to-br from-amber-50 to-orange-100',
-    shadow: 'shadow-amber-200'
-  },
-  emerald: { 
-    bg: 'bg-gradient-to-br from-emerald-500 to-green-600', 
-    gradient: 'from-emerald-500 to-green-600',
-    text: 'text-emerald-700', 
-    border: 'border-emerald-200', 
-    light: 'bg-gradient-to-br from-emerald-50 to-green-100',
-    shadow: 'shadow-emerald-200'
-  },
-  pink:    { 
-    bg: 'bg-gradient-to-br from-pink-500 to-fuchsia-600', 
-    gradient: 'from-pink-500 to-fuchsia-600',
-    text: 'text-pink-700', 
-    border: 'border-pink-200', 
-    light: 'bg-gradient-to-br from-pink-50 to-fuchsia-100',
-    shadow: 'shadow-pink-200'
-  },
-  indigo:  { 
-    bg: 'bg-gradient-to-br from-indigo-500 to-blue-600', 
-    gradient: 'from-indigo-500 to-blue-600',
-    text: 'text-indigo-700', 
-    border: 'border-indigo-200', 
-    light: 'bg-gradient-to-br from-indigo-50 to-blue-100',
-    shadow: 'shadow-indigo-200'
-  },
-};
-const c = (color: string) => COLOR[color] ?? COLOR['violet'];
+import { getDeckColorStyles } from '../utils/colorUtils';
 
 interface DashboardProps {
   onOpenDeck: (deck: Deck) => void;
@@ -86,14 +13,15 @@ interface DashboardProps {
   dayColor: { gradient: string; shadow: string };
 }
 
-export default function Dashboard({ onOpenDeck, onStartReview, onShowAddDeck, dayColor }: DashboardProps) {
+const Dashboard = memo(function Dashboard({ onOpenDeck, onStartReview, onShowAddDeck, dayColor }: DashboardProps) {
   const store = useFlashcardStore();
-  const { decks, getDueCards, getTotalCards, getDueCount, reviewHistory } = store;
+  const { decks, getDueCards, getTotalCards, getDueCount } = store;
   const { isDark } = useTheme();
 
-  const allDueCards = getDueCards();
-  const totalDue = allDueCards.length;
-  const totalCards = getTotalCards();
+  // Memoize expensive calculations
+  const allDueCards = useMemo(() => getDueCards(), [getDueCards]);
+  const totalDue = useMemo(() => allDueCards.length, [allDueCards]);
+  const totalCards = useMemo(() => getTotalCards(), [getTotalCards]);
 
   return (
     <motion.div 
@@ -109,56 +37,112 @@ export default function Dashboard({ onOpenDeck, onStartReview, onShowAddDeck, da
         </p>
       </div>
 
-      {/* Stat Cards - Clean Glassmorphism Design */}
-      <div className="grid grid-cols-2 gap-4 mb-10">
-        {/* Stat 1: ทบทวนวันนี้ */}
+      {/* Stat Cards - 4 Cards Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8 max-w-5xl mx-auto">
+        {/* Stat 1: การ์ดทั้งหมด */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           whileHover={{ scale: 1.02, y: -2 }}
-          className={`backdrop-blur-md rounded-3xl p-6 border flex flex-col items-center justify-center relative overflow-hidden group cursor-pointer transition-all ${
+          className={`backdrop-blur-md rounded-2xl p-5 border flex flex-col items-center justify-center relative overflow-hidden group cursor-pointer transition-all ${
             isDark 
-              ? 'bg-slate-800/90 border-rose-900/30 hover:bg-slate-800 hover:border-rose-800/50' 
-              : 'bg-white/80 border-rose-100 shadow-sm hover:shadow-md'
+              ? 'bg-slate-800/90 border-purple-900/30 hover:bg-slate-800 hover:border-purple-800/50' 
+              : 'bg-white/80 border-purple-100 shadow-sm hover:shadow-md'
           }`}
         >
-          <div className={`absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity ${
-            isDark ? 'text-rose-400' : 'text-rose-500'
+          <div className={`w-14 h-14 rounded-2xl mb-3 flex items-center justify-center bg-gradient-to-br from-purple-500 to-purple-600 shadow-lg ${
+            isDark ? '' : 'shadow-purple-200'
           }`}>
-            <svg className="w-16 h-16" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+            <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
           </div>
-          <span className="text-5xl font-black text-rose-500 tracking-tight mb-2 relative z-10">{totalDue}</span>
-          <span className={`text-xs font-bold uppercase tracking-wide relative z-10 ${
-            isDark ? 'text-slate-400' : 'text-slate-500'
-          }`}>ต้องทบทวนวันนี้</span>
+          <span className="text-3xl font-black text-purple-500 tracking-tight mb-1 relative z-10">{totalCards}</span>
+          <span className={`text-xs font-semibold text-center relative z-10 ${
+            isDark ? 'text-slate-400' : 'text-slate-600'
+          }`}>การ์ดทั้งหมด</span>
         </motion.div>
 
-        {/* Stat 2: การ์ดทั้งหมด */}
+        {/* Stat 2: ต้องทบทวนวันนี้ */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
           whileHover={{ scale: 1.02, y: -2 }}
-          className={`backdrop-blur-md rounded-3xl p-6 border flex flex-col items-center justify-center relative overflow-hidden group cursor-pointer transition-all ${
+          className={`backdrop-blur-md rounded-2xl p-5 border flex flex-col items-center justify-center relative overflow-hidden group cursor-pointer transition-all ${
             isDark 
-              ? 'bg-slate-800/90 border-sky-900/30 hover:bg-slate-800 hover:border-sky-800/50' 
-              : 'bg-white/80 border-sky-100 shadow-sm hover:shadow-md'
+              ? 'bg-slate-800/90 border-rose-900/30 hover:bg-slate-800 hover:border-rose-800/50' 
+              : 'bg-white/80 border-rose-100 shadow-sm hover:shadow-md'
           }`}
         >
-          <div className={`absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity ${
-            isDark ? 'text-sky-400' : 'text-sky-500'
+          <div className={`w-14 h-14 rounded-2xl mb-3 flex items-center justify-center bg-gradient-to-br from-rose-500 to-rose-600 shadow-lg ${
+            isDark ? '' : 'shadow-rose-200'
           }`}>
-            <svg className="w-16 h-16" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z" />
+            <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <span className="text-5xl font-black text-sky-500 tracking-tight mb-2 relative z-10">{totalCards}</span>
-          <span className={`text-xs font-bold uppercase tracking-wide relative z-10 ${
-            isDark ? 'text-slate-400' : 'text-slate-500'
-          }`}>การ์ดทั้งหมด</span>
+          <span className="text-3xl font-black text-rose-500 tracking-tight mb-1 relative z-10">{totalDue}</span>
+          <span className={`text-xs font-semibold text-center relative z-10 ${
+            isDark ? 'text-slate-400' : 'text-slate-600'
+          }`}>ต้องทบทวนวันนี้</span>
+        </motion.div>
+
+        {/* Stat 3: Streak */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          whileHover={{ scale: 1.02, y: -2 }}
+          className={`backdrop-blur-md rounded-2xl p-5 border flex flex-col items-center justify-center relative overflow-hidden group cursor-pointer transition-all ${
+            isDark 
+              ? 'bg-slate-800/90 border-orange-900/30 hover:bg-slate-800 hover:border-orange-800/50' 
+              : 'bg-white/80 border-orange-100 shadow-sm hover:shadow-md'
+          }`}
+        >
+          <div className={`w-14 h-14 rounded-2xl mb-3 flex items-center justify-center bg-gradient-to-br from-orange-500 to-orange-600 shadow-lg ${
+            isDark ? '' : 'shadow-orange-200'
+          }`}>
+            <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0113 13a2.99 2.99 0 01-.879 2.121z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <span className="text-3xl font-black text-orange-500 tracking-tight mb-1 relative z-10">{store.streak} วัน</span>
+          <span className={`text-xs font-semibold text-center relative z-10 ${
+            isDark ? 'text-slate-400' : 'text-slate-600'
+          }`}>Streak</span>
+        </motion.div>
+
+        {/* Stat 4: การ์ดที่เชี่ยวชาญ */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          whileHover={{ scale: 1.02, y: -2 }}
+          className={`backdrop-blur-md rounded-2xl p-5 border flex flex-col items-center justify-center relative overflow-hidden group cursor-pointer transition-all ${
+            isDark 
+              ? 'bg-slate-800/90 border-emerald-900/30 hover:bg-slate-800 hover:border-emerald-800/50' 
+              : 'bg-white/80 border-emerald-100 shadow-sm hover:shadow-md'
+          }`}
+        >
+          <div className={`w-14 h-14 rounded-2xl mb-3 flex items-center justify-center bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg ${
+            isDark ? '' : 'shadow-emerald-200'
+          }`}>
+            <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+            </svg>
+          </div>
+          <span className="text-3xl font-black text-emerald-500 tracking-tight mb-1 relative z-10">
+            {useMemo(() => {
+              // Cards with interval >= 21 days are considered "mastered"
+              const masteredCards = store.cards.filter(c => c.interval >= 21);
+              return masteredCards.length;
+            }, [store.cards])}
+          </span>
+          <span className={`text-xs font-semibold text-center relative z-10 ${
+            isDark ? 'text-slate-400' : 'text-slate-600'
+          }`}>การ์ดที่เชี่ยวชาญ</span>
         </motion.div>
       </div>
 
@@ -179,9 +163,9 @@ export default function Dashboard({ onOpenDeck, onStartReview, onShowAddDeck, da
         </motion.button>
       )}
 
-      {/* Activity Heatmap */}
-      <div className="mb-6">
-        <ActivityHeatmap reviewHistory={reviewHistory ?? {}} dayColor={dayColor} />
+      {/* Review Forecast */}
+      <div className="mb-8">
+        <ReviewForecast dayColor={dayColor} />
       </div>
 
       {/* Empty State or Deck List */}
@@ -213,7 +197,7 @@ export default function Dashboard({ onOpenDeck, onStartReview, onShowAddDeck, da
             {decks.map((deck) => {
               const due = getDueCount(deck.id);
               const total = getTotalCards(deck.id);
-              const col = c(deck.color);
+              const colorStyles = getDeckColorStyles(deck.color);
               return (
                 <motion.div 
                   key={deck.id} 
@@ -225,9 +209,15 @@ export default function Dashboard({ onOpenDeck, onStartReview, onShowAddDeck, da
                       : 'bg-white border-slate-100 shadow-sm hover:shadow-md'
                   }`}
                   onClick={() => onOpenDeck(deck)}>
-                  {/* Icon Box - Softer colors */}
-                  <div className={`w-14 h-14 rounded-2xl ${col.light} flex items-center justify-center group-hover:scale-105 transition-transform`}>
-                    <svg className={`w-7 h-7 ${col.text}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {/* Icon Box - Dynamic color */}
+                  <div 
+                    className="w-14 h-14 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform"
+                    style={{ 
+                      background: colorStyles.gradient,
+                      opacity: 0.9
+                    }}
+                  >
+                    <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                         d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                     </svg>
@@ -272,4 +262,6 @@ export default function Dashboard({ onOpenDeck, onStartReview, onShowAddDeck, da
       )}
     </motion.div>
   );
-}
+});
+
+export default Dashboard;

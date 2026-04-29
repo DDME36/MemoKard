@@ -111,6 +111,13 @@ export const importDeckFromText = (text: string, defaultName = 'Imported Deck', 
       if (match && match[1]) {
         t = match[1].trim();
       }
+    } else if (!t.startsWith('{') && t.includes('{') && t.includes('}')) {
+      // Try to extract JSON object if there's text around it
+      const firstBrace = t.indexOf('{');
+      const lastBrace = t.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        t = t.substring(firstBrace, lastBrace + 1).trim();
+      }
     }
 
     if (t.startsWith('{')) {
@@ -122,6 +129,16 @@ export const importDeckFromText = (text: string, defaultName = 'Imported Deck', 
         const data = JSON.parse(fixedJson);
         if (validateDeckData(data)) {
           return data;
+        } else if (data && data.deck && Array.isArray(data.cards)) {
+          // Lenient validation: as long as it has deck and cards array
+          return {
+            ...data,
+            deck: {
+              name: data.deck.name || defaultName,
+              color: data.deck.color || defaultColor,
+              description: data.deck.description
+            }
+          };
         }
       } catch (err) {
         // Ignore JSON error, fallback to text parsing

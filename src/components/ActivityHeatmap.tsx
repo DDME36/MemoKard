@@ -14,12 +14,17 @@ function toKey(d: Date) {
 function generateGrid(weeks = 13) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  
   const days: Date[] = [];
+  
+  // นับย้อนหลังจากวันนี้ไป (weeks * 7 - 1) วัน
+  // -1 เพราะเราจะเอาวันนี้ด้วย
   for (let i = weeks * 7 - 1; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
     days.push(d);
   }
+  
   return days;
 }
 
