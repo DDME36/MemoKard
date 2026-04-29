@@ -76,11 +76,13 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
     try {
       const parsedData = importDeckFromText(importText);
       
-      // Normalize color - convert to lowercase and check if valid
-      const normalizedColor = parsedData.deck.color?.toLowerCase() || 'violet';
-      const colorToUse = DECK_COLORS.includes(normalizedColor as DeckColor) 
-        ? (normalizedColor as DeckColor) 
-        : 'violet';
+      // Handle both hex color codes and color names
+      const rawColor = parsedData.deck.color || 'violet';
+      const colorToUse = rawColor.startsWith('#') 
+        ? rawColor // Use hex code directly
+        : (DECK_COLORS.includes(rawColor.toLowerCase() as DeckColor) 
+            ? rawColor.toLowerCase() 
+            : 'violet'); // Fallback to violet for invalid color names
       
       const deck = await addDeck(parsedData.deck.name, colorToUse);
       
@@ -113,11 +115,13 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
     try {
       const parsedData = await importDeck(file);
       
-      // Normalize color - convert to lowercase and check if valid
-      const normalizedColor = parsedData.deck.color?.toLowerCase() || 'violet';
-      const colorToUse = DECK_COLORS.includes(normalizedColor as DeckColor) 
-        ? (normalizedColor as DeckColor) 
-        : 'violet';
+      // Handle both hex color codes and color names
+      const rawColor = parsedData.deck.color || 'violet';
+      const colorToUse = rawColor.startsWith('#') 
+        ? rawColor // Use hex code directly
+        : (DECK_COLORS.includes(rawColor.toLowerCase() as DeckColor) 
+            ? rawColor.toLowerCase() 
+            : 'violet'); // Fallback to violet for invalid color names
       
       const deck = await addDeck(parsedData.deck.name, colorToUse);
       
@@ -151,8 +155,11 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
 1. คำถาม (question): ต้องเป็น "ประโยคคำถาม" ที่อ่านแล้วรู้ทันทีว่าต้องการอะไร ห้ามพิมพ์มาแค่คำโดดๆ หรือคีย์เวิร์ด
    (ตัวอย่าง: ❌ "Impedance" ✅ "จงอธิบายความหมายของ Impedance" หรือ ✅ "สูตรคำนวณหาค่า Impedance ในวงจร RLC คืออะไร?")
 2. คำตอบ (answer): ต้องให้คำตอบที่ตรงประเด็นและเข้าใจง่าย หากคำตอบมี "สูตรคณิตศาสตร์" ต้องอธิบายความหมายของตัวแปรแต่ละตัวสั้นๆ ต่อท้ายสูตรด้วยเสมอ
-3. ชื่อชุดการ์ด (name): สั้นกระชับ ไม่เกิน 40 ตัวอักษร สี (color) ให้เลือกจาก: violet, sky, teal, rose, amber, emerald, pink, indigo
-4. รูปแบบสมการคณิตศาสตร์และฟิสิกส์ (บังคับขั้นเด็ดขาด):
+3. ชื่อชุดการ์ด (name): สั้นกระชับ ไม่เกิน 40 ตัวอักษร
+4. สี (color): ให้เลือกสีที่เหมาะสมกับหัวข้อในรูปแบบ Hex Color Code (เช่น #f59e0b, #8b5cf6, #ec4899)
+   - ใช้สีสดใส สะดุดตา เหมาะกับการเรียนรู้
+   - เลือกสีที่สื่อถึงเนื้อหา เช่น: วิทยาศาสตร์ใช้สีฟ้า/เขียว, ภาษาใช้สีม่วง/ชมพู, คณิตศาสตร์ใช้สีส้ม/แดง
+5. รูปแบบสมการคณิตศาสตร์และฟิสิกส์ (บังคับขั้นเด็ดขาด):
    - ห้ามใช้ตัวอักษรพิเศษ (Unicode Math) เช่น ∑, ², ³, α, β, Δ เด็ดขาด!
    - ห้ามจัดรูปแบบเศษส่วนแบบตัวหนังสือ เช่น 1/2 หรือ ½ ให้ใช้ \\frac{1}{2} เท่านั้น
    - ต้องเขียนเป็น "Raw LaTeX Code" ล้วนๆ เท่านั้น เช่น \\sum, ^2, \\alpha, \\Delta
@@ -161,7 +168,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
    - เนื่องจากผลลัพธ์เป็น JSON string เครื่องหมาย Backslash ทุกตัวในคำสั่ง LaTeX จะต้องถูก "Double Escape" (พิมพ์เบิ้ล 2 ตัว) เสมอ เพื่อไม่ให้ JSON พัง
    - ตัวอย่างที่ถูก ✅: "\\\\sum", "\\\\frac{1}{2}", "\\\\vec{F}", "\\\\pi"
    - ตัวอย่างที่ผิด ❌: "\\sum", "\\frac{1}{2}", "\\vec{F}", "\\pi"
-6. การทำช่องว่างให้ทาย (Cloze Deletion): หากต้องการสร้างคำถามแบบ "เติมคำในช่องว่าง" ให้ใช้ {{...}} ครอบ "คำตอบ" ลงไปในฟิลด์ "question" ได้เลย (ห้ามใส่ใน answer)
+7. การทำช่องว่างให้ทาย (Cloze Deletion): หากต้องการสร้างคำถามแบบ "เติมคำในช่องว่าง" ให้ใช้ {{...}} ครอบ "คำตอบ" ลงไปในฟิลด์ "question" ได้เลย (ห้ามใส่ใน answer)
    - ⚠️ คำเตือนสุดสำคัญ: ประโยคที่อยู่นอก {{...}} ต้องมีบริบทชัดเจนเพียงพอให้ตอบได้ ห้ามซ่อนคีย์เวิร์ดที่เป็นประธานหรือบริบทหลักจนคำถามกำกวมเด็ดขาด!
    - 📝 ช่อง "answer" ของโหมดนี้ ให้ใช้สำหรับอธิบายความรู้เพิ่มเติม (Extra Info) หรือขยายความเท่านั้น
    - ✅ ตัวอย่างที่ถูก: {"question": "พื้นที่รับผิดชอบของ การไฟฟ้านครหลวง (MEA) ครอบคลุม 3 จังหวัด ได้แก่ {{กรุงเทพฯ นนทบุรี และสมุทรปราการ}}", "answer": "MEA ดูแลแค่ 3 จังหวัดนี้ ส่วนที่เหลือเป็นของ PEA"}
@@ -171,7 +178,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
 {
   "deck": {
     "name": "ชื่อชุดการ์ด",
-    "color": "violet"
+    "color": "#8b5cf6"
   },
   "cards": [
     {
@@ -372,21 +379,23 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
                   <br/>
                   <span className={isDark ? "text-slate-300" : "text-slate-700"}>3. ชื่อชุดการ์ด (name): สั้นกระชับ ไม่เกิน 40 ตัวอักษร</span>
                   <br/>
-                  <span className={isDark ? "text-slate-300" : "text-slate-700"}>4. รูปแบบสมการ: ห้ามใช้สัญลักษณ์พิเศษ ให้ใช้ Raw LaTeX เท่านั้น (เช่น \\sum, \\frac)</span>
+                  <span className={isDark ? "text-slate-300" : "text-slate-700"}>4. สี (color): ใช้ Hex Color Code (เช่น #f59e0b, #8b5cf6) ที่เหมาะกับหัวข้อ</span>
                   <br/>
-                  <span className={isDark ? "text-purple-400" : "text-purple-600"}>5. การเขียน Backslash: ต้องพิมพ์เบิ้ล 2 ตัวเสมอเพื่อไม่ให้ JSON พัง (เช่น \\\\sum)</span>
+                  <span className={isDark ? "text-slate-300" : "text-slate-700"}>5. รูปแบบสมการ: ห้ามใช้สัญลักษณ์พิเศษ ให้ใช้ Raw LaTeX เท่านั้น (เช่น \\sum, \\frac)</span>
                   <br/>
-                  <span className={isDark ? "text-purple-400" : "text-purple-600"}>6. Cloze Deletion: ใช้ {'{{'} ... {'}}'}  ครอบคำตอบสำคัญใน "question" เท่านั้น (ห้ามใส่ใน answer)</span>
+                  <span className={isDark ? "text-purple-400" : "text-purple-600"}>6. การเขียน Backslash: ต้องพิมพ์เบิ้ล 2 ตัวเสมอเพื่อไม่ให้ JSON พัง (เช่น \\\\sum)</span>
+                  <br/>
+                  <span className={isDark ? "text-purple-400" : "text-purple-600"}>7. Cloze Deletion: ใช้ {'{{'} ... {'}}'}  ครอบคำตอบสำคัญใน "question" เท่านั้น (ห้ามใส่ใน answer)</span>
                   <br/>
                   <span className={isDark ? "text-amber-500" : "text-amber-600"}>&nbsp;&nbsp;&nbsp;⚠️ ห้ามซ่อนคีย์เวิร์ด/ประธานหลักจนคำถามกำกวม! (เช่น ไม่รู้ว่าถามถึงบริษัทไหน)</span>
                   <br/>
-                  <span className={isDark ? "text-slate-400" : "text-slate-500"}>&nbsp;&nbsp;&nbsp;✅ {`{"question": "พื้นที่ของ MEA คือ {{กทม. นนทบุรี}}", "answer": "..."}`}</span>
+                  <span className={isDark ? "text-slate-400" : "text-slate-500"}>&nbsp;&nbsp;&nbsp;✅ {`{"question": "พื้นที่ของ MEA คือ {{กทม. นนทบุรี สมุทรปราการ}}", "answer": "..."}`}</span>
                   <br/>
                   <span className={isDark ? "text-rose-400" : "text-rose-600"}>&nbsp;&nbsp;&nbsp;❌ {`{"question": "พื้นที่ของ {{MEA}} คือจังหวัดใด?", "answer": "กทม. นนทบุรี"}`}</span>
                   <br/><br/>
                   <span className={isDark ? "text-sky-400" : "text-sky-600"}>รูปแบบ JSON:</span>
                   <br/>
-                  <span className={isDark ? "text-amber-400" : "text-amber-600"}>{`{"deck": {"name": "ชื่อชุดการ์ด","color": "violet"},"cards": [{"question": "คำถามที่ระบุความต้องการชัดเจน...","answer": "คำตอบที่ถูกต้อง พร้อมคำอธิบายตัวแปรหรือขยายความสั้นๆ..."}]}`}</span>
+                  <span className={isDark ? "text-amber-400" : "text-amber-600"}>{`{"deck": {"name": "ชื่อชุดการ์ด","color": "#8b5cf6"},"cards": [{"question": "คำถามที่ระบุความต้องการชัดเจน...","answer": "คำตอบที่ถูกต้อง พร้อมคำอธิบายตัวแปรหรือขยายความสั้นๆ..."}]}`}</span>
                 </div>
               </div>
 

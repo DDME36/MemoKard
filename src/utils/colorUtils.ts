@@ -2,6 +2,25 @@
  * Utility functions for dynamic color handling
  */
 
+// Color name to hex mapping
+const COLOR_MAP: Record<string, string> = {
+  violet: '#8b5cf6',
+  sky: '#38bdf8',
+  teal: '#14b8a6',
+  rose: '#f43f5e',
+  amber: '#f59e0b',
+  emerald: '#10b981',
+  pink: '#ec4899',
+  indigo: '#6366f1',
+};
+
+/**
+ * Convert color name to hex
+ */
+export function colorNameToHex(colorName: string): string {
+  return COLOR_MAP[colorName.toLowerCase()] || COLOR_MAP.violet;
+}
+
 /**
  * Convert hex color to RGB values
  */
@@ -45,9 +64,12 @@ export function darkenColor(hex: string, percent: number): string {
 }
 
 /**
- * Get dynamic color styles for a deck based on hex color
+ * Get dynamic color styles for a deck based on color name or hex
  */
-export function getDeckColorStyles(hexColor: string) {
+export function getDeckColorStyles(color: string) {
+  // Convert color name to hex if needed
+  const hexColor = color.startsWith('#') ? color : colorNameToHex(color);
+  
   const lightColor = lightenColor(hexColor, 40);
   const darkColor = darkenColor(hexColor, 15);
   const rgb = hexToRgb(hexColor);

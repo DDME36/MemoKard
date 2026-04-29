@@ -8,7 +8,7 @@ import type { Achievement } from '../components/AchievementToast';
 export interface Deck {
   id: string;
   name: string;
-  color: string;
+  color: string; // Can be a DeckColor name or hex code (e.g., '#8b5cf6')
   createdAt: Date;
   linkedPublicDeckId?: string | null;
   isSynced?: boolean;
