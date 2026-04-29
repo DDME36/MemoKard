@@ -75,14 +75,23 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
     
     try {
       const parsedData = importDeckFromText(importText);
-      const colorToUse = DECK_COLORS.includes(parsedData.deck.color as DeckColor) ? (parsedData.deck.color as DeckColor) : 'violet';
+      
+      // Normalize color - convert to lowercase and check if valid
+      const normalizedColor = parsedData.deck.color?.toLowerCase() || 'violet';
+      const colorToUse = DECK_COLORS.includes(normalizedColor as DeckColor) 
+        ? (normalizedColor as DeckColor) 
+        : 'violet';
       
       const deck = await addDeck(parsedData.deck.name, colorToUse);
       
-      // Add cards sequentially
-      for (const card of parsedData.cards) {
-        await addCard(deck.id, card.question, card.answer);
-      }
+      // Add cards in batch WITHOUT triggering achievements each time
+      const cardPromises = parsedData.cards.map(card => 
+        addCard(deck.id, card.question, card.answer, undefined, undefined, true)
+      );
+      await Promise.all(cardPromises);
+      
+      // Check achievements once after all cards are added
+      useFlashcardStore.getState().checkAndUnlockAchievements();
       
       onCreated(deck.id);
       haptics.success();
@@ -103,13 +112,23 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
 
     try {
       const parsedData = await importDeck(file);
-      const colorToUse = DECK_COLORS.includes(parsedData.deck.color as DeckColor) ? (parsedData.deck.color as DeckColor) : 'violet';
+      
+      // Normalize color - convert to lowercase and check if valid
+      const normalizedColor = parsedData.deck.color?.toLowerCase() || 'violet';
+      const colorToUse = DECK_COLORS.includes(normalizedColor as DeckColor) 
+        ? (normalizedColor as DeckColor) 
+        : 'violet';
       
       const deck = await addDeck(parsedData.deck.name, colorToUse);
       
-      for (const card of parsedData.cards) {
-        await addCard(deck.id, card.question, card.answer);
-      }
+      // Add cards in batch WITHOUT triggering achievements each time
+      const cardPromises = parsedData.cards.map(card => 
+        addCard(deck.id, card.question, card.answer, undefined, undefined, true)
+      );
+      await Promise.all(cardPromises);
+      
+      // Check achievements once after all cards are added
+      useFlashcardStore.getState().checkAndUnlockAchievements();
       
       onCreated(deck.id);
       haptics.success();

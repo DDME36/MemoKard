@@ -74,7 +74,7 @@ interface FlashcardStore {
   undoDeleteDeck: (id: string) => void;
 
   // Card actions
-  addCard: (deckId: string, question: string, answer: string, questionImage?: string, answerImage?: string) => Promise<void>;
+  addCard: (deckId: string, question: string, answer: string, questionImage?: string, answerImage?: string, skipAchievementCheck?: boolean) => Promise<void>;
   editCard: (id: string, question: string, answer: string, questionImage?: string, answerImage?: string) => Promise<void>;
   deleteCard: (id: string, immediate?: boolean) => Promise<void>;
   undoDeleteCard: (id: string) => void;
@@ -308,7 +308,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
       },
 
       // ── Card Actions ──
-      addCard: async (deckId, question, answer, questionImage, answerImage) => {
+      addCard: async (deckId, question, answer, questionImage, answerImage, skipAchievementCheck = false) => {
         const { userId, isDemo } = get();
         const fsrsState = createInitialFSRSState();
         const now = new Date();
@@ -337,8 +337,10 @@ export const useFlashcardStore = create<FlashcardStore>()(
           }
         }));
 
-        // Check for achievements
-        get().checkAndUnlockAchievements();
+        // Check for achievements (skip if requested to prevent spam)
+        if (!skipAchievementCheck) {
+          get().checkAndUnlockAchievements();
+        }
 
         if (!isDemo && userId) {
           const supabaseCard = await supabaseStore.createCard(
