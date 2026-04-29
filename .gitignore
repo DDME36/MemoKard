@@ -28,3 +28,7 @@ dev-dist
 *.njsproj
 *.sln
 *.sw?
+
+# Supabase SQL files (local use only)
+supabase-*.sql
+SUPABASE_DATABASE_GUIDE.md
