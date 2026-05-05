@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, memo } from 'react';
+import { useState, useEffect, useMemo, useCallback, memo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { useFlashcardStore, type Deck } from '../store/store';
@@ -6,6 +6,8 @@ import { useTheme } from '../contexts/ThemeContext';
 import ReviewCard from '../components/ReviewCard';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import ReviewModeSelector, { type ReviewMode } from '../components/ReviewModeSelector';
+import ZenModePanel from '../components/ZenModePanel';
+import { Headphones } from 'lucide-react';
 import { haptics, sounds } from '../utils/haptics';
 
 interface ReviewSessionProps {
@@ -40,75 +42,68 @@ const ReviewSession = memo(function ReviewSession({
   const store = useFlashcardStore();
   const { getCardsByDeck, getDueCards, reviewCard, trackStudyTime } = store;
   const { isDark } = useTheme();
+
+  // ✅ Fix: Store stable refs for deck ID and cramMode so the reset useEffect
+  // only fires when these VALUES truly change, not when store functions change reference.
+  const prevDeckIdRef = useRef<string | null | undefined>(activeDeck?.id);
+  const prevCramModeRef = useRef<boolean>(isCramMode);
+  const prevSkipModeSelectorRef = useRef<boolean>(skipModeSelector);
   
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [showCelebration, setShowCelebration] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [reviewMode, setReviewMode] = useState<ReviewMode>('normal');
   const [showModeSelector, setShowModeSelector] = useState(!skipModeSelector);
-  const [, setFailedCardIds] = useState<Set<string>>(new Set());
+  const [failedCardIds, setFailedCardIds] = useState<Set<string>>(new Set());
   const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
+  const [showZenMode, setShowZenMode] = useState(false);
+  // Frozen exam/preview card list — rebuilt only when mode is selected, never on store update
+  const [frozenExamCards, setFrozenExamCards] = useState<ReturnType<typeof getCardsByDeck>>([]);
+  // Phase 2: after answering all cards, repeat only the ones answered wrong
+  const [isRepeatPhase, setIsRepeatPhase] = useState(false);
 
-  // Freeze the review list when session starts so it doesn't shrink dynamically
-  const [reviewCards, setReviewCards] = useState(() => {
-    let initialCards = [];
+  // Helper: build initial card list (called once on mount and on deck change)
+  const buildCardList = useCallback(() => {
     if (activeDeck) {
       const allCards = getCardsByDeck(activeDeck.id);
-      // ถ้าเป็น Cram Mode ให้ดึงการ์ดทั้งหมด ไม่กรองตามเวลา
       if (isCramMode) {
-        initialCards = allCards;
-      } else {
-        // ถ้าไม่ใช่ Cram Mode ให้กรองเฉพาะการ์ดที่ถึงเวลาทบทวน
-        initialCards = allCards.filter(card => new Date(card.nextReviewDate) <= new Date());
+        return allCards;
       }
-    } else {
-      initialCards = getDueCards();
+      return allCards.filter(card => new Date(card.nextReviewDate) <= new Date());
     }
-    // สุ่มลำดับการ์ดเพื่อให้ไม่ต้องจำตามลำดับ
-    return shuffleArray(initialCards);
-  });
+    return getDueCards();
+  }, [activeDeck, isCramMode, getCardsByDeck, getDueCards]);
+
+  // Freeze the review list when session starts so it doesn't shrink dynamically
+  const [reviewCards, setReviewCards] = useState(() => shuffleArray(buildCardList()));
 
   // Filter cards based on review mode
+  // ✅ Fix: exam/preview use frozenExamCards (set once when mode is chosen)
+  // so they never re-shuffle when the store updates mid-session.
   const filteredCards = useMemo(() => {
     if (showModeSelector) return [];
-    
-    let cards = [...reviewCards];
-    
+
+    // Phase 2: repeat only wrong-answered cards
+    if (isRepeatPhase) {
+      return reviewCards.filter(c => failedCardIds.has(c.id));
+    }
+
     switch (reviewMode) {
       case 'focus':
-        // Only difficult cards (Ease Factor < 2.5)
-        cards = cards.filter(c => c.easeFactor < 2.5);
-        break;
+        return reviewCards.filter(c => c.easeFactor < 2.5);
       case 'quick':
-        // Maximum 10 cards
-        cards = cards.slice(0, 10);
-        break;
+        return reviewCards.slice(0, 10);
       case 'exam':
-        // All cards in deck (ignore due date)
-        if (activeDeck) {
-          cards = shuffleArray(getCardsByDeck(activeDeck.id));
-        }
-        break;
-      case 'weak':
-        // Only cards with low ease factor (< 2.0) - truly weak cards
-        cards = cards.filter(c => c.easeFactor < 2.0);
-        break;
       case 'preview':
-        // All cards in deck for preview
-        if (activeDeck) {
-          cards = shuffleArray(getCardsByDeck(activeDeck.id));
-        } else {
-          cards = shuffleArray(store.cards);
-        }
-        break;
+        // ✅ Use frozen list — never read from live store here
+        return frozenExamCards;
+      case 'weak':
+        return reviewCards.filter(c => c.easeFactor < 2.0);
       case 'normal':
       default:
-        // Keep as is
-        break;
+        return reviewCards;
     }
-    
-    return cards;
-  }, [reviewCards, reviewMode, showModeSelector, activeDeck, getCardsByDeck, store.cards]);
+  }, [reviewCards, reviewMode, showModeSelector, frozenExamCards, isRepeatPhase, failedCardIds]);
 
   // Simulate loading for smooth UX
   useEffect(() => {
@@ -136,26 +131,32 @@ const ReviewSession = memo(function ReviewSession({
     };
   }, [sessionStartTime, trackStudyTime]);
 
-  // Reset when switching decks or changing skip mode
+  // ✅ Fix: Reset ONLY when deck ID / cram mode / skipModeSelector VALUE changes.
+  // We compare against refs so that store function reference changes (which happen
+  // on every card review) do NOT trigger a spurious reset of the session.
   useEffect(() => {
-    let newCards = [];
-    if (activeDeck) {
-      const allCards = getCardsByDeck(activeDeck.id);
-      if (isCramMode) {
-        newCards = allCards;
-      } else {
-        newCards = allCards.filter(card => new Date(card.nextReviewDate) <= new Date());
-      }
-    } else {
-      newCards = getDueCards();
-    }
-    setReviewCards(shuffleArray(newCards));
+    const deckChanged = activeDeck?.id !== prevDeckIdRef.current;
+    const cramChanged = isCramMode !== prevCramModeRef.current;
+    const skipChanged = skipModeSelector !== prevSkipModeSelectorRef.current;
+
+    if (!deckChanged && !cramChanged && !skipChanged) return; // nothing meaningful changed
+
+    // Update refs
+    prevDeckIdRef.current = activeDeck?.id;
+    prevCramModeRef.current = isCramMode;
+    prevSkipModeSelectorRef.current = skipModeSelector;
+
+    // Rebuild card list with fresh data
+    setReviewCards(shuffleArray(buildCardList()));
+    setFrozenExamCards([]);
     setCurrentCardIndex(0);
     setShowCelebration(false);
     setShowModeSelector(!skipModeSelector);
     setFailedCardIds(new Set());
-    setSessionStartTime(null); // Reset timer on deck change
-  }, [activeDeck?.id, isCramMode, skipModeSelector, getCardsByDeck, getDueCards]);
+    setIsRepeatPhase(false);
+    setSessionStartTime(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDeck?.id, isCramMode, skipModeSelector, buildCardList]);
 
   const activeColor = useMemo(() =>
     (activeDeck && deckColor) ? deckColor : dayColor,
@@ -183,74 +184,58 @@ const ReviewSession = memo(function ReviewSession({
     [currentCardIndex, reviewTotal]
   );
 
+  // ✅ Celebration logic — declared BEFORE handleReview so the closure can reference it
+  const triggerCelebration = useCallback(() => {
+    setShowCelebration(true);
+    haptics.celebration();
+    sounds.play('celebration');
+    confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#8b5cf6', '#ec4899', '#3b82f6', '#10b981'] });
+    setTimeout(() => confetti({ particleCount: 50, angle: 60, spread: 55, origin: { x: 0 }, colors: ['#f59e0b', '#ef4444', '#8b5cf6'] }), 250);
+    setTimeout(() => confetti({ particleCount: 50, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#10b981', '#3b82f6', '#ec4899'] }), 400);
+  }, []);
+
   const handleReview = useCallback(async (quality: number) => {
     if (!currentCard) return;
-    
-    // Preview mode: just go to next card without recording
+
+    // Preview mode: just advance without recording FSRS
     if (reviewMode === 'preview') {
       if (currentCardIndex >= filteredCards.length - 1) {
-        setShowCelebration(true);
+        triggerCelebration();
       } else {
         setCurrentCardIndex((i) => i + 1);
       }
       return;
     }
-    
-    // Track failed cards for "Weak Points" mode
+
+    // Track failed cards so we can repeat them at the end
+    const updatedFailed = new Set(failedCardIds);
     if (quality === 1) {
-      setFailedCardIds(prev => new Set(prev).add(currentCard.id));
+      updatedFailed.add(currentCard.id);
+      setFailedCardIds(updatedFailed);
+    } else {
+      // If the user answers correctly on a repeat, remove from failed set
+      updatedFailed.delete(currentCard.id);
+      setFailedCardIds(updatedFailed);
     }
-    
-    // Exam mode should behave like Cram mode (don't update FSRS scheduling)
-    // Preview mode is already handled above by returning early
+
+    // Exam mode behaves like Cram (skip FSRS scheduling)
     const shouldSkipFSRS = isCramMode || reviewMode === 'exam';
     await reviewCard(currentCard.id, quality, shouldSkipFSRS);
-    
-    // Check if this was the last card
+
+    // Check if this was the last card in the current phase
     if (currentCardIndex >= filteredCards.length - 1) {
-      // 🎉 GAMIFICATION: Fire confetti + haptic + sound!
-      setShowCelebration(true);
-      
-      // Haptic celebration
-      haptics.celebration();
-      
-      // Sound celebration
-      sounds.play('celebration');
-      
-      // Visual confetti
-      confetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: ['#8b5cf6', '#ec4899', '#3b82f6', '#10b981']
-      });
-      
-      // Fire again after a delay for extra celebration
-      setTimeout(() => {
-        confetti({
-          particleCount: 50,
-          angle: 60,
-          spread: 55,
-          origin: { x: 0 },
-          colors: ['#f59e0b', '#ef4444', '#8b5cf6']
-        });
-      }, 250);
-      
-      setTimeout(() => {
-        confetti({
-          particleCount: 50,
-          angle: 120,
-          spread: 55,
-          origin: { x: 1 },
-          colors: ['#10b981', '#3b82f6', '#ec4899']
-        });
-      }, 400);
+      // If there are failed cards and we're not already in repeat phase, start repeat phase
+      if (!isRepeatPhase && updatedFailed.size > 0 && reviewMode === 'normal') {
+        setIsRepeatPhase(true);
+        setCurrentCardIndex(0);
+      } else {
+        // All done — fire celebration after short delay so progress bar hits 100% first
+        setTimeout(triggerCelebration, 400);
+      }
     } else {
       setCurrentCardIndex((i) => i + 1);
     }
-  }, [currentCard, currentCardIndex, filteredCards.length, reviewCard, isCramMode]);
-
-  // This useEffect is removed - state reset is handled in the previous useEffect
+  }, [currentCard, currentCardIndex, filteredCards.length, reviewCard, isCramMode, reviewMode, failedCardIds, isRepeatPhase, triggerCelebration]);
 
   // Show mode selector first
   if (showModeSelector) {
@@ -266,6 +251,17 @@ const ReviewSession = memo(function ReviewSession({
             setReviewMode(mode);
             setShowModeSelector(false);
             setCurrentCardIndex(0);
+            setIsRepeatPhase(false);
+            setFailedCardIds(new Set());
+            // ✅ Freeze exam/preview cards NOW (once) so they never re-shuffle mid-session
+            if (mode === 'exam' || mode === 'preview') {
+              const allCards = activeDeck
+                ? getCardsByDeck(activeDeck.id)
+                : store.cards;
+              setFrozenExamCards(shuffleArray(allCards));
+            } else {
+              setFrozenExamCards([]);
+            }
           }}
           dayColor={activeColor}
           deckId={activeDeck?.id}
@@ -465,15 +461,35 @@ const ReviewSession = memo(function ReviewSession({
       initial={{ opacity: 0, y: 12 }} 
       animate={{ opacity: 1, y: 0 }} 
       exit={{ opacity: 0 }}
+      className="relative"
     >
+      {/* Zen Mode Panel */}
+      <ZenModePanel 
+        isOpen={showZenMode} 
+        onClose={() => setShowZenMode(false)} 
+        dayColor={activeColor} 
+      />
+
       {/* Progress Bar */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-2">
-          <span className={`text-sm font-bold ${
-            isDark ? 'text-slate-400' : 'text-slate-600'
-          }`}>
-            {currentCardIndex + 1} / {reviewTotal}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className={`text-sm font-bold ${
+              isDark ? 'text-slate-400' : 'text-slate-600'
+            }`}>
+              {currentCardIndex + 1} / {reviewTotal}
+            </span>
+            <button 
+              onClick={() => setShowZenMode(true)}
+              className={`px-2 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                isDark 
+                  ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' 
+                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm'
+              }`}
+            >
+              <Headphones className="w-3.5 h-3.5" /> Zen Mode
+            </button>
+          </div>
           <span 
             className={`text-sm font-bold bg-gradient-to-r ${activeGradientClass} bg-clip-text text-transparent`}
             style={textGradientStyle}
@@ -485,12 +501,20 @@ const ReviewSession = memo(function ReviewSession({
           isDark ? 'bg-slate-800' : 'bg-slate-200'
         }`}>
           <motion.div
-            className={`h-full bg-gradient-to-r ${activeGradientClass}`}
+            className={`h-full relative bg-gradient-to-r ${activeGradientClass}`}
             style={activeGradientStyle}
             initial={{ width: 0 }}
             animate={{ width: `${reviewProgress}%` }}
             transition={{ duration: 0.3 }}
-          />
+          >
+            <motion.div
+              key={currentCardIndex}
+              initial={{ x: '-100%', opacity: 0 }}
+              animate={{ x: '200%', opacity: [0, 0.5, 0] }}
+              transition={{ duration: 0.7, ease: "easeInOut" }}
+              className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent w-full"
+            />
+          </motion.div>
         </div>
       </div>
 

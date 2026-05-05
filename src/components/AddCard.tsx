@@ -100,7 +100,7 @@ export default function AddCard({ deckId, onClose }: AddCardProps) {
               </label>
               <textarea id="question" value={question} onChange={(e) => setQuestion(e.target.value)}
                 placeholder="พิมพ์คำถามที่นี่..."
-                className={`w-full px-4 py-4 border-2 rounded-2xl placeholder-slate-400 focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100 transition-all resize-none text-sm font-medium select-text ${
+                className={`w-full px-4 py-4 border-2 rounded-2xl placeholder-slate-400 focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100 transition-all resize-none text-base font-medium select-text ${
                   isDark 
                     ? 'bg-slate-900 border-slate-700 text-slate-200' 
                     : 'bg-slate-50 border-slate-200 text-slate-800'
@@ -156,7 +156,7 @@ export default function AddCard({ deckId, onClose }: AddCardProps) {
               </label>
               <textarea id="answer" value={answer} onChange={(e) => setAnswer(e.target.value)}
                 placeholder="พิมพ์คำตอบที่นี่..."
-                className={`w-full px-4 py-4 border-2 rounded-2xl focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100 transition-all resize-none text-sm font-medium select-text ${
+                className={`w-full px-4 py-4 border-2 rounded-2xl focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100 transition-all resize-none text-base font-medium select-text ${
                   isDark 
                     ? 'bg-purple-900/30 border-purple-800 text-slate-200 placeholder-purple-400/50' 
                     : 'bg-purple-50 border-purple-200 text-slate-800 placeholder-purple-300'

@@ -7,6 +7,7 @@ import { communityStore, type PublicDeck, type PublicDeckCard } from '../store/c
 import RatingStars from '../components/RatingStars';
 import ReportModal from '../components/ReportModal';
 import ConfirmModal from '../components/ConfirmModal';
+import MathText from '../components/MathText';
 
 interface PublicDeckDetailProps {
   publicDeckId: string;
@@ -350,10 +351,10 @@ export default function PublicDeckDetail({ publicDeckId, onClose, onImported }: 
                       การ์ดที่ {index + 1}
                     </div>
                     <div className={`font-medium mb-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                      {card.question}
+                      <MathText className="[&_p]:mb-0 [&_.katex]:text-[0.95em]">{card.question}</MathText>
                     </div>
                     <div className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                      {card.answer}
+                      <MathText className="[&_p]:mb-0 [&_.katex]:text-[0.85em]">{card.answer}</MathText>
                     </div>
                   </div>
                 ))}

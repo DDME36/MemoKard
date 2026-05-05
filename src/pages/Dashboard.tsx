@@ -15,13 +15,21 @@ interface DashboardProps {
 
 const Dashboard = memo(function Dashboard({ onOpenDeck, onStartReview, onShowAddDeck, dayColor }: DashboardProps) {
   const store = useFlashcardStore();
-  const { decks, getDueCards, getTotalCards, getDueCount } = store;
+  const { decks, getTotalCards, getDueCount } = store;
   const { isDark } = useTheme();
 
-  // Memoize expensive calculations
-  const allDueCards = useMemo(() => getDueCards(), [getDueCards]);
-  const totalDue = useMemo(() => allDueCards.length, [allDueCards]);
-  const totalCards = useMemo(() => getTotalCards(), [getTotalCards]);
+  // ✅ Fix: read store.cards directly instead of getDueCards (unstable reference)
+  const allDueCards = useMemo(() => {
+    const now = new Date();
+    return store.cards.filter(c => new Date(c.nextReviewDate) <= now);
+  }, [store.cards]);
+  const totalDue = allDueCards.length;
+  const totalCards = useMemo(() => getTotalCards(), [store.cards, getTotalCards]);
+  // ✅ Fix: pull mastered count out of JSX into a proper useMemo at component level
+  const masteredCount = useMemo(
+    () => store.cards.filter(c => c.interval >= 21).length,
+    [store.cards]
+  );
 
   return (
     <motion.div 
@@ -101,7 +109,14 @@ const Dashboard = memo(function Dashboard({ onOpenDeck, onStartReview, onShowAdd
               : 'bg-white/80 border-orange-100 shadow-sm hover:shadow-md'
           }`}
         >
-          <div className={`w-14 h-14 rounded-2xl mb-3 flex items-center justify-center bg-gradient-to-br from-orange-500 to-orange-600 shadow-lg ${
+          {store.streak > 0 && (
+             <motion.div 
+               animate={{ opacity: [0.4, 0.7, 0.4], scale: [0.9, 1.2, 0.9] }} 
+               transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }} 
+               className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 bg-orange-500/30 blur-2xl rounded-full pointer-events-none z-0" 
+             />
+          )}
+          <div className={`w-14 h-14 rounded-2xl mb-3 flex items-center justify-center bg-gradient-to-br from-orange-500 to-orange-600 shadow-lg relative z-10 ${
             isDark ? '' : 'shadow-orange-200'
           }`}>
             <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -134,11 +149,7 @@ const Dashboard = memo(function Dashboard({ onOpenDeck, onStartReview, onShowAdd
             </svg>
           </div>
           <span className="text-3xl font-black text-emerald-500 tracking-tight mb-1 relative z-10">
-            {useMemo(() => {
-              // Cards with interval >= 21 days are considered "mastered"
-              const masteredCards = store.cards.filter(c => c.interval >= 21);
-              return masteredCards.length;
-            }, [store.cards])}
+            {masteredCount}
           </span>
           <span className={`text-xs font-semibold text-center relative z-10 ${
             isDark ? 'text-slate-400' : 'text-slate-600'

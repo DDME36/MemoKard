@@ -14,7 +14,7 @@ import { fsrs, createEmptyCard, Rating, type Card as FSRSCard, type RecordLog } 
 export { Rating };
 
 // FSRS scheduler instance (ใช้ default parameters)
-const scheduler = fsrs();
+export const scheduler = fsrs();
 
 /**
  * Map quality (1/2/3/4) → FSRS Rating
@@ -112,3 +112,18 @@ export function calculateFSRS(
     interval: scheduled.card.scheduled_days,
   };
 }
+
+/**
+ * NOTE: Real FSRS parameter optimization (optimizing the 17 weights) requires
+ * a significant amount of review history (1000+ reviews) and is computationally
+ * intensive — it is typically done on a server using the open-source
+ * `fsrs-optimizer` Python package, not in the browser.
+ *
+ * The ts-fsrs default weights are already trained on a large public Anki dataset
+ * and perform well for most users without personalization.
+ *
+ * If you want to add real optimization in the future:
+ * 1. Collect review logs in Supabase (card_id, rating, reviewed_at, scheduled_days)
+ * 2. Call a backend endpoint that runs the Python FSRS optimizer
+ * 3. Store the resulting weights and pass them to: fsrs({ w: [...17 weights...] })
+ */

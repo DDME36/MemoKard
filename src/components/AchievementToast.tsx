@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { sounds } from '../utils/haptics';
 
@@ -42,6 +42,11 @@ const rarityColors = {
 export default function AchievementToast({ achievement, onClose }: AchievementToastProps) {
   const [isVisible, setIsVisible] = useState(false);
 
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     if (achievement) {
       setIsVisible(true);
@@ -58,12 +63,12 @@ export default function AchievementToast({ achievement, onClose }: AchievementTo
       // Auto close after 5 seconds
       const timer = setTimeout(() => {
         setIsVisible(false);
-        setTimeout(onClose, 300);
+        setTimeout(() => onCloseRef.current(), 300);
       }, 5000);
 
       return () => clearTimeout(timer);
     }
-  }, [achievement, onClose]);
+  }, [achievement]);
 
   if (!achievement) return null;
 

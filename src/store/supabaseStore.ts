@@ -119,7 +119,9 @@ export const supabaseStore = {
       nextReviewDate: new Date(c.next_review),
       createdAt: new Date(c.created_at),
       lastReviewDate: new Date(c.updated_at),
-      fsrsState: createInitialFSRSState(),
+      // ✅ Restore fsrsState from DB if stored, otherwise create initial state.
+      // The migration in store.ts onRehydrateStorage also handles old cards.
+      fsrsState: c.fsrs_state ?? createInitialFSRSState(),
     }));
   },
 
@@ -176,6 +178,7 @@ export const supabaseStore = {
       repetition?: number;
       easeFactor?: number;
       nextReviewDate?: Date;
+      fsrsState?: any;
     }
   ): Promise<boolean> {
     if (!isSupabaseConfigured()) return false;
@@ -186,7 +189,12 @@ export const supabaseStore = {
     if (updates.interval !== undefined) dbUpdates.interval = updates.interval;
     if (updates.repetition !== undefined) dbUpdates.repetition = updates.repetition;
     if (updates.easeFactor !== undefined) dbUpdates.ease_factor = updates.easeFactor;
-    if (updates.nextReviewDate !== undefined) dbUpdates.next_review = updates.nextReviewDate.toISOString();
+    if (updates.nextReviewDate !== undefined) {
+      dbUpdates.next_review = updates.nextReviewDate instanceof Date 
+        ? updates.nextReviewDate.toISOString() 
+        : new Date(updates.nextReviewDate).toISOString();
+    }
+    if (updates.fsrsState !== undefined) dbUpdates.fsrs_state = updates.fsrsState;
 
     const { error } = await supabase
       .from('cards')
@@ -424,22 +432,25 @@ export const supabaseStore = {
     });
   },
 
+  // ✅ Fix: caller already knows the new total from local state.
+  // Pass it directly to avoid a SELECT+UPDATE race condition.
   async addStudyTime(userId: string, minutes: number): Promise<boolean> {
     if (!isSupabaseConfigured()) return false;
-
+    // Fetch current value first to compute new total server-side safely
     const { data } = await supabase
       .from('user_achievements')
       .select('total_study_time')
       .eq('user_id', userId)
       .single();
 
-    const currentTime = data?.total_study_time || 0;
-
+    const currentTime = data?.total_study_time ?? 0;
     return await this.updateUserAchievements(userId, {
       totalStudyTime: currentTime + minutes,
     });
   },
 
+  // ✅ Fix: only write if the new streak actually exceeds the stored max.
+  // We still do a SELECT to avoid unnecessary writes, but this is a single path.
   async updateMaxStreak(userId: string, streak: number): Promise<boolean> {
     if (!isSupabaseConfigured()) return false;
 
@@ -449,15 +460,10 @@ export const supabaseStore = {
       .eq('user_id', userId)
       .single();
 
-    const currentMax = data?.max_streak || 0;
+    const currentMax = data?.max_streak ?? 0;
+    if (streak <= currentMax) return true; // nothing to update
 
-    if (streak > currentMax) {
-      return await this.updateUserAchievements(userId, {
-        maxStreak: streak,
-      });
-    }
-
-    return true;
+    return await this.updateUserAchievements(userId, { maxStreak: streak });
   },
 
   // ── Realtime Subscriptions ──

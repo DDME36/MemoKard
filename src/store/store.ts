@@ -1,9 +1,23 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
+import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval';
 import { calculateFSRS, createInitialFSRSState, type FSRSState } from '../utils/fsrs';
 import { supabaseStore } from './supabaseStore';
+import { syncQueue } from './syncQueue';
 import { checkAchievements, type UserProgress } from '../utils/achievements';
 import type { Achievement } from '../components/AchievementToast';
+
+const idbStorage: StateStorage = {
+  getItem: async (name: string): Promise<string | null> => {
+    return (await idbGet(name)) || null;
+  },
+  setItem: async (name: string, value: string): Promise<void> => {
+    await idbSet(name, value);
+  },
+  removeItem: async (name: string): Promise<void> => {
+    await idbDel(name);
+  },
+};
 
 export interface Deck {
   id: string;
@@ -435,7 +449,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
           const today = new Date().toISOString().slice(0, 10);
           const currentCount = state.reviewHistory[today] ?? 0;
 
-          // Track perfect review streak
+          // Track consecutive perfect review streak (reset on non-perfect)
           let newPerfectStreak = state.perfectReviewStreak;
           if (quality === 4) {
             newPerfectStreak += 1;
@@ -444,15 +458,13 @@ export const useFlashcardStore = create<FlashcardStore>()(
           }
 
           if (isCramMode) {
-            // Skip FSRS state update in Cram Mode, only update history
             return {
-              reviewHistory: {
-                ...state.reviewHistory,
-                [today]: currentCount + 1,
-              },
+              reviewHistory: { ...state.reviewHistory, [today]: currentCount + 1 },
               userProgress: {
                 ...state.userProgress,
                 reviewsCompleted: state.userProgress.reviewsCompleted + 1,
+                // perfectReviews tracks the PEAK consecutive streak ever reached
+                perfectReviews: Math.max(state.userProgress.perfectReviews, newPerfectStreak),
               },
               perfectReviewStreak: newPerfectStreak,
             };
@@ -464,60 +476,74 @@ export const useFlashcardStore = create<FlashcardStore>()(
           return {
             cards: state.cards.map((c) =>
               c.id === id
-                ? {
-                    ...c,
-                    interval,
-                    repetition: c.repetition + 1,
-                    nextReviewDate,
-                    lastReviewDate: new Date(),
-                    fsrsState: newState,
-                  }
+                ? { ...c, interval, repetition: c.repetition + 1, nextReviewDate, lastReviewDate: new Date(), fsrsState: newState }
                 : c
             ),
-            reviewHistory: {
-              ...state.reviewHistory,
-              [today]: currentCount + 1,
-            },
+            reviewHistory: { ...state.reviewHistory, [today]: currentCount + 1 },
             userProgress: {
               ...state.userProgress,
               reviewsCompleted: state.userProgress.reviewsCompleted + 1,
-              perfectReviews: quality === 4 ? state.userProgress.perfectReviews + 1 : state.userProgress.perfectReviews,
+              perfectReviews: Math.max(state.userProgress.perfectReviews, newPerfectStreak),
             },
             perfectReviewStreak: newPerfectStreak,
           };
         });
 
-        // Check for achievements
+        // Check for achievements (fire-and-forget is fine here)
         get().checkAndUnlockAchievements();
 
-        // Sync perfect reviews and max streak to Supabase
+        // Sync to Supabase — use syncQueue for offline resilience
         if (!isDemo && userId) {
+          const updatedCard = get().cards.find((c) => c.id === id);
           const { perfectReviewStreak, userProgress } = get();
-          
-          // Update perfect reviews count
-          if (quality === 4) {
-            await supabaseStore.updateUserAchievements(userId, {
-              perfectReviews: perfectReviewStreak,
-            });
-          }
-          
-          // Update max streak if needed
-          await supabaseStore.updateMaxStreak(userId, userProgress.currentStreak);
-        }
 
-        // Skip Supabase sync for Cram Mode because card state wasn't changed
-        if (!isCramMode && !isDemo && userId) {
-          const card = get().cards.find((c) => c.id === id);
-          if (card) {
-            await Promise.all([
-              supabaseStore.updateCard(id, {
-                interval: card.interval,
-                repetition: card.repetition,
-                easeFactor: card.easeFactor,
-                nextReviewDate: card.nextReviewDate,
-              }),
-              supabaseStore.logReview(userId, id, quality),
-            ]);
+          try {
+            const promises: Promise<any>[] = [];
+
+            if (!isCramMode && updatedCard) {
+              promises.push(
+                supabaseStore.updateCard(id, {
+                  interval: updatedCard.interval,
+                  repetition: updatedCard.repetition,
+                  easeFactor: updatedCard.easeFactor,
+                  nextReviewDate: updatedCard.nextReviewDate,
+                  fsrsState: updatedCard.fsrsState,
+                }),
+                supabaseStore.logReview(userId, id, quality)
+              );
+            }
+
+            // Update peak perfect streak in achievements
+            if (quality === 4) {
+              promises.push(
+                supabaseStore.updateUserAchievements(userId, {
+                  perfectReviews: userProgress.perfectReviews,
+                })
+              );
+            } else if (perfectReviewStreak === 0 && quality !== 4) {
+              // streak was reset — update so DB reflects reset
+              promises.push(
+                supabaseStore.updateUserAchievements(userId, {
+                  perfectReviews: userProgress.perfectReviews,
+                })
+              );
+            }
+
+            promises.push(supabaseStore.updateMaxStreak(userId, userProgress.currentStreak));
+
+            await Promise.all(promises);
+          } catch (err) {
+            // Network error: queue for later retry
+            console.warn('[store] Supabase sync failed, queuing for retry:', err);
+            if (!isCramMode && !isDemo) {
+              const updatedCard2 = get().cards.find((c) => c.id === id);
+              if (updatedCard2) {
+                await syncQueue.enqueue('REVIEW_CARD', {
+                  id,
+                  nextReviewDate: updatedCard2.nextReviewDate,
+                });
+              }
+            }
           }
         }
 
@@ -659,6 +685,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
     }),
     {
       name: 'daily-memory-storage',
+      storage: createJSONStorage(() => idbStorage),
       partialize: (state) => ({
         decks: state.decks.map((d) => ({
           ...d,

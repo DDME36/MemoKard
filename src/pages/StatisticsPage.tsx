@@ -3,6 +3,7 @@ import { useFlashcardStore } from '../store/store';
 import { useTheme } from '../contexts/ThemeContext';
 import { useMemo } from 'react';
 import ActivityHeatmap from '../components/ActivityHeatmap';
+import { Brain } from 'lucide-react';
 
 interface StatisticsPageProps {
   dayColor: { gradient: string; shadow: string };
@@ -12,7 +13,6 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
   const { isDark } = useTheme();
   const { cards, reviewHistory, streak } = useFlashcardStore();
 
-  // Calculate statistics
   const stats = useMemo(() => {
     const totalCards = cards.length;
     const now = new Date();
@@ -21,32 +21,25 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
     const learningCards = cards.filter(c => c.repetition > 0 && c.repetition < 3).length;
     const matureCards = cards.filter(c => c.repetition >= 3).length;
 
-    // Calculate retention rate (cards with interval > 1 day / total reviewed cards)
     const reviewedCards = cards.filter(c => c.repetition > 0);
     const successfulCards = reviewedCards.filter(c => c.interval >= 1);
     const retentionRate = reviewedCards.length > 0 
       ? Math.round((successfulCards.length / reviewedCards.length) * 100) 
       : 0;
 
-    // Calculate average ease factor
     const avgEaseFactor = reviewedCards.length > 0
       ? (reviewedCards.reduce((sum, c) => sum + c.easeFactor, 0) / reviewedCards.length).toFixed(2)
       : '2.50';
 
-    // Total reviews
     const totalReviews = Object.values(reviewHistory).reduce((sum, count) => sum + count, 0);
-
-    // Reviews today
     const today = new Date().toISOString().slice(0, 10);
     const reviewsToday = reviewHistory[today] || 0;
 
-    // Reviews this week
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const reviewsThisWeek = Object.entries(reviewHistory)
       .filter(([date]) => new Date(date) >= weekAgo)
       .reduce((sum, [, count]) => sum + count, 0);
 
-    // Average reviews per day (last 30 days)
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const recentReviews = Object.entries(reviewHistory)
       .filter(([date]) => new Date(date) >= thirtyDaysAgo);
@@ -54,7 +47,6 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
       ? Math.round(recentReviews.reduce((sum, [, count]) => sum + count, 0) / 30)
       : 0;
 
-    // Forecast: cards due in next 7 days
     const forecast = Array.from({ length: 7 }, (_, i) => {
       const date = new Date(Date.now() + (i + 1) * 24 * 60 * 60 * 1000);
       const dueCount = cards.filter(c => {
@@ -64,21 +56,77 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
       return { date: date.toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric' }), count: dueCount };
     });
 
+    // ✅ Real FSRS metrics from card.fsrsState
+    const cardsWithFSRS = cards.filter(c => c.fsrsState && c.fsrsState.reps > 0);
+    const avgStability = cardsWithFSRS.length > 0
+      ? (cardsWithFSRS.reduce((s, c) => s + (c.fsrsState?.stability ?? 0), 0) / cardsWithFSRS.length).toFixed(1)
+      : '0.0';
+    const avgDifficulty = cardsWithFSRS.length > 0
+      ? (cardsWithFSRS.reduce((s, c) => s + (c.fsrsState?.difficulty ?? 5), 0) / cardsWithFSRS.length).toFixed(2)
+      : '5.00';
+    const avgInterval = reviewedCards.length > 0
+      ? Math.round(reviewedCards.reduce((s, c) => s + c.interval, 0) / reviewedCards.length)
+      : 0;
+    // FSRS state distribution: 0=New, 1=Learning, 2=Review, 3=Relearning
+    const fsrsStateNew      = cards.filter(c => (c.fsrsState?.state ?? 0) === 0).length;
+    const fsrsStateLearning = cards.filter(c => (c.fsrsState?.state ?? 0) === 1).length;
+    const fsrsStateReview   = cards.filter(c => (c.fsrsState?.state ?? 0) === 2).length;
+    const fsrsStateRelearn  = cards.filter(c => (c.fsrsState?.state ?? 0) === 3).length;
+
+    // ✅ Real FSRS Forgetting Curve — R(t,S) = (1 + FACTOR*t/S)^DECAY
+    const FSRS_FACTOR = 19 / 81;
+    const FSRS_DECAY = -0.5;
+    const fsrsR = (t: number, s: number) => Math.pow(1 + FSRS_FACTOR * t / s, FSRS_DECAY);
+    // time when retention drops to 90%: t = S * (0.9^(1/DECAY) - 1) / FACTOR
+    const reviewAt = (s: number) => s * (Math.pow(0.9, 1 / FSRS_DECAY) - 1) / FSRS_FACTOR;
+    // Use avgStability for real curves; fallback to 1 if no data
+    const curveS2 = Math.max(parseFloat(avgStability) || 1, 1);
+    const curveS1 = 1.0;              // initial stability (first encounter)
+    const curveS3 = curveS2 * 2.0;   // estimated stability after 2nd review
+    const ct1 = reviewAt(curveS1);
+    const ct2 = reviewAt(curveS2);
+    const ct3 = reviewAt(curveS3);
+    const totalT = ct1 + ct2 + ct3;
+    const svgX = (t: number) => 10 + (t / totalT) * 980;
+    const svgY = (r: number) => 20 + (1 - r) * 160;
+    const N = 60;
+    const makeSeg = (len: number, offset: number, s: number) =>
+      Array.from({ length: N + 1 }, (_, i) => {
+        const t = (i / N) * len;
+        return `${svgX(offset + t).toFixed(1)},${svgY(fsrsR(t, s)).toFixed(1)}`;
+      });
+    const pts1 = makeSeg(ct1, 0,         curveS1);
+    const pts2 = makeSeg(ct2, ct1,        curveS2);
+    const pts3 = makeSeg(ct3, ct1 + ct2,  curveS3);
+    const curvePath1 = 'M ' + pts1.join(' L ');
+    const curvePath2 = 'M ' + pts2.join(' L ');
+    const curvePath3 = 'M ' + pts3.join(' L ');
+    const fillPath1  = curvePath1 + ` L ${svgX(ct1).toFixed(1)},180 L ${svgX(0).toFixed(1)},180 Z`;
+    const fillPath2  = curvePath2 + ` L ${svgX(ct1+ct2).toFixed(1)},180 L ${svgX(ct1).toFixed(1)},180 Z`;
+    const fillPath3  = curvePath3 + ` L ${svgX(totalT).toFixed(1)},180 L ${svgX(ct1+ct2).toFixed(1)},180 Z`;
+    const reviewX1   = svgX(ct1);
+    const reviewX2   = svgX(ct1 + ct2);
+    const reviewY    = svgY(0.9);
+    const dayLabel1  = `${Math.round(ct1)} วัน`;
+    const dayLabel2  = `${Math.round(ct1 + ct2)} วัน`;
+    const dayLabel3  = `${Math.round(totalT)} วัน`;
+
     return {
-      totalCards,
-      dueCards,
-      newCards,
-      learningCards,
-      matureCards,
-      retentionRate,
-      avgEaseFactor,
-      totalReviews,
-      reviewsToday,
-      reviewsThisWeek,
-      avgReviewsPerDay,
-      forecast,
+      totalCards, dueCards, newCards, learningCards, matureCards,
+      retentionRate, avgEaseFactor, totalReviews, reviewsToday,
+      reviewsThisWeek, avgReviewsPerDay, forecast,
+      // FSRS metrics
+      avgStability, avgDifficulty, avgInterval,
+      fsrsStateNew, fsrsStateLearning, fsrsStateReview, fsrsStateRelearn,
+      cardsWithFSRS: cardsWithFSRS.length,
+      // FSRS Forgetting Curve paths (real math)
+      curvePath1, curvePath2, curvePath3,
+      fillPath1, fillPath2, fillPath3,
+      reviewX1, reviewX2, reviewY,
+      dayLabel1, dayLabel2, dayLabel3,
     };
   }, [cards, reviewHistory]);
+
 
   const StatCard = ({ title, value, subtitle, icon, color }: any) => (
     <motion.div
@@ -171,10 +219,11 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
       <div className={`p-6 rounded-2xl border mb-8 ${
         isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200 shadow-sm'
       }`}>
-        <h2 className={`text-xl font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-          การกระจายของการ์ด
+        <h2 className={`text-xl font-bold mb-6 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+          สถานะของการ์ด
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-2">
           <div className="text-center">
             <div className={`text-3xl font-bold mb-1 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
               {stats.newCards}
@@ -222,13 +271,143 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
         </div>
       </div>
 
+      {/* FSRS Memory Engine Section */}
+      <div className={`p-6 rounded-2xl border mb-8 overflow-hidden relative ${
+        isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200 shadow-sm'
+      }`}>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 relative z-10">
+          <div>
+            <h2 className={`text-xl font-bold flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              <Brain className="w-6 h-6 text-indigo-500" /> ระบบช่วยจำ FSRS
+            </h2>
+            <p className={`text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              วิเคราะห์และปรับจูนความจำของคุณตาม Forgetting Curve
+            </p>
+          </div>
+        </div>
+
+        {/* FSRS Real Stats Grid */}
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 relative z-10">
+          <div className={`p-4 rounded-xl text-center ${ isDark ? 'bg-slate-700/50' : 'bg-indigo-50' }`}>
+            <div className={`text-2xl font-bold ${ isDark ? 'text-indigo-400' : 'text-indigo-600' }`}>{stats.avgStability}</div>
+            <div className={`text-xs font-semibold mt-1 ${ isDark ? 'text-slate-400' : 'text-slate-600' }`}>Stability (วัน)</div>
+            <div className={`text-[10px] mt-0.5 ${ isDark ? 'text-slate-500' : 'text-slate-400' }`}>ค่าเฉลี่ยความคงทนของความจำ</div>
+          </div>
+          <div className={`p-4 rounded-xl text-center ${ isDark ? 'bg-slate-700/50' : 'bg-rose-50' }`}>
+            <div className={`text-2xl font-bold ${ isDark ? 'text-rose-400' : 'text-rose-600' }`}>{stats.avgDifficulty}</div>
+            <div className={`text-xs font-semibold mt-1 ${ isDark ? 'text-slate-400' : 'text-slate-600' }`}>Difficulty</div>
+            <div className={`text-[10px] mt-0.5 ${ isDark ? 'text-slate-500' : 'text-slate-400' }`}>1 = ง่ายสุด / 10 = ยากสุด</div>
+          </div>
+          <div className={`p-4 rounded-xl text-center ${ isDark ? 'bg-slate-700/50' : 'bg-emerald-50' }`}>
+            <div className={`text-2xl font-bold ${ isDark ? 'text-emerald-400' : 'text-emerald-600' }`}>{stats.avgInterval} วัน</div>
+            <div className={`text-xs font-semibold mt-1 ${ isDark ? 'text-slate-400' : 'text-slate-600' }`}>Avg Interval</div>
+            <div className={`text-[10px] mt-0.5 ${ isDark ? 'text-slate-500' : 'text-slate-400' }`}>ระยะเวลาทบทวนเฉลี่ย</div>
+          </div>
+          <div className={`p-4 rounded-xl text-center ${ isDark ? 'bg-slate-700/50' : 'bg-purple-50' }`}>
+            <div className={`text-2xl font-bold ${ isDark ? 'text-purple-400' : 'text-purple-600' }`}>{stats.cardsWithFSRS}</div>
+            <div className={`text-xs font-semibold mt-1 ${ isDark ? 'text-slate-400' : 'text-slate-600' }`}>การ์ดใน FSRS</div>
+            <div className={`text-[10px] mt-0.5 ${ isDark ? 'text-slate-500' : 'text-slate-400' }`}>มี state ของตัวเอง</div>
+          </div>
+        </div>
+
+        {/* FSRS State Distribution */}
+        <div className={`p-4 rounded-xl mb-6 relative z-10 ${ isDark ? 'bg-slate-700/30' : 'bg-slate-50' }`}>
+          <div className={`text-xs font-bold uppercase tracking-widest mb-3 ${ isDark ? 'text-slate-400' : 'text-slate-500' }`}>Card State Distribution</div>
+          <div className="flex gap-2 h-4 rounded-full overflow-hidden">
+            {stats.totalCards > 0 && (
+              <>
+                {stats.fsrsStateNew > 0 && <div title={`New: ${stats.fsrsStateNew}`} className="bg-blue-400" style={{ width: `${(stats.fsrsStateNew / stats.totalCards) * 100}%` }} />}
+                {stats.fsrsStateLearning > 0 && <div title={`Learning: ${stats.fsrsStateLearning}`} className="bg-amber-400" style={{ width: `${(stats.fsrsStateLearning / stats.totalCards) * 100}%` }} />}
+                {stats.fsrsStateReview > 0 && <div title={`Review: ${stats.fsrsStateReview}`} className="bg-emerald-400" style={{ width: `${(stats.fsrsStateReview / stats.totalCards) * 100}%` }} />}
+                {stats.fsrsStateRelearn > 0 && <div title={`Relearning: ${stats.fsrsStateRelearn}`} className="bg-rose-400" style={{ width: `${(stats.fsrsStateRelearn / stats.totalCards) * 100}%` }} />}
+              </>
+            )}
+          </div>
+          <div className="flex gap-4 mt-2 text-[11px] flex-wrap">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />New ({stats.fsrsStateNew})</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />Learning ({stats.fsrsStateLearning})</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />Review ({stats.fsrsStateReview})</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-400 inline-block" />Relearning ({stats.fsrsStateRelearn})</span>
+          </div>
+        </div>
+
+        {/* FSRS Forgetting Curve — Real math from R(t,S) = (1 + 19/81 * t/S)^(-0.5) */}
+        <div className="w-full h-44 mt-6 select-none hidden md:block flex flex-col">
+          <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+            Forgetting Curve — คำนวณจากข้อมูล Stability จริงของคุณ
+          </p>
+          <div className="relative w-full flex-1 min-h-[140px]">
+            <svg viewBox="0 0 1000 200" className="absolute inset-0 w-full h-full overflow-visible" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="fg1" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.25" />
+                  <stop offset="100%" stopColor="#f43f5e" stopOpacity="0" />
+                </linearGradient>
+                <linearGradient id="fg2" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.25" />
+                  <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
+                </linearGradient>
+                <linearGradient id="fg3" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+
+              {/* Grid lines */}
+              <line x1="0" y1="20" x2="1000" y2="20" stroke={isDark ? '#334155' : '#e2e8f0'} strokeWidth="1" strokeDasharray="5,5" />
+              <line x1="0" y1="100" x2="1000" y2="100" stroke={isDark ? '#334155' : '#e2e8f0'} strokeWidth="1" strokeDasharray="5,5" />
+              <line x1="0" y1="180" x2="1000" y2="180" stroke={isDark ? '#475569' : '#cbd5e1'} strokeWidth="2" />
+
+              {/* Fill areas */}
+              <motion.path initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} d={stats.fillPath1} fill="url(#fg1)" />
+              <motion.path initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }} d={stats.fillPath2} fill="url(#fg2)" />
+              <motion.path initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.9 }} d={stats.fillPath3} fill="url(#fg3)" />
+
+              {/* Decay curves */}
+              <motion.path initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1 }} d={stats.curvePath1} fill="none" stroke={isDark ? '#f43f5e' : '#f43f5e'} strokeWidth="2.5" strokeLinecap="round" />
+              <motion.path initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1, delay: 0.4 }} d={stats.curvePath2} fill="none" stroke={isDark ? '#f59e0b' : '#f59e0b'} strokeWidth="2.5" strokeLinecap="round" />
+              <motion.path initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1, delay: 0.8 }} d={stats.curvePath3} fill="none" stroke={isDark ? '#10b981' : '#10b981'} strokeWidth="2.5" strokeLinecap="round" />
+
+              {/* Review dots (start of each new segment = 100% after review) */}
+              <motion.circle initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0 }}   cx="10"                   cy="20" r="5" fill="#f43f5e" />
+              <motion.circle initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.5 }} cx={stats.reviewX1}       cy="20" r="5" fill="#f59e0b" />
+              <motion.circle initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 1 }}   cx={stats.reviewX2}       cy="20" r="5" fill="#10b981" />
+
+              {/* Vertical review lines */}
+              <motion.line initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} x1={stats.reviewX1} y1="20" x2={stats.reviewX1} y2={stats.reviewY} stroke={isDark ? '#475569' : '#94a3b8'} strokeWidth="1.5" strokeDasharray="4,4" />
+              <motion.line initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1 }}   x1={stats.reviewX2} y1="20" x2={stats.reviewX2} y2={stats.reviewY} stroke={isDark ? '#475569' : '#94a3b8'} strokeWidth="1.5" strokeDasharray="4,4" />
+            </svg>
+
+            {/* HTML Overlay for Text (prevents font stretching from preserveAspectRatio="none") */}
+            <div className="absolute inset-0 w-full h-full pointer-events-none text-xs">
+              {/* Y-axis Labels */}
+              <span className={`absolute left-[0.5%] font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`} style={{ top: 'calc(10% - 18px)' }}>100%</span>
+              <span className={`absolute left-[0.5%] ${isDark ? 'text-slate-400' : 'text-slate-500'}`} style={{ top: 'calc(50% - 16px)' }}>50%</span>
+              <span className={`absolute left-[0.5%] text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`} style={{ top: 'calc(90% - 16px)' }}>0%</span>
+              
+              {/* Day Labels at review points */}
+              <span className={`absolute text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`} style={{ left: `calc(${((stats.reviewX1 + 6) / 1000) * 100}%)`, top: 'calc(90% - 18px)' }}>{stats.dayLabel1}</span>
+              <span className={`absolute text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`} style={{ left: `calc(${((stats.reviewX2 + 6) / 1000) * 100}%)`, top: 'calc(90% - 18px)' }}>{stats.dayLabel2}</span>
+              <span className={`absolute right-[2%] text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`} style={{ top: 'calc(90% - 18px)' }}>{stats.dayLabel3}</span>
+
+              {/* Segment Labels */}
+              <span className="absolute left-[2%] font-semibold text-rose-500" style={{ top: 'calc(75% - 16px)' }}>จำครั้งแรก</span>
+              <span className="absolute font-semibold text-amber-500" style={{ left: `calc(${((stats.reviewX1 + 10) / 1000) * 100}%)`, top: 'calc(65% - 16px)' }}>ทบทวนครั้งที่ 1</span>
+              <span className="absolute font-semibold text-emerald-500" style={{ left: `calc(${((stats.reviewX2 + 10) / 1000) * 100}%)`, top: 'calc(40% - 16px)' }}>ทบทวนครั้งที่ 2</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Review Activity */}
       <div className={`p-6 rounded-2xl border mb-8 ${
         isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200 shadow-sm'
       }`}>
-        <h2 className={`text-xl font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-          กิจกรรมการทบทวน
+        <h2 className={`text-xl font-bold mb-6 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+          กิจกรรมการทบทวน (Activity)
         </h2>
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
           <div className="text-center">
             <div className={`text-2xl font-bold mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>

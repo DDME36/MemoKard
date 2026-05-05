@@ -4,159 +4,113 @@
  */
 
 export const haptics = {
-  /**
-   * Light tap - for general interactions
-   */
-  light: () => {
-    if ('vibrate' in navigator) {
-      navigator.vibrate(10);
-    }
-  },
+  /** Light tap - for general interactions */
+  light: () => { if ('vibrate' in navigator) navigator.vibrate(10); },
 
-  /**
-   * Medium tap - for button presses
-   */
-  medium: () => {
-    if ('vibrate' in navigator) {
-      navigator.vibrate(30);
-    }
-  },
+  /** Medium tap - for button presses */
+  medium: () => { if ('vibrate' in navigator) navigator.vibrate(30); },
 
-  /**
-   * Heavy tap - for important actions or errors
-   */
-  heavy: () => {
-    if ('vibrate' in navigator) {
-      navigator.vibrate(50);
-    }
-  },
+  /** Heavy tap - for important actions or errors */
+  heavy: () => { if ('vibrate' in navigator) navigator.vibrate(50); },
 
-  /**
-   * Success pattern - for positive feedback
-   */
-  success: () => {
-    if ('vibrate' in navigator) {
-      navigator.vibrate([30, 50, 30]);
-    }
-  },
+  /** Success pattern - for positive feedback */
+  success: () => { if ('vibrate' in navigator) navigator.vibrate([30, 50, 30]); },
 
-  /**
-   * Error pattern - for negative feedback
-   */
-  error: () => {
-    if ('vibrate' in navigator) {
-      navigator.vibrate([50, 100, 50]);
-    }
-  },
+  /** Error pattern - for negative feedback */
+  error: () => { if ('vibrate' in navigator) navigator.vibrate([50, 100, 50]); },
 
-  /**
-   * Review quality feedback - different patterns for different quality levels
-   */
+  /** Review quality feedback - different patterns for different quality levels */
   reviewQuality: (quality: number) => {
-    if ('vibrate' in navigator) {
-      if (quality <= 1) {
-        // Again/Hard - longer vibration
-        navigator.vibrate(80);
-      } else if (quality === 2) {
-        // Good - medium vibration
-        navigator.vibrate(40);
-      } else {
-        // Easy - short vibration
-        navigator.vibrate(20);
-      }
-    }
+    if (!('vibrate' in navigator)) return;
+    if (quality <= 1) navigator.vibrate(80);
+    else if (quality === 2) navigator.vibrate(40);
+    else navigator.vibrate(20);
   },
 
-  /**
-   * Card flip - subtle feedback
-   */
-  cardFlip: () => {
-    if ('vibrate' in navigator) {
-      navigator.vibrate(15);
-    }
-  },
+  /** Card flip - subtle feedback */
+  cardFlip: () => { if ('vibrate' in navigator) navigator.vibrate(15); },
 
-  /**
-   * Celebration - for completing reviews
-   */
-  celebration: () => {
-    if ('vibrate' in navigator) {
-      navigator.vibrate([50, 100, 50, 100, 50]);
-    }
-  }
+  /** Celebration - for completing reviews */
+  celebration: () => { if ('vibrate' in navigator) navigator.vibrate([50, 100, 50, 100, 50]); },
 };
 
 /**
  * Sound Effects Utilities
- * Provides audio feedback for better UX
+ * Uses a SHARED singleton AudioContext to avoid hitting the browser 6-context limit.
+ * Always calls resume() before playing to handle autoplay policy on mobile.
  */
+
+// ✅ Singleton — one context for the entire app lifetime
+let _sharedCtx: AudioContext | null = null;
+
+function getAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null;
+  const ACtx = window.AudioContext ?? (window as any).webkitAudioContext;
+  if (!ACtx) return null;
+  if (!_sharedCtx || _sharedCtx.state === 'closed') {
+    _sharedCtx = new ACtx();
+  }
+  return _sharedCtx;
+}
+
+/** Resume the AudioContext if it is suspended (autoplay policy). */
+async function ensureRunning(ctx: AudioContext) {
+  if (ctx.state === 'suspended') {
+    await ctx.resume();
+  }
+}
+
 export const sounds = {
   /**
-   * Play a sound effect
+   * Play a sound effect.
+   * Safe to call multiple times rapidly — reuses the same AudioContext.
    */
-  play: (type: 'flip' | 'success' | 'tap' | 'celebration') => {
-    // Create audio context if not exists
-    if (typeof window === 'undefined' || !('AudioContext' in window || 'webkitAudioContext' in window)) {
-      return;
-    }
-
+  play: async (type: 'flip' | 'success' | 'tap' | 'celebration') => {
     try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      const audioContext = new AudioContext();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      await ensureRunning(ctx);
 
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
+      const now = ctx.currentTime;
 
-      // Configure sound based on type
+      const makeOsc = (freq: number, startOffset: number, duration: number, gain: number) => {
+        const osc = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        osc.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        osc.frequency.value = freq;
+        gainNode.gain.setValueAtTime(gain, now + startOffset);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + startOffset + duration);
+        osc.start(now + startOffset);
+        osc.stop(now + startOffset + duration);
+      };
+
       switch (type) {
         case 'flip':
-          oscillator.frequency.value = 800;
-          gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-          oscillator.start(audioContext.currentTime);
-          oscillator.stop(audioContext.currentTime + 0.1);
+          makeOsc(800, 0, 0.08, 0.08);
           break;
 
         case 'tap':
-          oscillator.frequency.value = 600;
-          gainNode.gain.setValueAtTime(0.05, audioContext.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.05);
-          oscillator.start(audioContext.currentTime);
-          oscillator.stop(audioContext.currentTime + 0.05);
+          makeOsc(600, 0, 0.05, 0.05);
           break;
 
-        case 'success':
-          // Play ascending notes
-          oscillator.frequency.setValueAtTime(523, audioContext.currentTime); // C
-          oscillator.frequency.setValueAtTime(659, audioContext.currentTime + 0.1); // E
-          oscillator.frequency.setValueAtTime(784, audioContext.currentTime + 0.2); // G
-          gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-          oscillator.start(audioContext.currentTime);
-          oscillator.stop(audioContext.currentTime + 0.3);
+        case 'success': {
+          // Ascending C–E–G
+          const chord = [523, 659, 784];
+          chord.forEach((freq, i) => makeOsc(freq, i * 0.08, 0.12, 0.08));
           break;
+        }
 
-        case 'celebration':
-          // Play a cheerful melody
-          const notes = [523, 659, 784, 1047]; // C, E, G, C (octave higher)
-          notes.forEach((freq, i) => {
-            const osc = audioContext.createOscillator();
-            const gain = audioContext.createGain();
-            osc.connect(gain);
-            gain.connect(audioContext.destination);
-            osc.frequency.value = freq;
-            gain.gain.setValueAtTime(0.1, audioContext.currentTime + i * 0.1);
-            gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + i * 0.1 + 0.15);
-            osc.start(audioContext.currentTime + i * 0.1);
-            osc.stop(audioContext.currentTime + i * 0.1 + 0.15);
-          });
+        case 'celebration': {
+          // Cheerful C–E–G–C arpeggio
+          const notes = [523, 659, 784, 1047];
+          notes.forEach((freq, i) => makeOsc(freq, i * 0.1, 0.15, 0.08));
           break;
+        }
       }
-    } catch (error) {
-      // Silently fail if audio context is not supported
-      console.debug('Audio feedback not available:', error);
+    } catch (err) {
+      // Silently fail — audio is non-critical
+      console.debug('[sounds] Audio feedback unavailable:', err);
     }
-  }
+  },
 };

@@ -82,7 +82,7 @@ const ACHIEVEMENTS: Achievement[] = [
   {
     id: 'reviews_50',
     title: 'Speed Demon',
-    description: 'ทบทวน 50 การ์ดในวันเดียว',
+    description: 'ทบทวนครบ 50 การ์ด (รวมทุกวัน)',
     rarity: 'rare',
     icon: 'bolt' // ⚡
   },

@@ -74,14 +74,18 @@ export default function AchievementsPage({ dayColor }: { dayColor: { gradient: s
   const progress: UserProgress = useMemo(() => ({
     cardsCreated: store.cards.length,
     decksCreated: store.decks.length,
-    reviewsCompleted: Object.values(store.reviewHistory || {}).reduce((sum, count) => sum + count, 0),
+    // Sum all daily review counts from the history map
+    reviewsCompleted: Object.values(store.reviewHistory || {}).reduce((a, b) => a + b, 0),
     currentStreak: store.streak,
-    maxStreak: store.streak, // TODO: track max streak separately
-    perfectReviews: 0, // TODO: track perfect reviews
-    totalStudyTime: 0, // TODO: track study time
-    decksShared: 0, // TODO: track shared decks
-    decksImported: 0 // TODO: track imported decks
-  }), [store]);
+    // ✅ userProgress.maxStreak is updated by updateMaxStreak in the store
+    maxStreak: store.userProgress?.maxStreak ?? store.streak,
+    // ✅ userProgress.perfectReviews = peak consecutive perfect streak
+    perfectReviews: store.userProgress?.perfectReviews ?? 0,
+    // ✅ userProgress.totalStudyTime = accumulated minutes (via trackStudyTime)
+    totalStudyTime: store.userProgress?.totalStudyTime ?? 0,
+    decksShared: store.userProgress?.decksShared ?? 0,
+    decksImported: store.userProgress?.decksImported ?? 0,
+  }), [store.cards.length, store.decks.length, store.reviewHistory, store.streak, store.userProgress]);
 
   const achievements = getAllAchievements();
   const completed = getAchievementProgress(progress);

@@ -92,7 +92,7 @@ export default function EditCard({ card, onClose }: EditCardProps) {
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 placeholder="พิมพ์คำถามที่นี่..."
-                className={`w-full px-4 py-4 border-2 rounded-2xl placeholder-slate-400 focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100/20 transition-all resize-none text-sm font-medium select-text ${
+                className={`w-full px-4 py-4 border-2 rounded-2xl placeholder-slate-400 focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100/20 transition-all resize-none text-base font-medium select-text ${
                   isDark
                     ? 'bg-slate-800 border-slate-700 text-slate-200'
                     : 'bg-slate-50 border-slate-200 text-slate-800'
@@ -133,7 +133,7 @@ export default function EditCard({ card, onClose }: EditCardProps) {
               <textarea
                 value={answer}
                 onChange={(e) => setAnswer(e.target.value)}
-                className={`w-full px-4 py-4 border-2 rounded-2xl focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100/20 transition-all resize-none text-sm font-medium select-text ${
+                className={`w-full px-4 py-4 border-2 rounded-2xl focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100/20 transition-all resize-none text-base font-medium select-text ${
                   isDark
                     ? 'bg-purple-900/20 border-purple-800/50 text-slate-200'
                     : 'bg-purple-50 border-purple-200 text-slate-800'
