@@ -60,12 +60,8 @@ export default function LoadingSkeleton({ type = 'card', count = 1 }: LoadingSke
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05 }}
-            className={`${baseClass} h-24 p-4`}
-          >
-            <div className={`h-4 rounded ${isDark ? 'bg-slate-700' : 'bg-slate-300'} w-3/4 mb-3`} />
-            <div className={`h-3 rounded ${isDark ? 'bg-slate-700' : 'bg-slate-300'} w-full`} />
-            <div className={`h-3 rounded ${isDark ? 'bg-slate-700' : 'bg-slate-300'} w-5/6 mt-2`} />
-          </motion.div>
+            className={`${baseClass} h-16`}
+          />
         ))}
       </div>
     );
@@ -73,19 +69,16 @@ export default function LoadingSkeleton({ type = 'card', count = 1 }: LoadingSke
 
   // Default: card skeleton
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      className={`${baseClass} w-full max-w-xl mx-auto h-[50dvh] min-h-[280px] max-h-[400px]`}
-    >
-      <div className="p-8 h-full flex flex-col justify-between">
-        <div className={`h-3 rounded ${isDark ? 'bg-slate-700' : 'bg-slate-300'} w-20`} />
-        <div className="space-y-4">
-          <div className={`h-6 rounded ${isDark ? 'bg-slate-700' : 'bg-slate-300'} w-3/4 mx-auto`} />
-          <div className={`h-6 rounded ${isDark ? 'bg-slate-700' : 'bg-slate-300'} w-2/3 mx-auto`} />
-        </div>
-        <div className={`h-3 rounded ${isDark ? 'bg-slate-700' : 'bg-slate-300'} w-32 mx-auto`} />
-      </div>
-    </motion.div>
+    <div className="space-y-4">
+      {Array.from({ length: count }).map((_, i) => (
+        <motion.div
+          key={i}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: i * 0.1 }}
+          className={`${baseClass} h-48`}
+        />
+      ))}
+    </div>
   );
 }

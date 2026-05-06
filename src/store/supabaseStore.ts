@@ -432,38 +432,51 @@ export const supabaseStore = {
     });
   },
 
-  // ✅ Fix: caller already knows the new total from local state.
-  // Pass it directly to avoid a SELECT+UPDATE race condition.
+  // ✅ Fix: Use atomic increment to avoid race condition
   async addStudyTime(userId: string, minutes: number): Promise<boolean> {
     if (!isSupabaseConfigured()) return false;
-    // Fetch current value first to compute new total server-side safely
-    const { data } = await supabase
-      .from('user_achievements')
-      .select('total_study_time')
-      .eq('user_id', userId)
-      .single();
-
-    const currentTime = data?.total_study_time ?? 0;
-    return await this.updateUserAchievements(userId, {
-      totalStudyTime: currentTime + minutes,
+    
+    // Use PostgreSQL increment to avoid race condition
+    const { error } = await supabase.rpc('increment_study_time', {
+      user_id_param: userId,
+      minutes_param: minutes
     });
+
+    if (error) {
+      console.error('Error incrementing study time:', error);
+      // Fallback to old method if RPC doesn't exist
+      const { data } = await supabase
+        .from('user_achievements')
+        .select('total_study_time')
+        .eq('user_id', userId)
+        .single();
+
+      const currentTime = data?.total_study_time ?? 0;
+      return await this.updateUserAchievements(userId, {
+        totalStudyTime: currentTime + minutes,
+      });
+    }
+
+    return true;
   },
 
-  // ✅ Fix: only write if the new streak actually exceeds the stored max.
-  // We still do a SELECT to avoid unnecessary writes, but this is a single path.
+  // ✅ Fix: Use conditional update to avoid race condition
   async updateMaxStreak(userId: string, streak: number): Promise<boolean> {
     if (!isSupabaseConfigured()) return false;
 
-    const { data } = await supabase
+    // Use PostgreSQL conditional update (only update if new value is greater)
+    const { error } = await supabase
       .from('user_achievements')
-      .select('max_streak')
+      .update({ max_streak: streak })
       .eq('user_id', userId)
-      .single();
+      .or(`max_streak.is.null,max_streak.lt.${streak}`);
 
-    const currentMax = data?.max_streak ?? 0;
-    if (streak <= currentMax) return true; // nothing to update
+    if (error) {
+      console.error('Error updating max streak:', error);
+      return false;
+    }
 
-    return await this.updateUserAchievements(userId, { maxStreak: streak });
+    return true;
   },
 
   // ── Realtime Subscriptions ──

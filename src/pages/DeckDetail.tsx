@@ -41,7 +41,7 @@ export default function DeckDetail({ deck: initialDeck, onStartReview, onShowAdd
   const due = getDueCount(deck.id);
   
   // Check if this is a synced deck
-  const isSynced = deck.isSynced || false;
+  const isSynced = deck.linkedPublicDeckId !== null && deck.linkedPublicDeckId !== undefined;
   const canEdit = !isSynced; // Can only edit non-synced decks
   const canShare = !isSynced; // Can only share non-synced decks
 
@@ -212,8 +212,8 @@ export default function DeckDetail({ deck: initialDeck, onStartReview, onShowAdd
             </div>
           </div>
           <p className="text-sm text-white/80 font-medium">
-            {isSynced && deck.originalCreatorUsername && (
-              <>โดย {deck.originalCreatorUsername} · </>
+            {isSynced && publicDeck?.creatorUsername && (
+              <>โดย {publicDeck.creatorUsername} · </>
             )}
             {cards.length} การ์ด · ต้องทบทวน {due} ใบ
           </p>

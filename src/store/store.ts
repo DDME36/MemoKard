@@ -1,11 +1,11 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
 import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval';
-import { calculateFSRS, createInitialFSRSState, type FSRSState } from '../utils/fsrs';
-import { supabaseStore } from './supabaseStore';
-import { syncQueue } from './syncQueue';
+import { calculateFSRS, createInitialFSRSState } from '../utils/fsrs';
 import { checkAchievements, type UserProgress } from '../utils/achievements';
 import type { Achievement } from '../components/AchievementToast';
+import type { Deck, Flashcard } from './types';
+export { DECK_COLORS, type Deck, type Flashcard, type DeckColor } from './types';
 
 const idbStorage: StateStorage = {
   getItem: async (name: string): Promise<string | null> => {
@@ -18,37 +18,6 @@ const idbStorage: StateStorage = {
     await idbDel(name);
   },
 };
-
-export interface Deck {
-  id: string;
-  name: string;
-  color: string; // Can be a DeckColor name or hex code (e.g., '#8b5cf6')
-  createdAt: Date;
-  linkedPublicDeckId?: string | null;
-  isSynced?: boolean;
-  originalCreatorUsername?: string | null;
-}
-
-export interface Flashcard {
-  id: string;
-  deckId: string;
-  question: string;
-  answer: string;
-  questionImage?: string;
-  answerImage?: string;
-  // Keep these for Supabase compatibility (mapped from FSRS values)
-  interval: number;
-  repetition: number;
-  easeFactor: number;
-  nextReviewDate: Date;
-  createdAt: Date;
-  lastReviewDate: Date;
-  // FSRS state (source of truth for scheduling)
-  fsrsState: FSRSState;
-}
-
-export const DECK_COLORS = ['violet', 'sky', 'teal', 'rose', 'amber', 'emerald', 'pink', 'indigo'] as const;
-export type DeckColor = typeof DECK_COLORS[number];
 
 interface FlashcardStore {
   cards: Flashcard[];
@@ -152,6 +121,9 @@ export const useFlashcardStore = create<FlashcardStore>()(
         const { userId, isDemo } = get();
         if (isDemo || !userId) return;
 
+        // Lazy import to break circular dependency
+        const { supabaseStore } = await import('./supabaseStore');
+
         try {
           const [decks, cards, stats, achievements] = await Promise.all([
             supabaseStore.fetchDecks(userId),
@@ -240,6 +212,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
         get().checkAndUnlockAchievements();
 
         if (!isDemo && userId) {
+          const { supabaseStore } = await import('./supabaseStore');
           const supabaseDeck = await supabaseStore.createDeck(userId, name, color);
           if (supabaseDeck) {
             set((state) => ({
@@ -262,6 +235,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
         }));
 
         if (!isDemo && userId) {
+          const { supabaseStore } = await import('./supabaseStore');
           await supabaseStore.updateDeck(id, { name, color });
         }
       },
@@ -281,6 +255,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
           }));
 
           if (!isDemo && userId) {
+            const { supabaseStore } = await import('./supabaseStore');
             await supabaseStore.deleteDeck(id);
           }
         } else {
@@ -295,6 +270,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
           setTimeout(async () => {
             const stillPending = get().pendingDeleteDecks.has(id);
             if (stillPending && !isDemo && userId) {
+              const { supabaseStore } = await import('./supabaseStore');
               await supabaseStore.deleteDeck(id);
               set((state) => {
                 const newPending = new Map(state.pendingDeleteDecks);
@@ -357,6 +333,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
         }
 
         if (!isDemo && userId) {
+          const { supabaseStore } = await import('./supabaseStore');
           const supabaseCard = await supabaseStore.createCard(
             userId,
             deckId,
@@ -384,6 +361,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
         }));
 
         if (!isDemo && userId) {
+          const { supabaseStore } = await import('./supabaseStore');
           await supabaseStore.updateCard(id, { question, answer });
         }
       },
@@ -401,6 +379,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
           }));
 
           if (!isDemo && userId) {
+            const { supabaseStore } = await import('./supabaseStore');
             await supabaseStore.deleteCard(id);
           }
         } else {
@@ -414,6 +393,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
           setTimeout(async () => {
             const stillPending = get().pendingDeleteCards.has(id);
             if (stillPending && !isDemo && userId) {
+              const { supabaseStore } = await import('./supabaseStore');
               await supabaseStore.deleteCard(id);
               set((state) => {
                 const newPending = new Map(state.pendingDeleteCards);
@@ -498,6 +478,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
           const { perfectReviewStreak, userProgress } = get();
 
           try {
+            const { supabaseStore } = await import('./supabaseStore');
             const promises: Promise<any>[] = [];
 
             if (!isCramMode && updatedCard) {
@@ -538,6 +519,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
             if (!isCramMode && !isDemo) {
               const updatedCard2 = get().cards.find((c) => c.id === id);
               if (updatedCard2) {
+                const { syncQueue } = await import('./syncQueue');
                 await syncQueue.enqueue('REVIEW_CARD', {
                   id,
                   nextReviewDate: updatedCard2.nextReviewDate,
@@ -599,6 +581,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
         get().checkAndUnlockAchievements();
 
         if (!isDemo && userId) {
+          const { supabaseStore } = await import('./supabaseStore');
           await Promise.all([
             supabaseStore.updateUserStats(userId, newStreak, today),
             supabaseStore.updateUserAchievements(userId, { maxStreak: newMaxStreak }),
@@ -643,6 +626,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
 
             // Sync to Supabase
             if (!isDemo && userId) {
+              const { supabaseStore } = await import('./supabaseStore');
               const updatedUnlocked = [...unlockedAchievements, ...unlockedIds];
               await supabaseStore.updateUserAchievements(userId, {
                 unlockedAchievements: updatedUnlocked,
@@ -679,6 +663,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
 
         // Sync to Supabase
         if (!isDemo && userId) {
+          const { supabaseStore } = await import('./supabaseStore');
           await supabaseStore.addStudyTime(userId, minutes);
         }
       },
