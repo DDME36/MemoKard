@@ -351,77 +351,129 @@ function AppContent() {
         ) : (!user && !isDemo) ? (
           <AuthPage key="auth" />
         ) : (
-          <motion.main
-            key="main"
-            className="flex-1 max-w-3xl w-full mx-auto px-5 py-8 pb-10"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-          >
+          <main className="flex-1 max-w-3xl w-full mx-auto px-5 py-8 pb-10">
             <AnimatePresence mode="wait">
               {view === 'home' && (
-                <Dashboard
+                <motion.div
                   key="home"
-                  onOpenDeck={openDeck}
-                  onStartReview={() => startReview(undefined, false, true)}
-                  onShowAddDeck={() => setShowAddDeck(true)}
-                  dayColor={dayColor}
-                />
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <Dashboard
+                    onOpenDeck={openDeck}
+                    onStartReview={() => startReview(undefined, false, true)}
+                    onShowAddDeck={() => setShowAddDeck(true)}
+                    dayColor={dayColor}
+                  />
+                </motion.div>
               )}
               {view === 'deck' && liveActiveDeck && (
-                <DeckDetail
+                <motion.div
                   key="deck"
-                  deck={liveActiveDeck}
-                  onStartReview={startReview}
-                  onShowAddCard={() => setShowAddCard(true)}
-                  onEditCard={setEditingCard}
-                  onDeleteDeck={handleDeleteDeck}
-                />
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <DeckDetail
+                    deck={liveActiveDeck}
+                    onStartReview={startReview}
+                    onShowAddCard={() => setShowAddCard(true)}
+                    onEditCard={setEditingCard}
+                    onDeleteDeck={handleDeleteDeck}
+                  />
+                </motion.div>
               )}
               {view === 'review' && (
-                <ReviewSession
+                <motion.div
                   key="review"
-                  activeDeck={liveActiveDeck}
-                  isCramMode={isCramMode}
-                  onGoHome={goHome}
-                  onEditCard={setEditingCard}
-                  dayColor={dayColor}
-                  deckColor={deckColor}
-                  skipModeSelector={skipModeSelector}
-                />
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <ReviewSession
+                    activeDeck={liveActiveDeck}
+                    isCramMode={isCramMode}
+                    onGoHome={goHome}
+                    onEditCard={setEditingCard}
+                    dayColor={dayColor}
+                    deckColor={deckColor}
+                    skipModeSelector={skipModeSelector}
+                  />
+                </motion.div>
               )}
               {view === 'explore' && (
-                <ExplorePage
+                <motion.div
                   key="explore"
-                  onOpenDeck={openPublicDeck}
-                />
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <ExplorePage
+                    onOpenDeck={openPublicDeck}
+                  />
+                </motion.div>
               )}
               {view === 'public-deck' && activePublicDeckId && (
-                <PublicDeckDetail
+                <motion.div
                   key="public-deck"
-                  publicDeckId={activePublicDeckId}
-                  onClose={closePublicDeck}
-                  onImported={(deckId) => {
-                    const deck = store.getDeckById(deckId);
-                    if (deck) {
-                      closePublicDeck();
-                      openDeck(deck);
-                    }
-                  }}
-                />
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <PublicDeckDetail
+                    publicDeckId={activePublicDeckId}
+                    onClose={closePublicDeck}
+                    onImported={(deckId) => {
+                      const deck = store.getDeckById(deckId);
+                      if (deck) {
+                        closePublicDeck();
+                        openDeck(deck);
+                      }
+                    }}
+                  />
+                </motion.div>
               )}
               {view === 'admin' && isAdmin && (
-                <AdminPage key="admin" />
+                <motion.div
+                  key="admin"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <AdminPage />
+                </motion.div>
               )}
               {view === 'achievements' && (
-                <AchievementsPage key="achievements" dayColor={dayColor} />
+                <motion.div
+                  key="achievements"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <AchievementsPage dayColor={dayColor} />
+                </motion.div>
               )}
               {view === 'statistics' && (
-                <StatisticsPage key="statistics" dayColor={dayColor} />
+                <motion.div
+                  key="statistics"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <StatisticsPage dayColor={dayColor} />
+                </motion.div>
               )}
             </AnimatePresence>
-          </motion.main>
+          </main>
         )}
       </AnimatePresence>
 

@@ -32,12 +32,7 @@ const Dashboard = memo(function Dashboard({ onOpenDeck, onStartReview, onShowAdd
   );
 
   return (
-    <motion.div 
-      key="home" 
-      initial={{ opacity: 0, y: 12 }} 
-      animate={{ opacity: 1, y: 0 }} 
-      exit={{ opacity: 0 }}
-    >
+    <div>
       {/* Daily Quote */}
       <div className="mb-6 px-2">
         <p className={`text-sm font-medium italic ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
@@ -271,7 +266,7 @@ const Dashboard = memo(function Dashboard({ onOpenDeck, onStartReview, onShowAdd
           </div>
         </div>
       )}
-    </motion.div>
+    </div>
   );
 });
 

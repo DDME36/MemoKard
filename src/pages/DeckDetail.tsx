@@ -172,12 +172,7 @@ export default function DeckDetail({ deck: initialDeck, onStartReview, onShowAdd
   const shareLink = publicDeck ? `${window.location.origin}/deck/${publicDeck.id}` : '';
 
   return (
-    <motion.div 
-      key="deck" 
-      initial={{ opacity: 0, x: 20 }} 
-      animate={{ opacity: 1, x: 0 }} 
-      exit={{ opacity: 0 }}
-    >
+    <div>
       {/* Deck Header */}
       <div 
         className={`rounded-3xl p-6 mb-6 relative overflow-hidden ${
@@ -464,6 +459,6 @@ export default function DeckDetail({ deck: initialDeck, onStartReview, onShowAdd
         onConfirm={handleUnsubscribe}
         onCancel={() => setShowUnsubscribeConfirm(false)}
       />
-    </motion.div>
+    </div>
   );
 }
