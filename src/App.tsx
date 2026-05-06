@@ -165,17 +165,18 @@ function AppContent() {
         <header className={`border-b sticky top-0 z-40 ${
           isDark ? 'bg-slate-950 border-slate-800' : 'bg-white/90 border-purple-100 shadow-sm backdrop-blur-xl'
         }`}>
-          <div className="max-w-3xl mx-auto px-5 py-4 flex items-center justify-between">
-            <button onClick={goHome} className="flex items-center gap-3 group">
-              <div className={`w-10 h-10 rounded-2xl bg-gradient-to-br ${dayColor.gradient} flex items-center justify-center group-hover:scale-105 transition-all ${
+          <div className="max-w-3xl mx-auto px-3 sm:px-5 py-3 sm:py-4 flex items-center justify-between gap-2">
+            {/* Logo - Responsive */}
+            <button onClick={goHome} className="flex items-center gap-2 sm:gap-3 group flex-shrink-0">
+              <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-br ${dayColor.gradient} flex items-center justify-center group-hover:scale-105 transition-all ${
                 isDark ? '' : `shadow-lg ${dayColor.shadow}`
               }`}>
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                     d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
               </div>
-              <div className="text-left">
+              <div className="text-left hidden xs:block">
                 <HandwritingLogo gradient={dayColor.gradient} size="sm" animated={false} />
                 <p className={`text-[10px] font-medium uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
                   Daily Memory
@@ -183,16 +184,17 @@ function AppContent() {
               </div>
             </button>
 
-            <div className="flex items-center gap-2">
+            {/* Right Side - Responsive */}
+            <div className="flex items-center gap-1 sm:gap-2">
               {/* Icon Buttons Group */}
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5 sm:gap-1">
                 {/* Achievements */}
                 {view !== 'achievements' && (
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={goAchievements}
-                    className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
+                    className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg transition-colors ${
                       isDark
                         ? 'text-amber-400 hover:bg-slate-800'
                         : 'text-amber-600 hover:bg-amber-50'
@@ -211,7 +213,7 @@ function AppContent() {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={goStatistics}
-                    className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
+                    className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg transition-colors ${
                       isDark
                         ? 'text-blue-400 hover:bg-slate-800'
                         : 'text-blue-600 hover:bg-blue-50'
@@ -230,7 +232,7 @@ function AppContent() {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={goExplore}
-                    className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
+                    className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg transition-colors ${
                       isDark
                         ? 'text-slate-400 hover:bg-slate-800'
                         : 'text-slate-600 hover:bg-slate-100'
@@ -249,7 +251,7 @@ function AppContent() {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={goAdmin}
-                    className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
+                    className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg transition-colors ${
                       isDark
                         ? 'text-rose-400 hover:bg-slate-800'
                         : 'text-rose-600 hover:bg-rose-50'
@@ -262,13 +264,13 @@ function AppContent() {
                   </motion.button>
                 )}
 
-                {/* Divider */}
-                <div className={`w-px h-5 mx-1 ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`} />
+                {/* Divider - Hidden on mobile */}
+                <div className={`hidden sm:block w-px h-5 mx-1 ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`} />
 
                 {/* Theme Toggle */}
                 <button
                   onClick={toggleTheme}
-                  className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
+                  className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg transition-colors ${
                     isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'
                   }`}
                   title={isDark ? 'โหมดสว่าง' : 'โหมดมืด'}
@@ -288,7 +290,7 @@ function AppContent() {
                 {(user || isDemo) && (
                   <button
                     onClick={isDemo ? () => setShowLogoutConfirm(true) : signOut}
-                    className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
+                    className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg transition-colors ${
                       isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'
                     }`}
                     title={isDemo ? 'ออกจากโหมดทดลอง' : 'ออกจากระบบ'}
@@ -300,13 +302,13 @@ function AppContent() {
                 )}
               </div>
 
-              {/* New Deck Button */}
+              {/* New Deck Button - Hide text on mobile */}
               {view === 'home' && (
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => { haptics.medium(); setShowAddDeck(true); }}
-                  className={`flex items-center gap-2 px-3 py-2 bg-gradient-to-r ${dayColor.gradient} text-white rounded-lg font-semibold text-sm transition-all ${
+                  className={`hidden sm:flex items-center gap-2 px-3 py-2 bg-gradient-to-r ${dayColor.gradient} text-white rounded-lg font-semibold text-sm transition-all ${
                     isDark ? '' : 'shadow-md hover:shadow-lg'
                   }`}
                 >

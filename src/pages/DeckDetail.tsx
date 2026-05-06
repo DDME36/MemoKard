@@ -231,27 +231,27 @@ export default function DeckDetail({ deck: initialDeck, onStartReview, onShowAdd
 
         {/* Buttons - Centered */}
         <div className="relative z-10">
-          <div className="flex flex-wrap gap-2 justify-center">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center">
             {/* แชร์ - แสดงเฉพาะเมื่อ login, มีการ์ด, และไม่ใช่ชุด sync */}
             {canShare && user && !isDemo && cards.length > 0 && !publicDeck && (
               loadingPublicDeck || authLoading ? (
-                <div className="opacity-60 bg-white/10 backdrop-blur-sm text-white/50 text-sm font-bold px-3 sm:px-5 py-2.5 rounded-xl flex items-center gap-2 border border-white/10 cursor-default pointer-events-none animate-pulse">
-                  <svg className="w-5 h-5 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="opacity-60 bg-white/10 backdrop-blur-sm text-white/50 text-xs sm:text-sm font-bold px-2.5 sm:px-5 py-2 sm:py-2.5 rounded-xl flex items-center gap-1.5 sm:gap-2 border border-white/10 cursor-default pointer-events-none animate-pulse">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                   </svg>
-                  <span className="hidden sm:inline">แชร์</span>
+                  <span className="hidden xs:inline">แชร์</span>
                 </div>
               ) : (
                 <motion.button 
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }} 
                   onClick={() => setShowShareModal(true)}
-                  className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white text-sm font-bold px-5 py-2.5 rounded-xl flex items-center gap-2 border border-white/30 transition-all"
+                  className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white text-xs sm:text-sm font-bold px-2.5 sm:px-5 py-2 sm:py-2.5 rounded-xl flex items-center gap-1.5 sm:gap-2 border border-white/30 transition-all"
                   title="แชร์ชุดการ์ด">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                   </svg>
-                  <span>แชร์</span>
+                  <span className="hidden xs:inline">แชร์</span>
                 </motion.button>
               )
             )}
@@ -261,12 +261,12 @@ export default function DeckDetail({ deck: initialDeck, onStartReview, onShowAdd
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }} 
                 onClick={onShowAddCard}
-                className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white text-sm font-bold px-5 py-2.5 rounded-xl flex items-center gap-2 border border-white/30 transition-all"
+                className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white text-xs sm:text-sm font-bold px-2.5 sm:px-5 py-2 sm:py-2.5 rounded-xl flex items-center gap-1.5 sm:gap-2 border border-white/30 transition-all"
                 title="เพิ่มการ์ด">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                <span>เพิ่มการ์ด</span>
+                <span className="hidden xs:inline">เพิ่มการ์ด</span>
               </motion.button>
             )}
             {/* ยกเลิก Subscribe - แสดงเฉพาะชุด sync */}
@@ -275,12 +275,12 @@ export default function DeckDetail({ deck: initialDeck, onStartReview, onShowAdd
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }} 
                 onClick={() => setShowUnsubscribeConfirm(true)}
-                className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white text-sm font-bold px-5 py-2.5 rounded-xl flex items-center gap-2 border border-white/30 transition-all"
+                className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white text-xs sm:text-sm font-bold px-2.5 sm:px-5 py-2 sm:py-2.5 rounded-xl flex items-center gap-1.5 sm:gap-2 border border-white/30 transition-all"
                 title="ยกเลิก Subscribe">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
-                <span>ยกเลิก</span>
+                <span className="hidden xs:inline">ยกเลิก</span>
               </motion.button>
             )}
             {/* ปุ่มทบทวน - แสดงเฉพาะเมื่อมีการ์ด */}
@@ -290,30 +290,30 @@ export default function DeckDetail({ deck: initialDeck, onStartReview, onShowAdd
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }} 
                   onClick={() => onStartReview(deck, false)}
-                  className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white text-sm font-bold px-5 py-2.5 rounded-xl flex items-center gap-2 border border-white/30 transition-all"
+                  className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white text-xs sm:text-sm font-bold px-2.5 sm:px-5 py-2 sm:py-2.5 rounded-xl flex items-center gap-1.5 sm:gap-2 border border-white/30 transition-all"
                   title="ทบทวนการ์ดที่ถึงเวลา">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <span>ตามกำหนด</span>
+                  <span className="hidden xs:inline">ตามกำหนด</span>
                 </motion.button>
                 <motion.button 
                   whileTap={{ scale: 0.95 }} 
                   onClick={() => onStartReview(deck, true)}
-                  className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white text-sm font-bold px-5 py-2.5 rounded-xl flex items-center gap-2 border border-white/30 transition-all"
+                  className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white text-xs sm:text-sm font-bold px-2.5 sm:px-5 py-2 sm:py-2.5 rounded-xl flex items-center gap-1.5 sm:gap-2 border border-white/30 transition-all"
                   title="ทบทวนทั้งหมด (ไม่สนใจเวลา)">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
-                  <span>ทั้งหมด</span>
+                  <span className="hidden xs:inline">ทั้งหมด</span>
                 </motion.button>
                 <motion.button 
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }} 
                   onClick={() => exportDeck(deck, cards)}
-                  className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 text-white hover:bg-white/30 flex items-center justify-center transition-all"
+                  className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 text-white hover:bg-white/30 flex items-center justify-center transition-all flex-shrink-0"
                   title="ส่งออกชุดการ์ด (JSON)">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
                 </motion.button>
@@ -323,9 +323,9 @@ export default function DeckDetail({ deck: initialDeck, onStartReview, onShowAdd
             {!isSynced && (
               <button
                 onClick={() => onDeleteDeck(deck)}
-                className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 text-white hover:bg-white/30 flex items-center justify-center transition-all"
+                className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 text-white hover:bg-white/30 flex items-center justify-center transition-all flex-shrink-0"
                 title="ลบชุดการ์ด">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
               </button>

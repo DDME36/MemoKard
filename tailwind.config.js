@@ -7,6 +7,9 @@ export default {
   ],
   theme: {
     extend: {
+      screens: {
+        'xs': '375px', // Extra small devices (small phones)
+      },
       fontFamily: {
         sans: ['Noto Sans Thai', 'Inter', 'sans-serif'],
         inter: ['Inter', 'sans-serif'],
