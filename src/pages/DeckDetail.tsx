@@ -15,7 +15,7 @@ import { getDeckColorStyles } from '../utils/colorUtils';
 
 interface DeckDetailProps {
   deck: Deck;
-  onStartReview: (deck: Deck, isCramMode?: boolean) => void;
+  onStartReview: (deck: Deck, isCramMode?: boolean, skipMode?: boolean) => void;
   onShowAddCard: () => void;
   onEditCard: (card: Flashcard) => void;
   onDeleteDeck: (deck: Deck) => void;
@@ -284,9 +284,9 @@ export default function DeckDetail({ deck: initialDeck, onStartReview, onShowAdd
                 <motion.button 
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }} 
-                  onClick={() => onStartReview(deck, false)}
+                  onClick={() => onStartReview(deck, false, true)}
                   className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white text-xs sm:text-sm font-bold px-2.5 sm:px-5 py-2 sm:py-2.5 rounded-xl flex items-center gap-1.5 sm:gap-2 border border-white/30 transition-all"
-                  title="ทบทวนการ์ดที่ถึงเวลา">
+                  title="ทบทวนการ์ดที่ถึงเวลา (โหมดปกติ)">
                   <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
@@ -294,9 +294,9 @@ export default function DeckDetail({ deck: initialDeck, onStartReview, onShowAdd
                 </motion.button>
                 <motion.button 
                   whileTap={{ scale: 0.95 }} 
-                  onClick={() => onStartReview(deck, true)}
+                  onClick={() => onStartReview(deck, true, false)}
                   className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white text-xs sm:text-sm font-bold px-2.5 sm:px-5 py-2 sm:py-2.5 rounded-xl flex items-center gap-1.5 sm:gap-2 border border-white/30 transition-all"
-                  title="ทบทวนทั้งหมด (ไม่สนใจเวลา)">
+                  title="ทบทวนทั้งหมด (เลือกโหมดได้)">
                   <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
