@@ -153,19 +153,19 @@ function AppContent() {
   const isLoggedIn = !showSplash && !loading && (user || isDemo);
 
   return (
-    <div className={`flex flex-col min-h-screen transition-colors duration-300 ${isDark ? 'bg-slate-950' : 'bg-gradient-to-br from-slate-50 via-purple-50 to-pink-50'}`} style={{
-      paddingTop: 'env(safe-area-inset-top)',
-      paddingBottom: 'env(safe-area-inset-bottom)',
-      paddingLeft: 'env(safe-area-inset-left)',
-      paddingRight: 'env(safe-area-inset-right)'
-    }}>
+    <div className={`flex flex-col min-h-screen transition-colors duration-300 ${isDark ? 'bg-slate-950' : 'bg-gradient-to-br from-slate-50 via-purple-50 to-pink-50'}`}>
 
       {/* ── Header — outside AnimatePresence, always instant ── */}
       {isLoggedIn && (
         <header className={`border-b sticky top-0 z-40 ${
           isDark ? 'bg-slate-950 border-slate-800' : 'bg-white/90 border-purple-100 shadow-sm backdrop-blur-xl'
-        }`}>
-          <div className="max-w-3xl mx-auto px-3 sm:px-5 py-3 sm:py-4 flex items-center justify-between gap-2">
+        }`} style={{
+          paddingTop: 'env(safe-area-inset-top)'
+        }}>
+          <div className="max-w-3xl mx-auto px-3 sm:px-5 py-3 sm:py-4 flex items-center justify-between gap-2" style={{
+            paddingLeft: 'max(0.75rem, env(safe-area-inset-left))',
+            paddingRight: 'max(0.75rem, env(safe-area-inset-right))'
+          }}>
             {/* Logo - Responsive */}
             <button onClick={goHome} className="flex items-center gap-2 sm:gap-3 group flex-shrink-0">
               <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-br ${dayColor.gradient} flex items-center justify-center group-hover:scale-105 transition-all ${
@@ -351,7 +351,11 @@ function AppContent() {
         ) : (!user && !isDemo) ? (
           <AuthPage key="auth" />
         ) : (
-          <main className="flex-1 max-w-3xl w-full mx-auto px-5 py-8 pb-10">
+          <main className="flex-1 max-w-3xl w-full mx-auto px-5 py-8 pb-10" style={{
+            paddingLeft: 'max(1.25rem, env(safe-area-inset-left))',
+            paddingRight: 'max(1.25rem, env(safe-area-inset-right))',
+            paddingBottom: 'max(2.5rem, env(safe-area-inset-bottom))'
+          }}>
             <AnimatePresence mode="wait">
               {view === 'home' && (
                 <motion.div
@@ -497,7 +501,9 @@ function AppContent() {
       {isLoggedIn && (
         <footer className={`mt-auto text-center py-6 text-xs font-medium ${
           isDark ? 'text-slate-700' : 'text-slate-400'
-        }`}>
+        }`} style={{
+          paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))'
+        }}>
           MemoKard · เมมโมการ์ด
         </footer>
       )}
@@ -511,7 +517,11 @@ function AppContent() {
             exit={{ scale: 0, opacity: 0 }}
             whileTap={{ scale: 0.9 }}
             onClick={() => { haptics.medium(); setShowAddDeck(true); }}
-            className={`sm:hidden fixed bottom-6 right-6 z-40 w-14 h-14 flex items-center justify-center rounded-2xl bg-gradient-to-r ${dayColor.gradient} text-white`}
+            className={`sm:hidden fixed z-40 w-14 h-14 flex items-center justify-center rounded-2xl bg-gradient-to-r ${dayColor.gradient} text-white`}
+            style={{
+              bottom: 'max(1.5rem, calc(env(safe-area-inset-bottom) + 1.5rem))',
+              right: 'max(1.5rem, calc(env(safe-area-inset-right) + 1.5rem))'
+            }}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />

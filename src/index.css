@@ -5,6 +5,14 @@
 @tailwind utilities;
 
 @layer base {
+  /* Safe Area Support for iOS notch/home indicator */
+  :root {
+    --sat: env(safe-area-inset-top);
+    --sar: env(safe-area-inset-right);
+    --sab: env(safe-area-inset-bottom);
+    --sal: env(safe-area-inset-left);
+  }
+
   /* 1. Lock viewport completely - prevents iOS rubber-banding 100% */
   html, body {
     position: fixed;
