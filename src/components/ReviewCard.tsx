@@ -1,9 +1,11 @@
 import { useState, useEffect, memo, useCallback } from 'react';
-import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import MathText from './MathText';
 import type { Flashcard } from '../store/store';
 import { useTheme } from '../contexts/ThemeContext';
 import { haptics, sounds } from '../utils/haptics';
+import Scratchpad from './Scratchpad';
+import { Edit2 } from 'lucide-react';
 
 interface ReviewCardProps {
   card: Flashcard;
@@ -11,13 +13,18 @@ interface ReviewCardProps {
   onEditCard?: (card: Flashcard) => void;
   dayColor: { gradient: string; shadow: string };
   isPreviewMode?: boolean;
+  isTimeAttack?: boolean;
 }
 
-const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayColor, isPreviewMode = false }: ReviewCardProps) {
+const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayColor, isPreviewMode = false, isTimeAttack = false }: ReviewCardProps) {
   const [isFlipped, setIsFlipped] = useState(isPreviewMode); // Auto-flip in preview mode
   const [hasBeenFlipped, setHasBeenFlipped] = useState(isPreviewMode); // Track if it has been flipped at least once
   const [isExiting, setIsExiting] = useState(false);
   const [selectedQuality, setSelectedQuality] = useState<number | null>(null);
+  const [typedAnswer, setTypedAnswer] = useState('');
+  const [showScratchpad, setShowScratchpad] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(10);
+  const [isTimeOut, setIsTimeOut] = useState(false);
   const { isDark } = useTheme();
 
   const isCustomGradient = dayColor.gradient.includes('gradient(');
@@ -35,6 +42,83 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
   const swipeRightOpacity = useTransform(x, [20, 100], [0, 1]);
   const swipeLeftOpacity = useTransform(x, [-20, -100], [0, 1]);
 
+  // Motion values for 3D spring physical tilt (2026 sensory touch)
+  const rotateX = useMotionValue(0);
+  const rotateY = useMotionValue(0);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (isPreviewMode) return;
+    const cardEl = e.currentTarget;
+    const rect = cardEl.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+    
+    // Calculate coordinates relative to center
+    const mouseX = e.clientX - rect.left - width / 2;
+    const mouseY = e.clientY - rect.top - height / 2;
+    
+    // Convert to rotational angles (e.g. maximum 6 degrees of rotation for subtle premium parallax)
+    const rY = (mouseX / (width / 2)) * 6;
+    const rX = -(mouseY / (height / 2)) * 6;
+    
+    rotateY.set(rY);
+    rotateX.set(rX);
+  }, [isPreviewMode, rotateX, rotateY]);
+
+  const handleMouseLeave = useCallback(() => {
+    rotateX.set(0);
+    rotateY.set(0);
+  }, [rotateX, rotateY]);
+
+  // Offline AI similarity calculation using Dice's Coefficient (Bigram-based string overlap)
+  const calculateSimilarity = useCallback((s1: string, s2: string): number => {
+    const clean = (str: string) => 
+      str.toLowerCase()
+         .replace(/\{\{(.*?)\}\}/g, '$1') // remove cloze
+         .replace(/[*_#`\-+]/g, '') // remove markdown
+         .replace(/[.,/#!$%^&*;:{}=\-_`~()?'"“”]/g, '') // remove punctuation
+         .replace(/\s+/g, '') // remove spaces
+         .trim();
+
+    const a = clean(s1);
+    const b = clean(s2);
+
+    if (!a || !b) return 0;
+    if (a === b) return 1;
+
+    const getBigrams = (str: string) => {
+      const bigrams = new Set<string>();
+      for (let i = 0; i < str.length - 1; i++) {
+        bigrams.add(str.substring(i, i + 2));
+      }
+      return bigrams;
+    };
+
+    const bigramsA = getBigrams(a);
+    const bigramsB = getBigrams(b);
+    
+    if (bigramsA.size === 0 || bigramsB.size === 0) {
+      let intersection = 0;
+      const charsA = a.split('');
+      const charsB = b.split('');
+      charsA.forEach(c => {
+        const idx = charsB.indexOf(c);
+        if (idx !== -1) {
+          intersection++;
+          charsB.splice(idx, 1);
+        }
+      });
+      return (2 * intersection) / (a.length + b.length);
+    }
+
+    let intersection = 0;
+    bigramsA.forEach(b => {
+      if (bigramsB.has(b)) intersection++;
+    });
+
+    return (2 * intersection) / (bigramsA.size + bigramsB.size);
+  }, []);
+
   // Cloze Deletion: แปลง {{text}} เป็น [...] สำหรับหน้าคำถาม
   const renderClozeText = (text: string, showAnswer: boolean) => {
     if (showAnswer) {
@@ -46,6 +130,7 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
   };
 
   const handleFlip = useCallback(() => {
+    if (showScratchpad) return; // Prevent flip when drawing
     if (!isPreviewMode) {
       setIsFlipped(prev => {
         if (!prev) setHasBeenFlipped(true);
@@ -54,7 +139,7 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
       haptics.cardFlip();
       sounds.play('flip');
     }
-  }, [isPreviewMode]);
+  }, [isPreviewMode, showScratchpad]);
 
   const handleEdit = useCallback((e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -64,6 +149,7 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
   }, [card, onEditCard]);
 
   const handleReview = useCallback(async (quality: number) => {
+    if (isExiting) return;
     haptics.reviewQuality(quality);
     sounds.play('tap');
     setSelectedQuality(quality);
@@ -74,9 +160,11 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
       setIsExiting(false);
       setSelectedQuality(null);
       x.set(0); // Reset drag position
-      window.speechSynthesis.cancel(); // Stop TTS on next card
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel(); // Stop TTS on next card
+      }
     }, 300);
-  }, [onReview, x]);
+  }, [isExiting, onReview, x]);
 
   const handleSpeak = useCallback((text: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent card flip
@@ -145,16 +233,45 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isFlipped, hasBeenFlipped, isExiting, card.id, isPreviewMode, handleFlip, handleReview, handleEdit]);
+  }, [isFlipped, hasBeenFlipped, isExiting, card.id, card.answer, card.question, isPreviewMode, handleFlip, handleReview, handleEdit, handleSpeak]);
+
+  // Time Attack Countdown Timer Effect
+  useEffect(() => {
+    if (!isTimeAttack || isFlipped) return;
+
+    setTimeLeft(10);
+    setIsTimeOut(false);
+
+    const interval = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setIsFlipped(true);
+          setHasBeenFlipped(true);
+          setIsTimeOut(true);
+          haptics.error();
+          sounds.play('error');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [card.id, isFlipped, isTimeAttack]);
 
   // Reset state when card changes
   useEffect(() => {
     setIsFlipped(isPreviewMode);
     setHasBeenFlipped(isPreviewMode);
     setIsExiting(false);
+    setTypedAnswer('');
+    setShowScratchpad(false);
+    setIsTimeOut(false);
+    setTimeLeft(10);
   }, [card.id, isPreviewMode]);
 
-  const handleDragEnd = useCallback((_e: any, info: any) => {
+  const handleDragEnd = useCallback((_e: unknown, info: PanInfo) => {
     if (!hasBeenFlipped || isExiting) return;
     const offset = info.offset.x;
     const velocity = info.velocity.x;
@@ -166,27 +283,27 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
       // Return to center if not dragged far enough
       x.set(0);
     }
-  }, [isFlipped, isExiting, handleReview, x]);
+  }, [hasBeenFlipped, isExiting, handleReview, x]);
 
   const MarkdownComponents = (isBack: boolean) => ({
-    p: ({ children }: any) => <p className={`mb-3 last:mb-0 ${isBack ? 'text-white' : isDark ? 'text-slate-200' : 'text-slate-800'}`}>{children}</p>,
-    strong: ({ children }: any) => <strong className={`font-black ${isBack ? 'text-white' : isDark ? 'text-slate-100' : 'text-slate-900'}`}>{children}</strong>,
-    em: ({ children }: any) => <em className="italic opacity-90">{children}</em>,
-    code: ({ children, inline }: any) =>
+    p: ({ children }: { children?: React.ReactNode }) => <p className={`mb-3 last:mb-0 ${isBack ? 'text-white' : isDark ? 'text-slate-200' : 'text-slate-800'}`}>{children}</p>,
+    strong: ({ children }: { children?: React.ReactNode }) => <strong className={`font-black ${isBack ? 'text-white' : isDark ? 'text-slate-100' : 'text-slate-900'}`}>{children}</strong>,
+    em: ({ children }: { children?: React.ReactNode }) => <em className="italic opacity-90">{children}</em>,
+    code: ({ children, inline, ...props }: React.ComponentProps<'code'> & { inline?: boolean }) =>
       inline ? (
-        <code className={`px-2 py-0.5 rounded-md text-sm font-mono ${isBack ? 'bg-white/20 text-white' : isDark ? 'bg-slate-700 text-purple-300' : 'bg-slate-100 text-purple-700'}`}>
+        <code className={`px-2 py-0.5 rounded-md text-sm font-mono ${isBack ? 'bg-white/20 text-white' : isDark ? 'bg-slate-700 text-purple-300' : 'bg-slate-100 text-purple-700'}`} {...props}>
           {children}
         </code>
       ) : (
-        <code className={`block p-4 rounded-xl text-left text-sm font-mono overflow-x-hidden w-full ${isBack ? 'bg-black/30 text-emerald-300' : 'bg-slate-800 text-emerald-400'}`}>
+        <code className={`block p-4 rounded-xl text-left text-sm font-mono overflow-x-hidden w-full ${isBack ? 'bg-black/30 text-emerald-300' : 'bg-slate-800 text-emerald-400'}`} {...props}>
           {children}
         </code>
       ),
-    ul: ({ children }: any) => <ul className="list-disc pl-5 mb-3 text-left space-y-1 w-full max-w-sm">{children}</ul>,
-    ol: ({ children }: any) => <ol className="list-decimal pl-5 mb-3 text-left space-y-1 w-full max-w-sm">{children}</ol>,
-    li: ({ children }: any) => <li className={isBack ? 'text-white/90' : isDark ? 'text-slate-300' : 'text-slate-700'}>{children}</li>,
+    ul: ({ children }: { children?: React.ReactNode }) => <ul className="list-disc pl-5 mb-3 text-left space-y-1 w-full max-w-sm">{children}</ul>,
+    ol: ({ children }: { children?: React.ReactNode }) => <ol className="list-decimal pl-5 mb-3 text-left space-y-1 w-full max-w-sm">{children}</ol>,
+    li: ({ children }: { children?: React.ReactNode }) => <li className={isBack ? 'text-white/90' : isDark ? 'text-slate-300' : 'text-slate-700'}>{children}</li>,
     // KaTeX math elements inherit text color
-    span: ({ className, children, ...props }: any) => {
+    span: ({ className, children, ...props }: React.ComponentProps<'span'>) => {
       if (className?.includes('katex')) {
         return <span className={`${className} ${isBack ? 'text-white' : ''}`} {...props}>{children}</span>;
       }
@@ -207,7 +324,7 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
         y: -100, 
         scale: 1.1, 
         filter: "brightness(1.5)",
-        transition: { duration: 0.4, ease: "easeOut" as any }
+        transition: { duration: 0.4, ease: "easeOut" as const }
       }; // Pop up and glow
       case 2: return { opacity: 0, y: 50, scale: 0.95 }; // Slide down
       case 3: return { opacity: 0, y: -50, scale: 1.05 }; // Slide up
@@ -230,11 +347,13 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
             <motion.div
               className="relative w-full h-[50dvh] min-h-[280px] max-h-[400px] cursor-pointer perspective-1000 touch-pan-y"
               onClick={handleFlip}
-              drag={hasBeenFlipped ? "x" : false}
+              drag={hasBeenFlipped && !showScratchpad ? "x" : false}
               dragConstraints={{ left: 0, right: 0 }}
               dragElastic={0.7}
               onDragEnd={handleDragEnd}
-              style={{ x, rotate }}
+              onMouseMove={handleMouseMove}
+              onMouseLeave={handleMouseLeave}
+              style={{ x, rotate, rotateX, rotateY }}
             >
               {/* Drag Indicators */}
               {hasBeenFlipped && (
@@ -268,16 +387,56 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
                 <div className="absolute w-full h-full backface-hidden" style={{ 
                   backfaceVisibility: 'hidden', 
                   WebkitBackfaceVisibility: 'hidden',
-                  zIndex: isFlipped ? 1 : 2
+                  zIndex: isFlipped ? 1 : 2,
+                  opacity: isFlipped ? 0 : 1,
+                  pointerEvents: isFlipped ? 'none' : 'auto',
+                  transition: 'opacity 0.25s ease-in-out'
                 }}>
-                  <div className={`w-full h-full rounded-3xl border p-8 sm:p-10 flex flex-col items-center justify-center relative overflow-hidden ${
+                  <div className={`w-full h-full rounded-3xl p-8 sm:p-10 flex flex-col items-center justify-center relative overflow-hidden premium-card transition-all duration-300 hover:shadow-2xl hover:shadow-purple-500/10 ${
                     isDark
                       ? 'bg-slate-800 border-slate-700'
                       : 'bg-gradient-to-br from-white to-purple-50 border-purple-200 shadow-2xl shadow-purple-100'
                   }`}>
+                    {/* Time Attack Countdown Progress Line */}
+                    {isTimeAttack && (
+                      <div className="absolute top-0 left-0 w-full h-1.5 bg-slate-200/30 dark:bg-slate-900/30 z-40 overflow-hidden">
+                        <motion.div
+                          initial={{ width: '100%' }}
+                          animate={{ width: `${(timeLeft / 10) * 100}%` }}
+                          transition={{ duration: 0.3 }}
+                          className={`h-full shadow-[0_0_10px_currentColor] transition-colors duration-300 ${
+                            timeLeft > 6
+                              ? 'bg-emerald-500 text-emerald-400'
+                              : timeLeft > 3
+                              ? 'bg-amber-500 text-amber-400'
+                              : 'bg-rose-500 text-rose-400 animate-pulse'
+                          }`}
+                        />
+                      </div>
+                    )}
+                    {showScratchpad && (
+                      <Scratchpad 
+                        onClose={() => setShowScratchpad(false)} 
+                        isDark={isDark} 
+                      />
+                    )}
                     {!isDark && <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-200 to-pink-200 rounded-full blur-3xl opacity-30" />}
                     
                     <div className="absolute top-4 right-4 flex gap-2 z-30">
+                      {/* Draw Mode Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowScratchpad(true);
+                        }}
+                        className={`p-2 rounded-full transition-colors ${
+                          isDark ? 'hover:bg-slate-700 text-slate-500 hover:text-white' : 'hover:bg-purple-100 text-purple-300 hover:text-purple-600'
+                        }`}
+                        title="โหมดวาดเขียน"
+                      >
+                        <Edit2 className="w-5 h-5" />
+                      </button>
+
                       {/* TTS Button */}
                       <button
                         onClick={(e) => handleSpeak(card.question, e)}
@@ -312,6 +471,22 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
                       คำถาม
                     </span>
 
+                    {/* Time Attack Ticking Timer Pill */}
+                    {isTimeAttack && (
+                      <span className={`absolute top-5 left-[5.5rem] px-2.5 py-0.5 rounded-full text-[10px] font-black font-mono flex items-center gap-1.5 border shadow-sm transition-all duration-300 z-30 ${
+                        timeLeft > 6
+                          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500 dark:text-emerald-400'
+                          : timeLeft > 3
+                          ? 'bg-amber-500/10 border-amber-500/20 text-amber-500 dark:text-amber-400'
+                          : 'bg-rose-500/20 border-rose-500/30 text-rose-500 dark:text-rose-450 animate-pulse'
+                      }`}>
+                        <svg className={`w-3.5 h-3.5 ${timeLeft <= 3 ? 'animate-bounce' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        {timeLeft} วินาที
+                      </span>
+                    )}
+
                     {/* Leech Warning Indicator */}
                     {card.fsrsState.lapses >= 8 && (
                       <div className="absolute top-6 right-16 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-500 animate-pulse z-30">
@@ -329,6 +504,22 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
                       {card.questionImage && (
                         <img src={card.questionImage} alt="Question" className="mt-4 rounded-xl max-h-48 object-contain" />
                       )}
+                    </div>
+
+                    {/* Typed Answer Input Box (Optional) */}
+                    <div className="w-full max-w-sm mt-1 mb-8 z-20" onClick={e => e.stopPropagation()}>
+                      <textarea
+                        value={typedAnswer}
+                        onChange={e => setTypedAnswer(e.target.value)}
+                        onKeyDown={e => e.stopPropagation()}
+                        placeholder="พิมพ์คำตอบเพื่อตรวจสอบเปรียบเทียบ (ทางเลือก)..."
+                        rows={2}
+                        className={`w-full px-4 py-3 rounded-2xl border text-sm font-medium transition-all focus:ring-2 no-scrollbar ${
+                          isDark 
+                            ? 'bg-slate-900 border-slate-700 text-white focus:ring-purple-500 focus:border-purple-500' 
+                            : 'bg-white border-purple-200 text-slate-800 focus:ring-purple-400 focus:border-purple-400'
+                        }`}
+                      />
                     </div>
                     <motion.div
                       animate={{ y: [0, 5, 0] }}
@@ -354,16 +545,29 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
                     WebkitBackfaceVisibility: 'hidden', 
                     transform: 'rotateY(180deg)',
                     WebkitTransform: 'rotateY(180deg)',
-                    zIndex: isFlipped ? 2 : 1
+                    zIndex: isFlipped ? 2 : 1,
+                    opacity: isFlipped ? 1 : 0,
+                    pointerEvents: isFlipped ? 'auto' : 'none',
+                    transition: 'opacity 0.25s ease-in-out'
                   }}>
                   <div 
-                    className={`w-full h-full bg-gradient-to-br ${gradientClass} rounded-3xl p-8 sm:p-10 flex flex-col items-center justify-center relative overflow-hidden`}
+                    className={`w-full h-full bg-gradient-to-br ${gradientClass} rounded-3xl p-8 sm:p-10 flex flex-col items-center justify-center relative overflow-hidden border border-white/20 shadow-2xl shadow-purple-500/20`}
                     style={gradientStyle}
                   >
                     <div className="absolute top-0 left-0 w-40 h-40 bg-white/10 rounded-full blur-3xl" />
                     <span className="absolute top-6 left-6 text-xs font-bold text-white/80 uppercase tracking-widest">
                       {isPreviewMode ? 'โหมดเรียนรู้' : 'คำตอบ'}
                     </span>
+
+                    {/* Time Out Warning Badge */}
+                    {isTimeOut && (
+                      <span className="absolute top-5 left-20 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500/20 border border-rose-500/30 text-rose-200 animate-bounce flex items-center gap-1.5 z-30">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        หมดเวลาตอบ!
+                      </span>
+                    )}
 
                     {/* Buttons on the Back */}
                     <div className="absolute top-4 right-4 flex gap-2 z-30">
@@ -393,6 +597,47 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
                     </div>
 
                     <div className="text-xl md:text-2xl font-bold text-center leading-relaxed relative z-10 w-full flex flex-col items-center max-h-full overflow-y-auto overflow-x-hidden no-scrollbar pt-4 pb-4">
+                      {/* Condensed Offline AI Feedback & Typed Answer Comparison */}
+                      {typedAnswer.trim() && (() => {
+                        const similarity = calculateSimilarity(typedAnswer, card.answer);
+                        const matchPercent = Math.round(similarity * 100);
+                        
+                        let suggestionText = '';
+                        let suggestionColor = '';
+                        if (matchPercent >= 85) {
+                          suggestionText = 'ยอดเยี่ยม (แนะนำ: ง่าย)';
+                          suggestionColor = 'text-green-300';
+                        } else if (matchPercent >= 60) {
+                          suggestionText = 'ถูกต้องส่วนใหญ่ (แนะนำ: พอได้)';
+                          suggestionColor = 'text-sky-200';
+                        } else if (matchPercent >= 30) {
+                          suggestionText = 'ถูกบางส่วน (แนะนำ: ยาก)';
+                          suggestionColor = 'text-amber-200';
+                        } else {
+                          suggestionText = 'ลองใหม่อีกครั้ง (แนะนำ: ทำใหม่)';
+                          suggestionColor = 'text-rose-200';
+                        }
+                        
+                        return (
+                          <div className="mb-4 w-full text-left bg-white/10 rounded-2xl p-4 border border-white/10 text-white select-text cursor-default" onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-[10px] font-bold text-white/70 uppercase tracking-widest">การตรวจสอบคำตอบออฟไลน์</span>
+                              <span className={`text-xs font-black ${suggestionColor}`}>{suggestionText}</span>
+                            </div>
+                            <div className="text-xs opacity-80 mb-1">คำตอบที่คุณพิมพ์:</div>
+                            <div className="p-2.5 bg-black/20 rounded-xl font-mono text-xs text-white/95 break-words whitespace-pre-wrap select-text mb-3 border border-white/5">
+                              {typedAnswer}
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="flex-1 bg-white/20 h-2 rounded-full overflow-hidden">
+                                <div className="bg-white h-full transition-all duration-500" style={{ width: `${matchPercent}%` }} />
+                              </div>
+                              <span className="text-xs font-black text-white">{matchPercent}% Match</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
                       {/* Show the revealed question text as context on the back */}
                       {(card.question.includes('{{') || isPreviewMode) && (
                         <div className={`mb-4 w-full text-left opacity-90 border-b border-white/20 pb-4 ${isPreviewMode ? 'text-xl md:text-2xl' : 'text-sm md:text-base'} ${isPreviewMode && !card.question.includes('{{') ? 'mt-4' : ''}`}>

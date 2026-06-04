@@ -10,7 +10,7 @@ import 'highlight.js/styles/github-dark-dimmed.css';
 interface MathTextProps {
   children: string;
   /** Custom react-markdown component overrides */
-  components?: Record<string, React.ComponentType<any>>;
+  components?: React.ComponentProps<typeof ReactMarkdown>['components'];
   /** Additional className for the wrapper */
   className?: string;
 }

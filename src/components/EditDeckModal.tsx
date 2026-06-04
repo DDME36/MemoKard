@@ -36,9 +36,11 @@ export default function EditDeckModal({ isOpen, deckName, deckColor, onClose, on
 
   useEffect(() => {
     if (isOpen) {
-      setName(deckName);
-      setSelectedColor(deckColor);
-      setCustomColor('');
+      Promise.resolve().then(() => {
+        setName(deckName);
+        setSelectedColor(deckColor);
+        setCustomColor('');
+      });
     }
   }, [isOpen, deckName, deckColor]);
 

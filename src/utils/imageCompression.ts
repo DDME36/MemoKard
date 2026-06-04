@@ -30,7 +30,7 @@ export async function compressImage(file: File): Promise<string> {
 
         // Draw and compress
         ctx.drawImage(img, 0, 0, width, height);
-        const compressed = canvas.toDataURL('image/jpeg', 0.8);
+        const compressed = canvas.toDataURL('image/webp', 0.75);
         resolve(compressed);
       };
       

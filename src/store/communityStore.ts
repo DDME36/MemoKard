@@ -328,8 +328,7 @@ export const communityStore = {
     publicDeckId: string,
     userId: string,
     deckName: string,
-    deckColor: string,
-    _creatorUsername: string
+    deckColor: string
   ): Promise<string | null> {
     if (!isSupabaseConfigured()) return null;
 

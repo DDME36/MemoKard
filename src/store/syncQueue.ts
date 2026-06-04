@@ -1,7 +1,6 @@
 import { get as idbGet, set as idbSet } from 'idb-keyval';
 import { v4 as uuidv4 } from 'uuid';
-import { supabaseStore } from './supabaseStore';
-import { useFlashcardStore } from './store';
+import type { FSRSState } from '../utils/fsrs';
 
 const SYNC_QUEUE_KEY = 'offline-sync-queue';
 
@@ -18,7 +17,20 @@ export type SyncActionType =
 export interface SyncAction {
   id: string;
   type: SyncActionType;
-  payload: any;
+  payload: {
+    id?: string;
+    name?: string;
+    color?: string;
+    deckId?: string;
+    question?: string;
+    answer?: string;
+    interval?: number;
+    repetition?: number;
+    easeFactor?: number;
+    nextReviewDate?: string | Date;
+    fsrsState?: FSRSState;
+    [key: string]: unknown;
+  };
   timestamp: number;
 }
 
@@ -39,7 +51,7 @@ export class SyncQueueManager {
     await idbSet(SYNC_QUEUE_KEY, queue);
   }
 
-  async enqueue(type: SyncActionType, payload: any): Promise<void> {
+  async enqueue(type: SyncActionType, payload: SyncAction['payload']): Promise<void> {
     const queue = await this.getQueue();
     const newAction: SyncAction = {
       id: uuidv4(),
@@ -71,12 +83,14 @@ export class SyncQueueManager {
   async processQueue(): Promise<void> {
     if (this.isSyncing || !navigator.onLine) return;
     
+    const { useFlashcardStore } = await import('./store');
+    const { supabaseStore } = await import('./supabaseStore');
     const store = useFlashcardStore.getState();
     const userId = store.userId;
     if (!userId || store.isDemo) return;
 
     this.isSyncing = true;
-    let queue = await this.getQueue();
+    const queue = await this.getQueue();
 
     while (queue.length > 0 && navigator.onLine) {
       const action = queue[0];
@@ -85,40 +99,53 @@ export class SyncQueueManager {
       try {
         switch (action.type) {
           case 'CREATE_DECK':
-            // Supabase API does not currently allow forcing an ID from client via this store wrapper,
-            // but for offline sync we ideally should. Assuming supabaseStore is modified or we just let it create a new ID and map it (complex).
-            // For now, we pass the payload to the existing API which might generate a new ID on server.
-            await supabaseStore.createDeck(userId, action.payload.name, action.payload.color);
+            await supabaseStore.createDeck(userId, action.payload.name || '', action.payload.color || 'violet', action.payload.id);
             break;
           case 'UPDATE_DECK':
-            await supabaseStore.updateDeck(action.payload.id, { name: action.payload.name, color: action.payload.color });
+            if (action.payload.id) {
+              await supabaseStore.updateDeck(action.payload.id, { name: action.payload.name, color: action.payload.color });
+            }
             break;
           case 'DELETE_DECK':
-            await supabaseStore.deleteDeck(action.payload.id);
+            if (action.payload.id) {
+              await supabaseStore.deleteDeck(action.payload.id);
+            }
             break;
           case 'CREATE_CARD':
-            await supabaseStore.createCard(
-              userId, 
-              action.payload.deckId, 
-              action.payload.question, 
-              action.payload.answer, 
-              { interval: 0, repetition: 0, easeFactor: 2.5 }
-            );
+            if (action.payload.deckId) {
+              await supabaseStore.createCard(
+                userId, 
+                action.payload.deckId, 
+                action.payload.question || '', 
+                action.payload.answer || '', 
+                { interval: 0, repetition: 0, easeFactor: 2.5 },
+                action.payload.id
+              );
+            }
             break;
           case 'UPDATE_CARD':
-            await supabaseStore.updateCard(action.payload.id, {
-              question: action.payload.question,
-              answer: action.payload.answer
-            });
+            if (action.payload.id) {
+              await supabaseStore.updateCard(action.payload.id, {
+                question: action.payload.question,
+                answer: action.payload.answer
+              });
+            }
             break;
           case 'DELETE_CARD':
-            await supabaseStore.deleteCard(action.payload.id);
+            if (action.payload.id) {
+              await supabaseStore.deleteCard(action.payload.id);
+            }
             break;
           case 'REVIEW_CARD':
-            await supabaseStore.updateCard(action.payload.id, {
-              nextReviewDate: new Date(action.payload.nextReviewDate)
-              // FSRS state should theoretically be added to Supabase schema if we want full sync
-            });
+            if (action.payload.id) {
+              await supabaseStore.updateCard(action.payload.id, {
+                interval: action.payload.interval,
+                repetition: action.payload.repetition,
+                easeFactor: action.payload.easeFactor,
+                nextReviewDate: action.payload.nextReviewDate ? new Date(action.payload.nextReviewDate) : undefined,
+                fsrsState: action.payload.fsrsState,
+              });
+            }
             break;
           case 'UPDATE_STATS':
             // Custom payload for batch stats update

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, memo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
-import { useFlashcardStore, type Deck } from '../store/store';
+import { useFlashcardStore, type Deck, type Flashcard } from '../store/store';
 import { useTheme } from '../contexts/ThemeContext';
 import ReviewCard from '../components/ReviewCard';
 import LoadingSkeleton from '../components/LoadingSkeleton';
@@ -14,7 +14,7 @@ interface ReviewSessionProps {
   activeDeck: Deck | null;
   isCramMode?: boolean;
   onGoHome: () => void;
-  onEditCard?: (card: any) => void;
+  onEditCard?: (card: Flashcard) => void;
   dayColor: { gradient: string; shadow: string };
   deckColor?: { gradient: string; shadow: string };
   skipModeSelector?: boolean;
@@ -29,6 +29,15 @@ const shuffleArray = <T,>(array: T[]): T[] => {
   }
   return newArray;
 };
+
+type SessionStats = Record<1 | 2 | 3 | 4, number>;
+
+const createSessionStats = (): SessionStats => ({
+  1: 0,
+  2: 0,
+  3: 0,
+  4: 0,
+});
 
 const ReviewSession = memo(function ReviewSession({ 
   activeDeck, 
@@ -57,6 +66,7 @@ const ReviewSession = memo(function ReviewSession({
   const [failedCardIds, setFailedCardIds] = useState<Set<string>>(new Set());
   const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
   const [showZenMode, setShowZenMode] = useState(false);
+  const [sessionStats, setSessionStats] = useState<SessionStats>(() => createSessionStats());
   // Frozen exam/preview card list — rebuilt only when mode is selected, never on store update
   const [frozenExamCards, setFrozenExamCards] = useState<ReturnType<typeof getCardsByDeck>>([]);
   // Phase 2: after answering all cards, repeat only the ones answered wrong
@@ -89,21 +99,31 @@ const ReviewSession = memo(function ReviewSession({
     }
 
     switch (reviewMode) {
-      case 'focus':
-        return reviewCards.filter(c => c.easeFactor < 2.5);
+      case 'focus': {
+        const dueDifficult = reviewCards.filter(c => c.easeFactor < 2.5);
+        if (dueDifficult.length > 0) return dueDifficult;
+        return shuffleArray((activeDeck ? store.getCardsByDeck(activeDeck.id) : store.cards).filter(c => c.easeFactor < 2.5));
+      }
       case 'quick':
         return reviewCards.slice(0, 10);
       case 'exam':
       case 'preview':
         // ✅ Use frozen list — never read from live store here
         return frozenExamCards;
-      case 'weak':
-        return reviewCards.filter(c => c.easeFactor < 2.0);
+      case 'weak': {
+        const dueWeak = reviewCards.filter(c => c.easeFactor < 2.0);
+        if (dueWeak.length > 0) return dueWeak;
+        return shuffleArray((activeDeck ? store.getCardsByDeck(activeDeck.id) : store.cards).filter(c => c.easeFactor < 2.0));
+      }
+      case 'new_cards':
+        return shuffleArray((activeDeck ? store.getCardsByDeck(activeDeck.id) : store.cards).filter(c => c.repetition === 0));
+      case 'time_attack':
+        return reviewCards;
       case 'normal':
       default:
         return reviewCards;
     }
-  }, [reviewCards, reviewMode, showModeSelector, frozenExamCards, isRepeatPhase, failedCardIds]);
+  }, [reviewCards, reviewMode, showModeSelector, frozenExamCards, isRepeatPhase, failedCardIds, activeDeck, store]);
 
   // Simulate loading for smooth UX
   useEffect(() => {
@@ -154,8 +174,8 @@ const ReviewSession = memo(function ReviewSession({
     setShowModeSelector(!skipModeSelector);
     setFailedCardIds(new Set());
     setIsRepeatPhase(false);
+    setSessionStats(createSessionStats());
     setSessionStartTime(null);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDeck?.id, isCramMode, skipModeSelector, buildCardList]);
 
   const activeColor = useMemo(() =>
@@ -207,6 +227,11 @@ const ReviewSession = memo(function ReviewSession({
       return;
     }
 
+    setSessionStats((stats) => ({
+      ...stats,
+      [quality as 1 | 2 | 3 | 4]: stats[quality as 1 | 2 | 3 | 4] + 1,
+    }));
+
     // Track failed cards so we can repeat them at the end
     const updatedFailed = new Set(failedCardIds);
     if (quality === 1) {
@@ -253,6 +278,7 @@ const ReviewSession = memo(function ReviewSession({
             setCurrentCardIndex(0);
             setIsRepeatPhase(false);
             setFailedCardIds(new Set());
+            setSessionStats(createSessionStats());
             // ✅ Freeze exam/preview cards NOW (once) so they never re-shuffle mid-session
             if (mode === 'exam' || mode === 'preview') {
               const allCards = activeDeck
@@ -310,6 +336,14 @@ const ReviewSession = memo(function ReviewSession({
       preview: {
         title: 'ไม่มีการ์ดในชุดนี้',
         description: 'กรุณาเพิ่มการ์ดในชุดนี้ก่อน'
+      },
+      new_cards: {
+        title: 'ไม่มีการ์ดใหม่',
+        description: 'ยินดีด้วย! ไม่มีการ์ดใหม่ (ยังไม่เคยทบทวน) ในชุดการ์ดนี้แล้ว ทบทวนการ์ดที่มีอยู่ต่อได้เลย!'
+      },
+      time_attack: {
+        title: 'ไม่มีการ์ดท้าทายเวลา',
+        description: 'ยินดีด้วย! คุณทบทวนการ์ดท้าทายเวลาครบแล้ว หรือไม่มีการ์ดที่ต้องทบทวนในขณะนี้'
       }
     };
 
@@ -372,6 +406,13 @@ const ReviewSession = memo(function ReviewSession({
 
   // Celebration screen - only show when actually completed reviews
   if (showCelebration) {
+    const totalRated = sessionStats[1] + sessionStats[2] + sessionStats[3] + sessionStats[4];
+    const correctRated = sessionStats[3] + sessionStats[4];
+    const accuracy = totalRated > 0 ? Math.round((correctRated / totalRated) * 100) : 100;
+    const elapsedMinutes = sessionStartTime
+      ? Math.max(1, Math.round((Date.now() - sessionStartTime) / 60000))
+      : 0;
+
     return (
       <motion.div 
         key="review-complete" 
@@ -409,8 +450,43 @@ const ReviewSession = memo(function ReviewSession({
           transition={{ delay: 0.3 }}
           className={isDark ? 'text-slate-400 mb-8' : 'text-slate-600 mb-8'}
         >
-          คุณทบทวนการ์ดครบแล้ว กลับมาทบทวนอีกครั้งในวันพรุ่งนี้นะ
+          {reviewMode === 'preview'
+            ? 'คุณดูการ์ดครบแล้ว พร้อมกลับไปทบทวนจริงได้ทุกเมื่อ'
+            : 'คุณทบทวนการ์ดครบแล้ว กลับมาทบทวนอีกครั้งในวันพรุ่งนี้นะ'}
         </motion.p>
+        {reviewMode !== 'preview' && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35 }}
+            className={`mx-auto mb-8 grid max-w-md grid-cols-3 gap-3 rounded-2xl border p-3 ${
+              isDark ? 'border-slate-800 bg-slate-900/70' : 'border-slate-100 bg-white/80 shadow-sm'
+            }`}
+          >
+            <div>
+              <div className={`text-2xl font-black ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
+                {totalRated}
+              </div>
+              <div className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                การ์ด
+              </div>
+            </div>
+            <div>
+              <div className="text-2xl font-black text-emerald-500">{accuracy}%</div>
+              <div className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                แม่นยำ
+              </div>
+            </div>
+            <div>
+              <div className={`text-2xl font-black ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
+                {elapsedMinutes}m
+              </div>
+              <div className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                เวลา
+              </div>
+            </div>
+          </motion.div>
+        )}
         <motion.button
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -472,6 +548,19 @@ const ReviewSession = memo(function ReviewSession({
 
       {/* Progress Bar */}
       <div className="mb-8">
+        {isRepeatPhase && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`mb-4 rounded-2xl border px-4 py-3 text-sm font-bold ${
+              isDark
+                ? 'border-amber-900/40 bg-amber-950/20 text-amber-300'
+                : 'border-amber-200 bg-amber-50 text-amber-700'
+            }`}
+          >
+            รอบแก้จุดพลาด: ทำเฉพาะการ์ดที่ตอบไม่ได้จนกว่าจะจำได้
+          </motion.div>
+        )}
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-3">
             <span className={`text-sm font-bold ${
@@ -487,7 +576,7 @@ const ReviewSession = memo(function ReviewSession({
                   : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm'
               }`}
             >
-              <Headphones className="w-3.5 h-3.5" /> Zen Mode
+              <Headphones className="w-3.5 h-3.5" /> โหมดเซน (Zen Mode)
             </button>
           </div>
           <span 
@@ -525,6 +614,7 @@ const ReviewSession = memo(function ReviewSession({
         onEditCard={onEditCard}
         dayColor={activeColor}
         isPreviewMode={reviewMode === 'preview'}
+        isTimeAttack={reviewMode === 'time_attack'}
       />
     </motion.div>
   );

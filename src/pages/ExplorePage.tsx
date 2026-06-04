@@ -21,32 +21,32 @@ export default function ExplorePage({ onOpenDeck }: ExplorePageProps) {
   const limit = 50;
 
   useEffect(() => {
+    const loadDecks = async () => {
+      setLoading(true);
+      try {
+        let result;
+        if (searchQuery || selectedCategory !== 'all') {
+          result = await communityStore.searchPublicDecks(
+            searchQuery,
+            selectedCategory !== 'all' ? selectedCategory : undefined,
+            undefined,
+            page,
+            limit
+          );
+        } else {
+          result = await communityStore.getPublicDecks(page, limit, sortBy);
+        }
+        setDecks(result.decks);
+        setTotal(result.total);
+      } catch (error) {
+        console.error('Error loading decks:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     loadDecks();
   }, [page, sortBy, selectedCategory, searchQuery]);
-
-  const loadDecks = async () => {
-    setLoading(true);
-    try {
-      let result;
-      if (searchQuery || selectedCategory !== 'all') {
-        result = await communityStore.searchPublicDecks(
-          searchQuery,
-          selectedCategory !== 'all' ? selectedCategory : undefined,
-          undefined,
-          page,
-          limit
-        );
-      } else {
-        result = await communityStore.getPublicDecks(page, limit, sortBy);
-      }
-      setDecks(result.decks);
-      setTotal(result.total);
-    } catch (error) {
-      console.error('Error loading decks:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
@@ -131,7 +131,7 @@ export default function ExplorePage({ onOpenDeck }: ExplorePageProps) {
           {/* Sort */}
           <CustomSelect
             value={sortBy}
-            onChange={(value) => handleSortChange(value as any)}
+            onChange={(value) => handleSortChange(value as 'import_count' | 'rating' | 'newest')}
             options={[
               { value: 'import_count', label: 'ยอดนิยม' },
               { value: 'rating', label: 'คะแนนสูงสุด' },

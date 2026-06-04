@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useFlashcardStore, type Deck, type Flashcard } from '../store/store';
 import { useTheme } from '../contexts/ThemeContext';
@@ -12,6 +12,9 @@ import EditDeckModal from '../components/EditDeckModal';
 import MathText from '../components/MathText';
 import { exportDeck } from '../utils/deckIO';
 import { getDeckColorStyles } from '../utils/colorUtils';
+import { haptics } from '../utils/haptics';
+import { VirtualizedCardList } from '../components/VirtualizedCardList';
+import { RefreshCw } from 'lucide-react';
 
 interface DeckDetailProps {
   deck: Deck;
@@ -34,7 +37,7 @@ export default function DeckDetail({ deck: initialDeck, onStartReview, onShowAdd
   const [showUnshareConfirm, setShowUnshareConfirm] = useState(false);
   const [showUnsubscribeConfirm, setShowUnsubscribeConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [loadingPublicDeck, setLoadingPublicDeck] = useState(true);
+  const [loadingPublicDeck, setLoadingPublicDeck] = useState(() => (user && !isDemo) ? true : false);
 
   const col = getDeckColorStyles(deck.color);
   const cards = getCardsByDeck(deck.id);
@@ -45,19 +48,9 @@ export default function DeckDetail({ deck: initialDeck, onStartReview, onShowAdd
   const canEdit = !isSynced; // Can only edit non-synced decks
   const canShare = !isSynced; // Can only share non-synced decks
 
-  // Check if deck is already shared
-  useEffect(() => {
-    if (authLoading) return;
-    if (user && !isDemo) {
-      loadPublicDeck();
-    } else {
-      setLoadingPublicDeck(false);
-    }
-  }, [deck.id, user, isDemo, authLoading]);
-
-  const loadPublicDeck = async () => {
+  const loadPublicDeck = useCallback(async () => {
     if (!user || isDemo) return;
-    setLoadingPublicDeck(true);
+    Promise.resolve().then(() => setLoadingPublicDeck(true));
     try {
       const pd = await communityStore.getPublicDeckBySourceDeckId(deck.id, user.id);
       setPublicDeck(pd);
@@ -66,7 +59,21 @@ export default function DeckDetail({ deck: initialDeck, onStartReview, onShowAdd
     } finally {
       setLoadingPublicDeck(false);
     }
-  };
+  }, [deck.id, user, isDemo]);
+
+  // Check if deck is already shared
+  useEffect(() => {
+    if (authLoading) return;
+    if (user && !isDemo) {
+      Promise.resolve().then(() => {
+        loadPublicDeck();
+      });
+    } else {
+      Promise.resolve().then(() => {
+        setPublicDeck(null);
+      });
+    }
+  }, [authLoading, user, isDemo, loadPublicDeck]);
 
   const handleShare = async (description: string, category: DeckCategory, tags: string[]) => {
     if (!user || isDemo) {
@@ -218,8 +225,9 @@ export default function DeckDetail({ deck: initialDeck, onStartReview, onShowAdd
             {cards.length} การ์ด · ต้องทบทวน {due} ใบ
           </p>
           {isSynced && (
-            <p className="text-xs text-white/60 mt-1">
-              🔄 อัปเดตอัตโนมัติจากเจ้าของต้นฉบับ
+            <p className="text-xs text-white/60 mt-1 flex items-center justify-center gap-1">
+              <RefreshCw className="w-3 h-3 animate-spin flex-shrink-0" />
+              <span>อัปเดตอัตโนมัติจากเจ้าของต้นฉบับ</span>
             </p>
           )}
         </div>
@@ -370,54 +378,61 @@ export default function DeckDetail({ deck: initialDeck, onStartReview, onShowAdd
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                 </svg>
                 <div className={isDark ? 'text-violet-300' : 'text-violet-800'}>
-                  <p className="font-bold">🔒 ชุดการ์ดนี้เป็นแบบ read-only</p>
+                  <p className="font-bold">ชุดการ์ดนี้เป็นแบบ Read-Only</p>
                   <p className="text-xs mt-1">ไม่สามารถแก้ไขได้ เพราะซิงค์กับชุดต้นฉบับ</p>
                 </div>
               </div>
             </div>
           )}
-          {cards.map((card) => {
-            const isDue = new Date(card.nextReviewDate) <= new Date();
-            return (
-              <motion.div 
-                key={card.id} 
-                whileHover={canEdit ? { scale: 1.02, y: -2 } : {}}
-                whileTap={canEdit ? { scale: 0.98 } : {}}
-                className={`backdrop-blur-sm rounded-2xl border p-5 flex items-start gap-4 transition-all duration-300 ${
-                  canEdit ? 'cursor-pointer' : 'cursor-default'
-                } ${
-                  isDark 
-                    ? `bg-slate-800/90 border-slate-700 ${canEdit ? 'hover:bg-slate-800 hover:border-purple-500/50' : ''}` 
-                    : `bg-white/80 border-purple-100 ${canEdit ? 'hover:border-purple-200 hover:shadow-xl hover:shadow-purple-100' : ''}`
-                }`}
-                onClick={() => canEdit && onEditCard(card)}>
-                <div className="flex-1 min-w-0">
-                  <div className={`text-base font-bold mb-1 line-clamp-1 ${
-                    isDark ? 'text-slate-200' : 'text-slate-800'
-                  }`}>
-                    <MathText className="[&_p]:mb-0 [&_.katex]:text-[0.95em]">{card.question}</MathText>
-                  </div>
-                  <div className={`text-sm line-clamp-1 ${
-                    isDark ? 'text-slate-400' : 'text-slate-500'
-                  }`}>
-                    <MathText className="[&_p]:mb-0 [&_.katex]:text-[0.85em]">{card.answer}</MathText>
-                  </div>
+          <VirtualizedCardList
+            items={cards}
+            itemHeight={98}
+            containerHeight={480}
+            renderItem={(card) => {
+              const isDue = new Date(card.nextReviewDate) <= new Date();
+              return (
+                <div className="pb-3 pr-1 h-full">
+                  <motion.div 
+                    whileHover={canEdit ? { scale: 1.01, y: -1 } : {}}
+                    whileTap={canEdit ? { scale: 0.99 } : {}}
+                    className={`premium-card rounded-3xl p-5 flex items-start gap-4 transition-all duration-300 h-full ${
+                      canEdit ? 'cursor-pointer accent-glow' : 'cursor-default'
+                    }`}
+                    onClick={() => {
+                      if (canEdit) {
+                        haptics.light();
+                        onEditCard(card);
+                      }
+                    }}>
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-base font-bold mb-1 line-clamp-1 display-font ${
+                        isDark ? 'text-slate-200' : 'text-slate-800'
+                      }`}>
+                        <MathText className="[&_p]:mb-0 [&_.katex]:text-[0.95em]">{card.question}</MathText>
+                      </div>
+                      <div className={`text-sm line-clamp-1 ${
+                        isDark ? 'text-slate-400' : 'text-slate-500'
+                      }`}>
+                        <MathText className="[&_p]:mb-0 [&_.katex]:text-[0.85em]">{card.answer}</MathText>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      {isDue && (
+                        <span className="text-xs font-bold bg-gradient-to-r from-rose-500 to-pink-500 text-white px-3 py-1 rounded-xl display-font shadow-lg shadow-rose-500/10">ถึงเวลา</span>
+                      )}
+                      {canEdit && (
+                        <svg className={`w-5 h-5 ${
+                          isDark ? 'text-purple-400' : 'text-purple-300'
+                        }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                      )}
+                    </div>
+                  </motion.div>
                 </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  {isDue && (
-                    <span className="text-xs font-bold bg-gradient-to-r from-rose-500 to-pink-500 text-white px-3 py-1 rounded-xl">ถึงเวลา</span>
-                  )}
-                  {canEdit && (
-                    <svg className={`w-5 h-5 ${
-                      isDark ? 'text-purple-400' : 'text-purple-300'
-                    }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                    </svg>
-                  )}
-                </div>
-              </motion.div>
-            );
-          })}
+              );
+            }}
+          />
         </div>
       )}
 

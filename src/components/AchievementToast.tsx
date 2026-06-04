@@ -49,7 +49,7 @@ export default function AchievementToast({ achievement, onClose }: AchievementTo
 
   useEffect(() => {
     if (achievement) {
-      setIsVisible(true);
+      Promise.resolve().then(() => setIsVisible(true));
       sounds.play('celebration');
       
       // Fire confetti

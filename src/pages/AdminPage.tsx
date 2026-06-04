@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
@@ -43,11 +43,7 @@ export default function AdminPage() {
   const [filter, setFilter] = useState<'all' | 'active' | 'hidden'>('all');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadReportedDecks();
-  }, []);
-
-  const loadReportedDecks = async () => {
+  const loadReportedDecks = useCallback(async () => {
     setLoading(true);
     try {
       // Get all decks that have at least 1 report
@@ -130,7 +126,13 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    Promise.resolve().then(() => {
+      loadReportedDecks();
+    });
+  }, [loadReportedDecks]);
 
   const handleHide = async (deckId: string) => {
     setActionLoading(deckId);
@@ -265,14 +267,14 @@ export default function AdminPage() {
 
       {/* Filter Tabs */}
       <div className={`flex gap-1 p-1 rounded-xl ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}>
-        {[
+        {([
           { key: 'all', label: 'ทั้งหมด', count: decks.length },
           { key: 'active', label: 'แสดงอยู่', count: decks.filter((d) => d.is_active).length },
           { key: 'hidden', label: 'ซ่อนแล้ว', count: decks.filter((d) => !d.is_active).length },
-        ].map((tab) => (
+        ] as const).map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setFilter(tab.key as any)}
+            onClick={() => setFilter(tab.key)}
             className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
               filter === tab.key
                 ? isDark

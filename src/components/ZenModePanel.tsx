@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Headphones, CloudRain, Flame, Radio, X, Minus, GripHorizontal } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+import { haptics } from '../utils/haptics';
 
 interface ZenModePanelProps {
   isOpen: boolean;
@@ -18,7 +19,7 @@ class AudioMixer {
 
   init() {
     if (this.ctx) return;
-    const ACtx = window.AudioContext || (window as any).webkitAudioContext;
+    const ACtx = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     this.ctx = new ACtx();
 
     this.rainGain = this.ctx.createGain();
@@ -154,7 +155,7 @@ export default function ZenModePanel({ isOpen, onClose, dayColor }: ZenModePanel
 
   useEffect(() => {
     if (isOpen) {
-      setIsMinimized(false);
+      Promise.resolve().then(() => setIsMinimized(false));
       if (!mixerRef.current) {
         mixerRef.current = new AudioMixer();
         mixerRef.current.init();
@@ -248,11 +249,11 @@ export default function ZenModePanel({ isOpen, onClose, dayColor }: ZenModePanel
           initial={{ opacity: 0, y: 20, scale: 0.95 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 20, scale: 0.95 }}
-          className={`fixed z-50 backdrop-blur-xl shadow-2xl border ${
+          className={`fixed z-50 backdrop-blur-2xl shadow-2xl border ${
             isMinimized 
-              ? 'p-1.5 rounded-full flex items-center gap-1 cursor-grab active:cursor-grabbing' 
-              : 'w-80 rounded-3xl p-5'
-          } ${isDark ? 'bg-slate-900/95 border-slate-700' : 'bg-white/95 border-slate-200'}`}
+              ? 'p-1.5 rounded-full flex items-center gap-1 cursor-grab active:cursor-grabbing premium-card border-white/20' 
+              : 'w-80 rounded-[32px] p-5 premium-card border-white/20'
+          }`}
           style={{ top: '5rem', right: '1rem', touchAction: "none" }}
         >
           {/* Hidden Iframe for zero visual footprint */}
@@ -270,25 +271,31 @@ export default function ZenModePanel({ isOpen, onClose, dayColor }: ZenModePanel
             <>
               {/* Drag Handle */}
               <div className="px-2 opacity-40 hover:opacity-100 transition-opacity">
-                <GripHorizontal className="w-4 h-4" />
+                <GripHorizontal className="w-4 h-4 text-slate-400" />
               </div>
               
               {/* Expand Button */}
               <button 
-                onClick={() => setIsMinimized(false)} 
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                onClick={() => {
+                  haptics.light();
+                  setIsMinimized(false);
+                }} 
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full hover:bg-white/10 dark:hover:bg-slate-800/40 transition-colors"
                 title="ขยาย (Expand)"
               >
-                <Headphones className={`w-4 h-4 ${(timerRunning || showLofi || rainVol > 0 || brownVol > 0) ? 'text-indigo-500 animate-pulse' : 'text-slate-500'}`} />
-                <span className="text-sm font-bold">
+                <Headphones className={`w-4 h-4 ${(timerRunning || showLofi || rainVol > 0 || brownVol > 0) ? 'text-indigo-500 animate-pulse' : 'text-slate-400'}`} />
+                <span className="text-sm font-bold display-font text-slate-700 dark:text-slate-300">
                   {timerRunning ? formatTime(timeLeft) : 'Zen'}
                 </span>
               </button>
 
               {/* Close Button */}
               <button 
-                onClick={handleClose} 
-                className="p-2 rounded-full hover:bg-rose-100 dark:hover:bg-rose-900/30 text-slate-500 hover:text-rose-500 transition-colors"
+                onClick={() => {
+                  haptics.medium();
+                  handleClose();
+                }} 
+                className="p-2 rounded-full hover:bg-rose-500/10 dark:hover:bg-rose-950/30 text-slate-400 hover:text-rose-500 transition-colors"
                 title="ปิด (Close)"
               >
                 <X className="w-4 h-4" />
@@ -297,20 +304,26 @@ export default function ZenModePanel({ isOpen, onClose, dayColor }: ZenModePanel
           ) : (
             <>
               <div className="flex justify-between items-center mb-6 cursor-grab active:cursor-grabbing">
-                <h3 className="font-bold text-lg flex items-center gap-2 pointer-events-none">
-                  <Headphones className="w-5 h-5 text-indigo-500" /> โหมดสมาธิ
+                <h3 className="font-bold text-lg flex items-center gap-2 pointer-events-none display-font text-slate-800 dark:text-slate-100">
+                  <Headphones className="w-5 h-5 text-indigo-500 animate-pulse" /> โหมดสมาธิ
                 </h3>
                 <div className="flex items-center gap-1">
                   <button 
-                    onClick={() => setIsMinimized(true)} 
-                    className="p-1.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors text-slate-500"
+                    onClick={() => {
+                      haptics.light();
+                      setIsMinimized(true);
+                    }} 
+                    className="p-1.5 rounded-full hover:bg-white/10 dark:hover:bg-slate-800/40 transition-colors text-slate-400"
                     title="พับเก็บ (Minimize)"
                   >
                     <Minus className="w-5 h-5" />
                   </button>
                   <button 
-                    onClick={handleClose} 
-                    className="p-1.5 rounded-full hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-colors text-slate-500 hover:text-rose-500"
+                    onClick={() => {
+                      haptics.medium();
+                      handleClose();
+                    }} 
+                    className="p-1.5 rounded-full hover:bg-rose-500/10 dark:hover:bg-rose-950/30 transition-colors text-slate-400 hover:text-rose-500"
                     title="ปิด (Close)"
                   >
                     <X className="w-5 h-5" />
@@ -319,32 +332,33 @@ export default function ZenModePanel({ isOpen, onClose, dayColor }: ZenModePanel
               </div>
 
               {/* Pomodoro Timer */}
-              <div className={`p-4 rounded-2xl mb-4 text-center ${isDark ? 'bg-slate-800/50' : 'bg-slate-100/50'}`}>
-                <div className="text-xs font-bold uppercase tracking-widest opacity-50 mb-1">
+              <div className={`p-4 rounded-2xl mb-4 text-center ${isDark ? 'bg-slate-900/50 border border-white/5' : 'bg-white/50 border border-white/40 shadow-inner shadow-slate-100'}`}>
+                <div className="text-[10px] font-bold uppercase tracking-widest opacity-50 mb-1 display-font text-slate-500 dark:text-slate-400">
                   {isBreak ? 'เวลาพัก (Break)' : 'เวลาโฟกัส (Focus)'}
                 </div>
-                <div className={`text-4xl font-black font-mono mb-3 bg-gradient-to-r ${gradientClass} bg-clip-text text-transparent`} style={gradientStyle}>
+                <div className={`text-4xl font-black font-mono mb-3 display-font bg-gradient-to-r ${gradientClass} bg-clip-text text-transparent`} style={gradientStyle}>
                   {formatTime(timeLeft)}
                 </div>
                 <div className="flex gap-2 justify-center">
                   <button 
                     onClick={() => {
+                      haptics.medium();
                       timerRunningRef.current = !timerRunning;
                       setTimerRunning(!timerRunning);
                     }}
-                    className={`px-4 py-2 rounded-xl font-bold text-sm text-white bg-gradient-to-r ${gradientClass} shadow-md`}
+                    className={`px-4 py-2 rounded-xl font-bold text-sm text-white bg-gradient-to-r ${gradientClass} shadow-md display-font`}
                     style={gradientStyle}
                   >
                     {timerRunning ? 'หยุดพัก' : 'เริ่มจับเวลา'}
                   </button>
                   <button 
                     onClick={() => {
-                      // ✅ Fix: reset to the CURRENT phase duration (not the opposite)
+                      haptics.light();
                       setTimerRunning(false);
                       timerRunningRef.current = false;
                       setTimeLeft(isBreak ? 5 * 60 : 25 * 60);
                     }}
-                    className={`px-3 py-2 rounded-xl font-bold text-sm border ${isDark ? 'border-slate-600 hover:bg-slate-700' : 'border-slate-300 hover:bg-slate-200'}`}
+                    className={`px-3 py-2 rounded-xl font-bold text-sm border display-font ${isDark ? 'border-slate-700 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-50 text-slate-600 shadow-sm'}`}
                   >
                     รีเซ็ต
                   </button>
@@ -353,43 +367,47 @@ export default function ZenModePanel({ isOpen, onClose, dayColor }: ZenModePanel
 
               {/* Ambient Sounds */}
               <div className="space-y-4 mb-6">
-                <div className="text-xs font-bold uppercase tracking-widest opacity-50">Ambient Sounds</div>
+                <div className="text-[10px] font-bold uppercase tracking-widest opacity-50 display-font text-slate-500 dark:text-slate-400">Ambient Sounds</div>
                 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3" onClick={() => haptics.light()}>
                   <CloudRain className={`w-5 h-5 ${rainVol > 0 ? 'text-blue-400' : 'text-slate-400'}`} />
                   <input 
                     type="range" min="0" max="0.5" step="0.01" 
                     value={rainVol} 
                     onChange={(e) => setRainVol(parseFloat(e.target.value))}
-                    className="w-full accent-blue-500"
+                    className="w-full accent-blue-500 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer"
                   />
                 </div>
                 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3" onClick={() => haptics.light()}>
                   <Flame className={`w-5 h-5 ${brownVol > 0 ? 'text-orange-500' : 'text-slate-400'}`} />
                   <input 
                     type="range" min="0" max="0.5" step="0.01" 
                     value={brownVol} 
                     onChange={(e) => setBrownVol(parseFloat(e.target.value))}
-                    className="w-full accent-orange-500"
+                    className="w-full accent-orange-500 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer"
                   />
                 </div>
               </div>
 
               {/* Lofi Radio Toggle */}
-              <div className={`p-3 rounded-2xl ${isDark ? 'bg-slate-800/50' : 'bg-slate-100/50'}`}>
+              <div className={`p-3 rounded-2xl ${isDark ? 'bg-slate-900/40 border border-white/5' : 'bg-white/40 border border-white/40 shadow-sm'}`}>
                 <button 
-                  onClick={() => setShowLofi(!showLofi)}
-                  className="w-full flex items-center justify-between font-bold text-sm group"
+                  onClick={() => {
+                    haptics.medium();
+                    setShowLofi(!showLofi);
+                  }}
+                  className="w-full flex items-center justify-between font-bold text-sm group text-slate-700 dark:text-slate-300"
                 >
-                  <span className="flex items-center gap-2">
+                  <span className="flex items-center gap-2 display-font">
                     <Radio className={`w-4 h-4 ${showLofi ? 'text-rose-500 animate-pulse' : 'text-slate-400'}`} /> 
                     Lofi Radio
                   </span>
-                  <div className={`w-10 h-5 rounded-full relative transition-colors ${showLofi ? 'bg-rose-500' : isDark ? 'bg-slate-600' : 'bg-slate-300'}`}>
+                  <div className={`w-10 h-5 rounded-full relative transition-colors ${showLofi ? 'bg-rose-500' : isDark ? 'bg-slate-700' : 'bg-slate-350'}`}>
                     <motion.div 
                       layout 
-                      className={`absolute top-0.5 bottom-0.5 bg-white rounded-full w-4 shadow-sm ${showLofi ? 'right-0.5' : 'left-0.5'}`} 
+                      className="absolute top-0.5 bottom-0.5 bg-white rounded-full w-4 shadow-sm" 
+                      style={showLofi ? { right: '0.125rem' } : { left: '0.125rem' }}
                     />
                   </div>
                 </button>

@@ -140,11 +140,11 @@ export const importDeckFromText = (text: string, defaultName = 'Imported Deck', 
             }
           };
         }
-      } catch (err) {
+      } catch {
         // Ignore JSON error, fallback to text parsing
       }
     }
-  } catch (e) {
+  } catch {
     // Ignore JSON error, fallback to text parsing
   }
 
@@ -203,18 +203,22 @@ export const importDeckFromText = (text: string, defaultName = 'Imported Deck', 
 /**
  * Validate imported deck data
  */
-export const validateDeckData = (data: any): data is ExportedDeck => {
+export const validateDeckData = (data: unknown): data is ExportedDeck => {
+  const d = data as Partial<ExportedDeck>;
   return (
-    data &&
-    typeof data === 'object' &&
-    data.deck &&
-    typeof data.deck.name === 'string' &&
-    typeof data.deck.color === 'string' &&
-    Array.isArray(data.cards) &&
-    data.cards.every((card: any) => 
-      card &&
-      typeof card.question === 'string' &&
-      typeof card.answer === 'string'
-    )
+    !!d &&
+    typeof d === 'object' &&
+    !!d.deck &&
+    typeof d.deck.name === 'string' &&
+    typeof d.deck.color === 'string' &&
+    Array.isArray(d.cards) &&
+    d.cards.every((card: unknown) => {
+      const c = card as Record<string, unknown> | null;
+      return (
+        !!c &&
+        typeof c.question === 'string' &&
+        typeof c.answer === 'string'
+      );
+    })
   );
 };

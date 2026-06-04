@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { User, Session } from '@supabase/supabase-js';
+import type { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { useFlashcardStore } from '../store/store';
 
@@ -9,10 +9,10 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   // username + email + password
-  signUp: (username: string, email: string, password: string) => Promise<{ error: any }>;
+  signUp: (username: string, email: string, password: string) => Promise<{ error: AuthError | { message: string } | null }>;
   // login ด้วย username หรือ email ก็ได้
-  signIn: (usernameOrEmail: string, password: string) => Promise<{ error: any }>;
-  signInWithGoogle: () => Promise<{ error: any }>;
+  signIn: (usernameOrEmail: string, password: string) => Promise<{ error: AuthError | { message: string } | null }>;
+  signInWithGoogle: () => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
   isDemo: boolean;
   setDemoMode: (demo: boolean) => void;
@@ -31,7 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isSupabaseConfigured() || isDemo) {
-      setLoading(false);
+      Promise.resolve().then(() => setLoading(false));
       return;
     }
 

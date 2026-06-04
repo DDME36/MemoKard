@@ -90,7 +90,7 @@ export default function ReportModal({ isOpen, deckName, onClose, onSubmit }: Rep
                   </label>
                   <CustomSelect
                     value={reason}
-                    onChange={(value) => setReason(value as any)}
+                    onChange={(value) => setReason(value as 'spam' | 'inappropriate' | 'copyright' | 'other')}
                     options={REPORT_REASONS.map((r) => ({ value: r.value, label: r.label }))}
                     placeholder="เลือกเหตุผล"
                   />

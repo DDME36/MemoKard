@@ -13,25 +13,38 @@ export const haptics = {
   /** Heavy tap - for important actions or errors */
   heavy: () => { if ('vibrate' in navigator) navigator.vibrate(50); },
 
-  /** Success pattern - for positive feedback */
-  success: () => { if ('vibrate' in navigator) navigator.vibrate([30, 50, 30]); },
+  /** Success pattern - for positive feedback or saving successfully */
+  success: () => { if ('vibrate' in navigator) navigator.vibrate([30, 40, 30, 40, 50]); },
 
   /** Error pattern - for negative feedback */
-  error: () => { if ('vibrate' in navigator) navigator.vibrate([50, 100, 50]); },
+  error: () => { if ('vibrate' in navigator) navigator.vibrate([80, 100, 80]); },
 
-  /** Review quality feedback - different patterns for different quality levels */
+  /** Review quality feedback - high-fidelity physical grading feels */
   reviewQuality: (quality: number) => {
     if (!('vibrate' in navigator)) return;
-    if (quality <= 1) navigator.vibrate(80);
-    else if (quality === 2) navigator.vibrate(40);
-    else navigator.vibrate(20);
+    if (quality === 1) {
+      // Again (1): Double heartbeat-like alert pulse (Again/Wrong)
+      navigator.vibrate([40, 40, 80]);
+    } else if (quality === 2) {
+      // Hard (2): Solid sharp snap feedback
+      navigator.vibrate(50);
+    } else if (quality === 3) {
+      // Good (3): Soft, extremely light and smooth pulse
+      navigator.vibrate(20);
+    } else {
+      // Easy (4): Double swift micro-pulses
+      navigator.vibrate([15, 30, 15]);
+    }
   },
 
-  /** Card flip - subtle feedback */
-  cardFlip: () => { if ('vibrate' in navigator) navigator.vibrate(15); },
+  /** Card flip - extremely light tactile flip sensation */
+  cardFlip: () => { if ('vibrate' in navigator) navigator.vibrate(12); },
 
-  /** Celebration - for completing reviews */
-  celebration: () => { if ('vibrate' in navigator) navigator.vibrate([50, 100, 50, 100, 50]); },
+  /** Achievement Unlocked - double notification-buzz feeling */
+  achievement: () => { if ('vibrate' in navigator) navigator.vibrate([35, 35, 100, 35, 35, 100]); },
+
+  /** Celebration - for completing reviews - rhythmic success beats */
+  celebration: () => { if ('vibrate' in navigator) navigator.vibrate([50, 60, 50, 60, 80, 40, 80]); },
 };
 
 /**
@@ -45,7 +58,7 @@ let _sharedCtx: AudioContext | null = null;
 
 function getAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
-  const ACtx = window.AudioContext ?? (window as any).webkitAudioContext;
+  const ACtx = window.AudioContext ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!ACtx) return null;
   if (!_sharedCtx || _sharedCtx.state === 'closed') {
     _sharedCtx = new ACtx();
@@ -65,7 +78,7 @@ export const sounds = {
    * Play a sound effect.
    * Safe to call multiple times rapidly — reuses the same AudioContext.
    */
-  play: async (type: 'flip' | 'success' | 'tap' | 'celebration') => {
+  play: async (type: 'flip' | 'success' | 'tap' | 'celebration' | 'error') => {
     try {
       const ctx = getAudioContext();
       if (!ctx) return;
@@ -105,6 +118,21 @@ export const sounds = {
           // Cheerful C–E–G–C arpeggio
           const notes = [523, 659, 784, 1047];
           notes.forEach((freq, i) => makeOsc(freq, i * 0.1, 0.15, 0.08));
+          break;
+        }
+
+        case 'error': {
+          // Descending buzz warning tone
+          const osc = ctx.createOscillator();
+          const gainNode = ctx.createGain();
+          osc.connect(gainNode);
+          gainNode.connect(ctx.destination);
+          osc.frequency.setValueAtTime(260, now);
+          osc.frequency.exponentialRampToValueAtTime(130, now + 0.25);
+          gainNode.gain.setValueAtTime(0.12, now);
+          gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+          osc.start(now);
+          osc.stop(now + 0.25);
           break;
         }
       }

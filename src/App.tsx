@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useFlashcardStore, type Deck, type Flashcard } from './store/store';
 import { useAuth } from './contexts/AuthContext';
@@ -7,15 +7,6 @@ import { ToastProvider, useToast } from './contexts/ToastContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import AchievementToast from './components/AchievementToast';
 import type { Achievement } from './components/AchievementToast';
-import AuthPage from './pages/AuthPage';
-import Dashboard from './pages/Dashboard';
-import DeckDetail from './pages/DeckDetail';
-import ReviewSession from './pages/ReviewSession';
-import ExplorePage from './pages/ExplorePage';
-import PublicDeckDetail from './pages/PublicDeckDetail';
-import AdminPage from './pages/AdminPage';
-import AchievementsPage from './pages/AchievementsPage';
-import StatisticsPage from './pages/StatisticsPage';
 import AddCard from './components/AddCard';
 import AddDeck from './components/AddDeck';
 import EditCard from './components/EditCard';
@@ -23,38 +14,23 @@ import ConfirmModal from './components/ConfirmModal';
 import HandwritingLogo from './components/HandwritingLogo';
 import SplashScreen from './components/SplashScreen';
 import InstallPrompt from './components/InstallPrompt';
+import LoadingSkeleton from './components/LoadingSkeleton';
+import PwaStatusBar from './components/PwaStatusBar';
 import { haptics } from './utils/haptics';
 import { getDeckColorStyles } from './utils/colorUtils';
+import { Zap } from 'lucide-react';
+import { getThaiDayColor, DECK_COLOR_MAP } from './utils/thaiDayColors';
 
-// สีประจำวันแบบไทย (ตามเวลาประเทศไทย UTC+7)
-const THAI_DAY_COLORS = {
-  0: { gradient: 'from-red-600 to-rose-600', shadow: 'shadow-red-200' },
-  1: { gradient: 'from-yellow-400 to-amber-500', shadow: 'shadow-amber-200' },
-  2: { gradient: 'from-pink-600 to-rose-600', shadow: 'shadow-pink-200' },
-  3: { gradient: 'from-green-600 to-emerald-600', shadow: 'shadow-green-200' },
-  4: { gradient: 'from-orange-600 to-amber-600', shadow: 'shadow-orange-200' },
-  5: { gradient: 'from-sky-600 to-blue-600', shadow: 'shadow-sky-200' },
-  6: { gradient: 'from-purple-600 to-violet-600', shadow: 'shadow-purple-200' },
-};
-
-const getThaiDayColor = () => {
-  const now = new Date();
-  const thaiTime = new Date(now.getTime() + (7 * 60 * 60 * 1000));
-  const dayOfWeek = thaiTime.getUTCDay();
-  return THAI_DAY_COLORS[dayOfWeek as keyof typeof THAI_DAY_COLORS];
-};
-
-// map deck color key → gradient/shadow
-const DECK_COLOR_MAP: Record<string, { gradient: string; shadow: string }> = {
-  violet:  { gradient: 'from-purple-500 to-purple-600', shadow: 'shadow-purple-200' },
-  sky:     { gradient: 'from-sky-500 to-blue-600',      shadow: 'shadow-sky-200' },
-  teal:    { gradient: 'from-teal-500 to-emerald-600',  shadow: 'shadow-teal-200' },
-  rose:    { gradient: 'from-rose-500 to-pink-600',     shadow: 'shadow-rose-200' },
-  amber:   { gradient: 'from-amber-500 to-orange-600',  shadow: 'shadow-amber-200' },
-  emerald: { gradient: 'from-emerald-500 to-green-600', shadow: 'shadow-emerald-200' },
-  pink:    { gradient: 'from-pink-500 to-fuchsia-600',  shadow: 'shadow-pink-200' },
-  indigo:  { gradient: 'from-indigo-500 to-blue-600',   shadow: 'shadow-indigo-200' },
-};
+// Lazy loaded page components to optimize bundle size
+const AuthPage = lazy(() => import('./pages/AuthPage'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const DeckDetail = lazy(() => import('./pages/DeckDetail'));
+const ReviewSession = lazy(() => import('./pages/ReviewSession'));
+const ExplorePage = lazy(() => import('./pages/ExplorePage'));
+const PublicDeckDetail = lazy(() => import('./pages/PublicDeckDetail'));
+const AdminPage = lazy(() => import('./pages/AdminPage'));
+const AchievementsPage = lazy(() => import('./pages/AchievementsPage'));
+const StatisticsPage = lazy(() => import('./pages/StatisticsPage'));
 
 type View = 'home' | 'deck' | 'review' | 'explore' | 'public-deck' | 'admin' | 'achievements' | 'statistics';
 
@@ -91,6 +67,7 @@ function AppContent() {
   const [editingCard, setEditingCard] = useState<Flashcard | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [currentAchievement, setCurrentAchievement] = useState<Achievement | null>(null);
+  const [hasHandledLaunchShortcut, setHasHandledLaunchShortcut] = useState(false);
 
   // Poll for achievements from the queue
   useEffect(() => {
@@ -152,8 +129,33 @@ function AppContent() {
 
   const isLoggedIn = !showSplash && !loading && (user || isDemo);
 
+  useEffect(() => {
+    if (!isLoggedIn || hasHandledLaunchShortcut) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const shortcut = params.get('shortcut');
+
+    if (shortcut === 'review') {
+      Promise.resolve().then(() => startReview(undefined, false, true));
+    } else if (shortcut === 'explore') {
+      Promise.resolve().then(() => goExplore());
+    }
+
+    if (shortcut) {
+      params.delete('shortcut');
+      const nextQuery = params.toString();
+      const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`;
+      window.history.replaceState({}, '', nextUrl);
+    }
+
+    Promise.resolve().then(() => setHasHandledLaunchShortcut(true));
+  }, [hasHandledLaunchShortcut, isLoggedIn]);
+
   return (
-    <div className={`flex flex-col min-h-screen transition-colors duration-300 ${isDark ? 'bg-slate-950' : 'bg-gradient-to-br from-slate-50 via-purple-50 to-pink-50'}`}>
+    <div className={`flex flex-col min-h-screen transition-colors duration-300 relative overflow-hidden ${isDark ? 'bg-slate-950' : 'bg-gradient-to-br from-slate-50 via-purple-50 to-pink-50'}`}>
+      {/* Premium Cosmic Ambient Glowing Nodes (2026 Cosmic Theme) */}
+      <div className="cosmic-glow-node-1 top-[-10%] left-[-10%] opacity-50 dark:opacity-40" />
+      <div className="cosmic-glow-node-2 bottom-[10%] right-[-10%] opacity-40 dark:opacity-30" />
 
       {/* ── Header — outside AnimatePresence, always instant ── */}
       {isLoggedIn && (
@@ -199,7 +201,7 @@ function AppContent() {
                         ? 'text-amber-400 hover:bg-slate-800'
                         : 'text-amber-600 hover:bg-amber-50'
                     }`}
-                    title="Achievements"
+                    title="ความสำเร็จ"
                   >
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
@@ -256,7 +258,7 @@ function AppContent() {
                         ? 'text-rose-400 hover:bg-slate-800'
                         : 'text-rose-600 hover:bg-rose-50'
                     }`}
-                    title="Admin"
+                    title="ผู้ดูแลระบบ"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -323,6 +325,8 @@ function AppContent() {
         </header>
       )}
 
+      {isLoggedIn && <PwaStatusBar dayColor={dayColor} />}
+
       {/* ── Page Content ── */}
       <AnimatePresence mode="wait">
         {showSplash ? (
@@ -335,28 +339,58 @@ function AppContent() {
         ) : loading ? (
           <motion.div
             key="loading"
-            className="min-h-screen flex items-center justify-center"
+            className="min-h-screen flex items-center justify-center p-5"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
           >
-            <div className="text-center">
-              <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-violet-500 to-purple-600 rounded-3xl flex items-center justify-center animate-pulse">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            <div className="text-center max-w-xs mx-auto">
+              {/* Dynamic Theme-Colored Pulsing Icon */}
+              <div className={`w-16 h-16 mx-auto mb-5 bg-gradient-to-br ${dayColor.gradient} rounded-3xl flex items-center justify-center shadow-lg ${isDark ? '' : dayColor.shadow}`}>
+                <svg className="w-8 h-8 text-white animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
               </div>
-              <p className={`font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>กำลังโหลด...</p>
+              
+              <h3 className={`text-base font-bold mb-1.5 ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>กำลังเชื่อมต่อเซิร์ฟเวอร์</h3>
+              <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'} mb-6 leading-relaxed`}>หากระบบโหลดช้าเนื่องจากการเชื่อมต่อขัดข้อง คุณสามารถสลับใช้งานโหมดทดลองออฟไลน์ได้ทันที</p>
+              
+              {/* Fallback button to skip to demo mode */}
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => {
+                  haptics.success();
+                  setDemoMode(true);
+                }}
+                className={`w-full py-3.5 px-5 rounded-2xl text-xs font-bold shadow-md transition-all ${
+                  isDark
+                    ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                    : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                  <span>เข้าใช้งานโหมดทดลอง (Offline)</span>
+                </div>
+              </motion.button>
             </div>
           </motion.div>
         ) : (!user && !isDemo) ? (
-          <AuthPage key="auth" />
+          <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center">
+              <LoadingSkeleton type="card" />
+            </div>
+          }>
+            <AuthPage key="auth" />
+          </Suspense>
         ) : (
           <main className="flex-1 max-w-3xl w-full mx-auto px-5 py-8 pb-10" style={{
             paddingLeft: 'max(1.25rem, env(safe-area-inset-left))',
             paddingRight: 'max(1.25rem, env(safe-area-inset-right))',
             paddingBottom: 'max(2.5rem, env(safe-area-inset-bottom))'
           }}>
-            <AnimatePresence mode="wait">
+            <Suspense fallback={<LoadingSkeleton type="card" />}>
+              <AnimatePresence mode="wait">
               {view === 'home' && (
                 <motion.div
                   key="home"
@@ -477,8 +511,9 @@ function AppContent() {
                 </motion.div>
               )}
             </AnimatePresence>
-          </main>
-        )}
+          </Suspense>
+        </main>
+      )}
       </AnimatePresence>
 
       {/* ── Modals ── */}

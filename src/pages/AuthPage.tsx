@@ -51,7 +51,7 @@ export default function AuthPage() {
     
     // Format check first
     if (username.trim().length < 3 || !/^[a-zA-Z0-9_]+$/.test(username.trim())) {
-      setUsernameStatus('idle');
+      Promise.resolve().then(() => setUsernameStatus('idle'));
       return;
     }
 
@@ -68,7 +68,7 @@ export default function AuthPage() {
   useEffect(() => {
     if (mode !== 'register') return;
     if (!email) {
-      setEmailValid(null);
+      Promise.resolve().then(() => setEmailValid(null));
       return;
     }
     const timer = setTimeout(() => {
@@ -120,8 +120,9 @@ export default function AuthPage() {
         const { error } = await signIn(email.trim(), password);
         if (error) setError(translateAuthError(error.message));
       }
-    } catch (err: any) {
-      setError(translateAuthError(err.message || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ'));
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ';
+      setError(translateAuthError(errMsg));
     } finally {
       setLoading(false);
     }

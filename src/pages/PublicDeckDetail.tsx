@@ -31,45 +31,45 @@ export default function PublicDeckDetail({ publicDeckId, onClose, onImported }: 
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
 
   useEffect(() => {
+    const loadDeckData = async () => {
+      setLoading(true);
+      try {
+        const [deckData, cardsData] = await Promise.all([
+          communityStore.getPublicDeckById(publicDeckId),
+          communityStore.getPublicDeckCards(publicDeckId),
+        ]);
+
+        if (!deckData) {
+          showToast('ไม่พบชุดการ์ดนี้', 'error');
+          onClose();
+          return;
+        }
+
+        setDeck(deckData);
+        setCards(cardsData);
+
+        // Check if user has imported this deck
+        if (user && !isDemo) {
+          const imported = await communityStore.hasUserImportedDeck(publicDeckId, user.id);
+          setHasImported(imported);
+
+          // Get user's rating
+          const rating = await communityStore.getUserRating(publicDeckId, user.id);
+          setUserRating(rating);
+
+          // Check if user has reported
+          const reported = await communityStore.getUserReportStatus(publicDeckId, user.id);
+          setHasReported(reported);
+        }
+      } catch (error) {
+        console.error('Error loading deck:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     loadDeckData();
-  }, [publicDeckId]);
-
-  const loadDeckData = async () => {
-    setLoading(true);
-    try {
-      const [deckData, cardsData] = await Promise.all([
-        communityStore.getPublicDeckById(publicDeckId),
-        communityStore.getPublicDeckCards(publicDeckId),
-      ]);
-
-      if (!deckData) {
-        showToast('ไม่พบชุดการ์ดนี้', 'error');
-        onClose();
-        return;
-      }
-
-      setDeck(deckData);
-      setCards(cardsData);
-
-      // Check if user has imported this deck
-      if (user && !isDemo) {
-        const imported = await communityStore.hasUserImportedDeck(publicDeckId, user.id);
-        setHasImported(imported);
-
-        // Get user's rating
-        const rating = await communityStore.getUserRating(publicDeckId, user.id);
-        setUserRating(rating);
-
-        // Check if user has reported
-        const reported = await communityStore.getUserReportStatus(publicDeckId, user.id);
-        setHasReported(reported);
-      }
-    } catch (error) {
-      console.error('Error loading deck:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [publicDeckId, user, isDemo, onClose, showToast]);
 
   const handleSubscribe = async () => {
     if (isDemo || !user) {
@@ -86,8 +86,7 @@ export default function PublicDeckDetail({ publicDeckId, onClose, onImported }: 
         publicDeckId,
         user.id,
         deck.name,
-        deck.color,
-        deck.creatorUsername
+        deck.color
       );
 
       if (!newDeckId) {

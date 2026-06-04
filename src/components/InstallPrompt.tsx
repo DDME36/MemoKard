@@ -26,21 +26,27 @@ interface InstallPromptProps {
 
 export default function InstallPrompt({ dayColor }: InstallPromptProps) {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isIOS, setIsIOS] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
+  const [isIOS] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    return /iphone|ipad|ipod/.test(userAgent);
+  });
+  const [isStandalone] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return !!(window.matchMedia('(display-mode: standalone)').matches || 
+              ('standalone' in window.navigator && (window.navigator as Navigator & { standalone?: boolean }).standalone));
+  });
   const [showPrompt, setShowPrompt] = useState(false);
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
 
   useEffect(() => {
-    // Check if app is already installed
     const isPwaInstalled = window.matchMedia('(display-mode: standalone)').matches || 
-                           ('standalone' in window.navigator && (window.navigator as any).standalone);
-    setIsStandalone(!!isPwaInstalled);
+                           ('standalone' in window.navigator && (window.navigator as Navigator & { standalone?: boolean }).standalone);
 
     if (isPwaInstalled) {
       // If installed, we might want to ask for notification permissions
       if ('Notification' in window && Notification.permission === 'default') {
-        setShowNotificationPrompt(true);
+        Promise.resolve().then(() => setShowNotificationPrompt(true));
       }
       return; // Do not show install prompt if already installed
     }
@@ -54,12 +60,7 @@ export default function InstallPrompt({ dayColor }: InstallPromptProps) {
       }
     }
 
-    // Detect iOS Safari
-    const userAgent = window.navigator.userAgent.toLowerCase();
-    const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
-    setIsIOS(isIosDevice);
-
-    if (isIosDevice) {
+    if (isIOS) {
       // Show iOS instruction after a delay
       setTimeout(() => setShowPrompt(true), 5000); // Increased to 5 seconds
     }
@@ -76,7 +77,7 @@ export default function InstallPrompt({ dayColor }: InstallPromptProps) {
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
-  }, []);
+  }, [isIOS]);
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;

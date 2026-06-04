@@ -1,6 +1,7 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import type { Deck, Flashcard } from './store';
-import { createInitialFSRSState } from '../utils/fsrs';
+import type { Deck, Flashcard } from './types';
+import { createInitialFSRSState, type FSRSState } from '../utils/fsrs';
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 // ============================================
 // Supabase Operations
@@ -30,16 +31,21 @@ export const supabaseStore = {
     }));
   },
 
-  async createDeck(userId: string, name: string, color: string): Promise<Deck | null> {
+  async createDeck(userId: string, name: string, color: string, customId?: string): Promise<Deck | null> {
     if (!isSupabaseConfigured()) return null;
+
+    const insertData: { user_id: string; name: string; color: string; id?: string } = {
+      user_id: userId,
+      name,
+      color,
+    };
+    if (customId) {
+      insertData.id = customId;
+    }
 
     const { data, error } = await supabase
       .from('decks')
-      .insert({
-        user_id: userId,
-        name,
-        color,
-      })
+      .insert(insertData)
       .select()
       .single();
 
@@ -130,22 +136,38 @@ export const supabaseStore = {
     deckId: string,
     question: string,
     answer: string,
-    sm2Data: { interval: number; repetition: number; easeFactor: number }
+    sm2Data: { interval: number; repetition: number; easeFactor: number },
+    customId?: string
   ): Promise<Flashcard | null> {
     if (!isSupabaseConfigured()) return null;
 
+    const insertData: {
+      user_id: string;
+      deck_id: string;
+      question: string;
+      answer: string;
+      interval: number;
+      repetition: number;
+      ease_factor: number;
+      next_review: string;
+      id?: string;
+    } = {
+      user_id: userId,
+      deck_id: deckId,
+      question,
+      answer,
+      interval: sm2Data.interval,
+      repetition: sm2Data.repetition,
+      ease_factor: sm2Data.easeFactor,
+      next_review: new Date().toISOString(),
+    };
+    if (customId) {
+      insertData.id = customId;
+    }
+
     const { data, error } = await supabase
       .from('cards')
-      .insert({
-        user_id: userId,
-        deck_id: deckId,
-        question,
-        answer,
-        interval: sm2Data.interval,
-        repetition: sm2Data.repetition,
-        ease_factor: sm2Data.easeFactor,
-        next_review: new Date().toISOString(),
-      })
+      .insert(insertData)
       .select()
       .single();
 
@@ -178,12 +200,20 @@ export const supabaseStore = {
       repetition?: number;
       easeFactor?: number;
       nextReviewDate?: Date;
-      fsrsState?: any;
+      fsrsState?: FSRSState;
     }
   ): Promise<boolean> {
     if (!isSupabaseConfigured()) return false;
 
-    const dbUpdates: any = {};
+    const dbUpdates: Partial<{
+      question: string;
+      answer: string;
+      interval: number;
+      repetition: number;
+      ease_factor: number;
+      next_review: string;
+      fsrs_state: FSRSState | null;
+    }> = {};
     if (updates.question !== undefined) dbUpdates.question = updates.question;
     if (updates.answer !== undefined) dbUpdates.answer = updates.answer;
     if (updates.interval !== undefined) dbUpdates.interval = updates.interval;
@@ -353,7 +383,12 @@ export const supabaseStore = {
   ): Promise<boolean> {
     if (!isSupabaseConfigured()) return false;
 
-    const dbUpdates: any = {};
+    const dbUpdates: Partial<{
+      unlocked_achievements: string[];
+      perfect_reviews: number;
+      total_study_time: number;
+      max_streak: number;
+    }> = {};
     if (updates.unlockedAchievements !== undefined) {
       dbUpdates.unlocked_achievements = updates.unlockedAchievements;
     }
@@ -480,7 +515,7 @@ export const supabaseStore = {
   },
 
   // ── Realtime Subscriptions ──
-  subscribeToDecks(userId: string, callback: (payload: any) => void) {
+  subscribeToDecks(userId: string, callback: (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => void) {
     if (!isSupabaseConfigured()) return () => {};
 
     const channel = supabase
@@ -502,7 +537,7 @@ export const supabaseStore = {
     };
   },
 
-  subscribeToCards(userId: string, callback: (payload: any) => void) {
+  subscribeToCards(userId: string, callback: (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => void) {
     if (!isSupabaseConfigured()) return () => {};
 
     const channel = supabase
@@ -522,5 +557,22 @@ export const supabaseStore = {
     return () => {
       supabase.removeChannel(channel);
     };
+  },
+
+  async fetchReviewDates(userId: string): Promise<string[]> {
+    if (!isSupabaseConfigured()) return [];
+
+    const { data, error } = await supabase
+      .from('review_logs')
+      .select('reviewed_at')
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('Error fetching review dates:', error);
+      return [];
+    }
+
+    const dates = (data || []).map((r) => new Date(r.reviewed_at).toISOString().slice(0, 10));
+    return Array.from(new Set(dates));
   },
 };

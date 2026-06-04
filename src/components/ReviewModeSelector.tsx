@@ -2,8 +2,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../contexts/ThemeContext';
 import { useState } from 'react';
 import { useFlashcardStore } from '../store/store';
+import { haptics } from '../utils/haptics';
 
-export type ReviewMode = 'normal' | 'focus' | 'quick' | 'exam' | 'weak' | 'preview';
+export type ReviewMode = 'normal' | 'focus' | 'quick' | 'exam' | 'weak' | 'preview' | 'new_cards' | 'time_attack';
 
 interface ReviewModeSelectorProps {
   selectedMode: ReviewMode;
@@ -81,6 +82,28 @@ const MODES = [
     ),
     color: 'from-slate-500 to-slate-600',
   },
+  {
+    id: 'new_cards' as ReviewMode,
+    name: 'การ์ดใหม่',
+    description: 'ฝึกการ์ดที่เพิ่งสร้างและยังไม่เคยเรียนรู้',
+    icon: (
+      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+    color: 'from-cyan-500 to-blue-500',
+  },
+  {
+    id: 'time_attack' as ReviewMode,
+    name: 'ท้าทายเวลา',
+    description: 'ทบทวนจำกัดเวลา (10 วินาที/ใบ)',
+    icon: (
+      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+    color: 'from-orange-550 to-rose-600',
+  },
 ];
 
 export default function ReviewModeSelector({ selectedMode, onSelectMode, dayColor, deckId }: ReviewModeSelectorProps) {
@@ -93,7 +116,7 @@ export default function ReviewModeSelector({ selectedMode, onSelectMode, dayColo
   const dayShadowStyle = (isCustomGradient && !isDark && dayColor.shadow) ? { boxShadow: dayColor.shadow } : {};
 
   // Check card availability for each mode
-  const checkModeAvailability = (mode: ReviewMode): { available: boolean; reason: string } => {
+  const checkModeAvailability = (mode: ReviewMode): { available: boolean; reason: string; count: number } => {
     // Filter cards by deck if deckId is provided
     const allCards = deckId ? store.getCardsByDeck(deckId) : store.cards;
     const dueCards = deckId 
@@ -104,37 +127,61 @@ export default function ReviewModeSelector({ selectedMode, onSelectMode, dayColo
       case 'normal':
         return {
           available: dueCards.length > 0,
-          reason: dueCards.length === 0 ? 'ไม่มีการ์ดที่ต้องทบทวน' : ''
+          reason: dueCards.length === 0 ? 'ไม่มีการ์ดที่ต้องทบทวน' : '',
+          count: dueCards.length
         };
-      case 'focus':
-        const difficultCards = allCards.filter(c => c.easeFactor < 2.5);
+      case 'focus': {
+        const difficultCards = dueCards.filter(c => c.easeFactor < 2.5);
+        const allDifficult = allCards.filter(c => c.easeFactor < 2.5);
         return {
-          available: difficultCards.length > 0,
-          reason: difficultCards.length === 0 ? 'ไม่มีการ์ดที่ยาก' : ''
+          available: allDifficult.length > 0,
+          reason: allDifficult.length === 0 ? 'ไม่มีการ์ดที่ยากในชุดนี้' : '',
+          count: difficultCards.length > 0 ? difficultCards.length : allDifficult.length
         };
+      }
       case 'quick':
         return {
           available: dueCards.length > 0,
-          reason: dueCards.length === 0 ? 'ไม่มีการ์ดที่ต้องทบทวน' : ''
+          reason: dueCards.length === 0 ? 'ไม่มีการ์ดที่ต้องทบทวน' : '',
+          count: Math.min(dueCards.length, 10)
         };
       case 'exam':
         return {
           available: allCards.length > 0,
-          reason: allCards.length === 0 ? 'ไม่มีการ์ดในชุดนี้' : ''
+          reason: allCards.length === 0 ? 'ไม่มีการ์ดในชุดนี้' : '',
+          count: allCards.length
         };
-      case 'weak':
-        const weakCards = allCards.filter(c => c.easeFactor < 2.0);
+      case 'weak': {
+        const weakCards = dueCards.filter(c => c.easeFactor < 2.0);
+        const allWeak = allCards.filter(c => c.easeFactor < 2.0);
         return {
-          available: weakCards.length > 0,
-          reason: weakCards.length === 0 ? 'ไม่มีการ์ดจุดอ่อน' : ''
+          available: allWeak.length > 0,
+          reason: allWeak.length === 0 ? 'ไม่มีการ์ดจุดอ่อนในชุดนี้' : '',
+          count: weakCards.length > 0 ? weakCards.length : allWeak.length
         };
+      }
       case 'preview':
         return {
           available: allCards.length > 0,
-          reason: allCards.length === 0 ? 'ไม่มีการ์ดในชุดนี้' : ''
+          reason: allCards.length === 0 ? 'ไม่มีการ์ดในชุดนี้' : '',
+          count: allCards.length
+        };
+      case 'new_cards': {
+        const newCards = allCards.filter(c => c.repetition === 0);
+        return {
+          available: newCards.length > 0,
+          reason: newCards.length === 0 ? 'ไม่มีการ์ดใหม่ในชุดนี้' : '',
+          count: newCards.length
+        };
+      }
+      case 'time_attack':
+        return {
+          available: dueCards.length > 0,
+          reason: dueCards.length === 0 ? 'ไม่มีการ์ดที่ต้องทบทวนในขณะนี้' : '',
+          count: dueCards.length
         };
       default:
-        return { available: true, reason: '' };
+        return { available: true, reason: '', count: 0 };
     }
   };
 
@@ -142,18 +189,21 @@ export default function ReviewModeSelector({ selectedMode, onSelectMode, dayColo
     const { available } = checkModeAvailability(modeId);
     
     if (!available) {
+      // Trigger error tactile feedback for premium feel
+      haptics.error();
       // Show tooltip for 2 seconds
       setShowTooltip(modeId);
       setTimeout(() => setShowTooltip(null), 2000);
       return;
     }
 
+    haptics.medium();
     onSelectMode(modeId);
   };
 
   return (
     <div className="mb-8">
-      <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+      <h3 className={`text-lg font-bold mb-4 display-font ${isDark ? 'text-white' : 'text-slate-900'}`}>
         เลือกโหมดทบทวน
       </h3>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -168,36 +218,42 @@ export default function ReviewModeSelector({ selectedMode, onSelectMode, dayColo
             if (!a.available && b.available) return 1;
             return 0;
           })
-          .map(({ mode, available, reason }) => {
+          .map(({ mode, available, reason, count }) => {
           const isSelected = selectedMode === mode.id;
           const isShowingTooltip = showTooltip === mode.id;
 
           return (
             <div key={mode.id} className="relative">
               <motion.button
-                whileHover={available ? { scale: 1.03, y: -2 } : {}}
-                whileTap={available ? { scale: 0.97 } : {}}
+                whileHover={available ? { scale: 1.02, y: -1 } : {}}
+                whileTap={available ? { scale: 0.98 } : {}}
                 onClick={() => handleModeClick(mode.id)}
-                disabled={!available}
-                className={`w-full p-4 rounded-2xl border-2 transition-all ${
+                className={`w-full p-4 rounded-3xl border-2 transition-all relative overflow-hidden ${
                   !available
                     ? isDark
-                      ? 'bg-slate-800/50 border-slate-700/50 text-slate-600 cursor-not-allowed opacity-50'
-                      : 'bg-slate-100/50 border-slate-200/50 text-slate-400 cursor-not-allowed opacity-50'
+                      ? 'bg-slate-900/40 border-slate-800/40 text-slate-600 cursor-not-allowed opacity-40'
+                      : 'bg-slate-100/40 border-slate-200/40 text-slate-400 cursor-not-allowed opacity-40'
                     : isSelected
-                    ? `bg-gradient-to-br ${mode.color} border-transparent text-white ${
-                        isDark ? '' : `shadow-lg ${dayShadowClass}`
-                      }`
-                    : isDark
-                    ? 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-600'
-                    : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 shadow-sm'
+                    ? `bg-gradient-to-br ${mode.color} border-transparent text-white shadow-lg ${dayShadowClass}`
+                    : `premium-card accent-glow ${isDark ? 'border-slate-700/50' : 'border-slate-150'}`
                 }`}
                 style={isSelected ? dayShadowStyle : {}}
               >
+                {available && count > 0 && (
+                  <span className={`absolute right-3 top-3 rounded-full px-2 py-0.5 text-[9px] font-black display-font ${
+                    isSelected
+                      ? 'bg-white/20 text-white'
+                      : isDark
+                        ? 'bg-slate-800 text-slate-400'
+                        : 'bg-purple-100 text-purple-600'
+                  }`}>
+                    {count}
+                  </span>
+                )}
                 <div className="flex flex-col items-center justify-center gap-3">
                   <div className={`${
                     !available
-                      ? 'opacity-50'
+                      ? 'opacity-40'
                       : isSelected
                       ? 'text-white'
                       : isDark
@@ -206,7 +262,7 @@ export default function ReviewModeSelector({ selectedMode, onSelectMode, dayColo
                   }`}>
                     {mode.icon}
                   </div>
-                  <div className={`font-bold text-sm ${
+                  <div className={`font-bold text-sm display-font ${
                     !available
                       ? ''
                       : isSelected

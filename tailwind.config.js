@@ -11,9 +11,10 @@ export default {
         'xs': '375px', // Extra small devices (small phones)
       },
       fontFamily: {
-        sans: ['Noto Sans Thai', 'Inter', 'sans-serif'],
-        inter: ['Inter', 'sans-serif'],
-        thai: ['Noto Sans Thai', 'sans-serif'],
+        sans: ['IBM Plex Sans Thai', 'Outfit', 'sans-serif'],
+        outfit: ['Outfit', 'sans-serif'],
+        thai: ['IBM Plex Sans Thai', 'sans-serif'],
+        caveat: ['Caveat', 'cursive'],
       },
       colors: {
         'soft-blue': '#E3F2FD',

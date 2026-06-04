@@ -4,6 +4,7 @@ import { useFlashcardStore } from '../store/store';
 import { compressImage } from '../utils/imageCompression';
 import { useTheme } from '../contexts/ThemeContext';
 import { haptics } from '../utils/haptics';
+import { Lightbulb } from 'lucide-react';
 
 interface AddCardProps {
   deckId: string;
@@ -107,8 +108,9 @@ export default function AddCard({ deckId, onClose }: AddCardProps) {
                 }`}
                 style={{ userSelect: 'text', WebkitUserSelect: 'text' }}
                 rows={3} required />
-              <p className={`text-xs mt-1 font-medium ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                💡 พิมพ์ {'{{ข้อความ}}'} เพื่อทำช่องว่างให้ทาย (Cloze Deletion)
+              <p className={`text-xs mt-1.5 font-medium flex items-center gap-1.5 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                <Lightbulb className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                <span>พิมพ์ {'{{ข้อความ}}'} เพื่อทำช่องว่างให้ทาย (Cloze Deletion)</span>
               </p>
               <div className="flex items-center gap-2 mt-2">
                 <input

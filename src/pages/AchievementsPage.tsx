@@ -3,6 +3,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { getAllAchievements, getAchievementProgress, type UserProgress } from '../utils/achievements';
 import { useFlashcardStore } from '../store/store';
 import { useMemo } from 'react';
+import { haptics } from '../utils/haptics';
 
 const rarityConfig: Record<string, { light: string; dark: string; badge: string; badgeDark: string; iconBg: string; iconBgDark: string; iconColor: string; iconColorDark: string; completedGradient: string }> = {
   common: {
@@ -103,24 +104,31 @@ export default function AchievementsPage({ dayColor }: { dayColor: { gradient: s
     });
   }, [achievements, completed]);
 
+  const rarityLabels: Record<string, string> = {
+    common: 'ทั่วไป',
+    rare: 'หายาก',
+    epic: 'หายากพิเศษ',
+    legendary: 'ระดับตำนาน'
+  };
+
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto">
       {/* Header */}
       <div className="mb-8">
-        <h1 className={`text-3xl font-bold mb-2 ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>Achievements</h1>
-        <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>ปลดล็อก achievements ด้วยการเรียนรู้และทบทวน</p>
+        <h1 className={`text-3xl font-bold mb-2 display-font ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>ความสำเร็จ (Achievements)</h1>
+        <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>ปลดล็อกความสำเร็จของคุณด้วยการเรียนรู้และทบทวนอย่างสม่ำเสมอ</p>
       </div>
 
       {/* Progress Overview */}
-      <div className={`rounded-3xl p-6 mb-8 border ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-200 shadow-sm'}`}>
+      <div className="premium-card rounded-3xl p-6 mb-8 border">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className={`text-2xl font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{completedCount} / {totalCount}</h2>
-            <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Achievements Unlocked</p>
+            <h2 className="text-2xl font-bold display-font text-slate-800 dark:text-slate-200">{completedCount} / {totalCount}</h2>
+            <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>ภารกิจที่ปลดล็อกแล้ว</p>
           </div>
           <div className="text-right">
-            <div className={`text-3xl font-bold bg-gradient-to-r ${dayColor.gradient} bg-clip-text text-transparent`}>{completionPercentage}%</div>
-            <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>Complete</p>
+            <div className={`text-3xl font-bold display-font bg-gradient-to-r ${dayColor.gradient} bg-clip-text text-transparent`}>{completionPercentage}%</div>
+            <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>เสร็จสมบูรณ์</p>
           </div>
         </div>
         <div className={`h-3 rounded-full overflow-hidden ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`}>
@@ -133,6 +141,7 @@ export default function AchievementsPage({ dayColor }: { dayColor: { gradient: s
         {sortedAchievements.map((achievement, index) => {
           const isCompleted = completed[achievement.id];
           const cfg = rarityConfig[achievement.rarity];
+          const isLegendary = achievement.rarity === 'legendary';
 
           return (
             <motion.div
@@ -140,15 +149,25 @@ export default function AchievementsPage({ dayColor }: { dayColor: { gradient: s
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.04 }}
-              className={`rounded-2xl p-5 border-2 transition-all ${
+              onClick={() => haptics.light()}
+              className={`rounded-3xl p-5 border-2 transition-all cursor-pointer relative overflow-hidden ${
                 isCompleted
-                  ? `bg-gradient-to-br ${cfg.completedGradient} border-transparent shadow-xl`
-                  : isDark ? `${cfg.dark}` : `${cfg.light} shadow-sm`
+                  ? isLegendary
+                    ? `bg-gradient-to-br ${cfg.completedGradient} border-transparent shadow-xl shadow-amber-500/20 ring-2 ring-amber-400/50 ring-offset-2 ring-offset-slate-900`
+                    : `bg-gradient-to-br ${cfg.completedGradient} border-transparent shadow-lg`
+                  : `premium-card accent-glow ${isDark ? 'border-slate-700/50' : 'border-slate-100'}`
               }`}
             >
-              <div className="flex items-start gap-4">
+              {isCompleted && isLegendary && (
+                <motion.div 
+                  animate={{ opacity: [0.3, 0.6, 0.3], scale: [0.95, 1.05, 0.95] }} 
+                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }} 
+                  className="absolute inset-0 bg-gradient-to-tr from-amber-500/20 to-orange-500/20 blur-xl pointer-events-none z-0" 
+                />
+              )}
+              <div className="flex items-start gap-4 relative z-10">
                 {/* Unique Icon */}
-                <div className={`w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 ${
                   isCompleted
                     ? 'bg-white/20'
                     : isDark ? cfg.iconBgDark : cfg.iconBg
@@ -161,7 +180,7 @@ export default function AchievementsPage({ dayColor }: { dayColor: { gradient: s
                 {/* Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2 mb-1">
-                    <h3 className={`font-bold text-base ${
+                    <h3 className={`font-bold text-base display-font ${
                       isCompleted ? 'text-white' : isDark ? 'text-slate-200' : 'text-slate-800'
                     }`}>{achievement.title}</h3>
                     {isCompleted && (
@@ -171,9 +190,9 @@ export default function AchievementsPage({ dayColor }: { dayColor: { gradient: s
                     )}
                   </div>
                   <p className={`text-sm mb-3 ${isCompleted ? 'text-white/90' : isDark ? 'text-slate-400' : 'text-slate-600'}`}>{achievement.description}</p>
-                  <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                  <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider display-font ${
                     isCompleted ? 'bg-white/20 text-white' : isDark ? cfg.badgeDark : cfg.badge
-                  }`}>{achievement.rarity}</span>
+                  }`}>{rarityLabels[achievement.rarity] || achievement.rarity}</span>
                 </div>
               </div>
             </motion.div>
@@ -182,23 +201,23 @@ export default function AchievementsPage({ dayColor }: { dayColor: { gradient: s
       </div>
 
       {/* Stats Summary */}
-      <div className={`mt-8 rounded-3xl p-6 border ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-200 shadow-sm'}`}>
-        <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>ความคืบหน้าของคุณ</h3>
+      <div className="premium-card rounded-3xl p-6 border mt-8">
+        <h3 className={`text-lg font-bold mb-4 display-font ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>ความคืบหน้าของคุณ</h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="text-center">
-            <div className={`text-2xl font-bold ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>{progress.cardsCreated}</div>
+          <div className="text-center" onClick={() => haptics.light()}>
+            <div className={`text-2xl font-bold display-font ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>{progress.cardsCreated}</div>
             <div className={`text-xs ${isDark ? 'text-purple-400/70' : 'text-purple-600/70'}`}>การ์ดที่สร้าง</div>
           </div>
-          <div className="text-center">
-            <div className={`text-2xl font-bold ${isDark ? 'text-sky-400' : 'text-sky-600'}`}>{progress.decksCreated}</div>
+          <div className="text-center" onClick={() => haptics.light()}>
+            <div className={`text-2xl font-bold display-font ${isDark ? 'text-sky-400' : 'text-sky-600'}`}>{progress.decksCreated}</div>
             <div className={`text-xs ${isDark ? 'text-sky-400/70' : 'text-sky-600/70'}`}>ชุดการ์ดที่สร้าง</div>
           </div>
-          <div className="text-center">
-            <div className={`text-2xl font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>{progress.reviewsCompleted}</div>
+          <div className="text-center" onClick={() => haptics.light()}>
+            <div className={`text-2xl font-bold display-font ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>{progress.reviewsCompleted}</div>
             <div className={`text-xs ${isDark ? 'text-emerald-400/70' : 'text-emerald-600/70'}`}>ทบทวนแล้ว</div>
           </div>
-          <div className="text-center">
-            <div className={`text-2xl font-bold ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>{progress.currentStreak}</div>
+          <div className="text-center" onClick={() => haptics.light()}>
+            <div className={`text-2xl font-bold display-font ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>{progress.currentStreak}</div>
             <div className={`text-xs ${isDark ? 'text-orange-400/70' : 'text-orange-600/70'}`}>วันติดต่อกัน</div>
           </div>
         </div>

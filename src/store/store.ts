@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
+import { persist, createJSONStorage, type StateStorage, subscribeWithSelector } from 'zustand/middleware';
 import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval';
-import { calculateFSRS, createInitialFSRSState } from '../utils/fsrs';
+import { calculateFSRS, createInitialFSRSState, type FSRSState } from '../utils/fsrs';
 import { checkAchievements, type UserProgress } from '../utils/achievements';
 import type { Achievement } from '../components/AchievementToast';
 import type { Deck, Flashcard } from './types';
@@ -19,7 +19,62 @@ const idbStorage: StateStorage = {
   },
 };
 
-interface FlashcardStore {
+export function calculateDynamicStreak(reviewHistory: Record<string, number>): { currentStreak: number; maxStreak: number } {
+  const dates = Object.keys(reviewHistory)
+    .filter((dateStr) => reviewHistory[dateStr] > 0)
+    .sort();
+
+  if (dates.length === 0) {
+    return { currentStreak: 0, maxStreak: 0 };
+  }
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+
+  let maxStreak = 0;
+  let tempStreak = 0;
+  let prevDate: Date | null = null;
+
+  for (let i = 0; i < dates.length; i++) {
+    const currentDate = new Date(dates[i]);
+    if (!prevDate) {
+      tempStreak = 1;
+    } else {
+      const diffTime = Math.abs(currentDate.getTime() - prevDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays === 1) {
+        tempStreak += 1;
+      } else if (diffDays > 1) {
+        tempStreak = 1;
+      }
+    }
+    maxStreak = Math.max(maxStreak, tempStreak);
+    prevDate = currentDate;
+  }
+
+  let currentStreak = 0;
+  const hasReviewedToday = dates.includes(todayStr);
+  const hasReviewedYesterday = dates.includes(yesterdayStr);
+
+  if (hasReviewedToday || hasReviewedYesterday) {
+    let checkDate = hasReviewedToday ? new Date(todayStr) : new Date(yesterdayStr);
+    currentStreak = 0;
+    while (true) {
+      const checkStr = checkDate.toISOString().slice(0, 10);
+      if (dates.includes(checkStr)) {
+        currentStreak += 1;
+        checkDate = new Date(checkDate.getTime() - 86400000);
+      } else {
+        break;
+      }
+    }
+  }
+
+  return { currentStreak, maxStreak: Math.max(maxStreak, currentStreak) };
+}
+
+export interface FlashcardState {
   cards: Flashcard[];
   decks: Deck[];
   streak: number;
@@ -38,14 +93,19 @@ interface FlashcardStore {
   totalStudyTime: number;
   maxStreak: number; // Track max streak separately
   
+  // Custom dynamic weights for FSRS offline personalized optimizer
+  fsrsWeights: number[];
+  
   // Previous progress snapshot for achievement checking
   previousProgress: UserProgress | null;
 
   // Pending deletes for undo functionality
   pendingDeleteDecks: Map<string, { deck: Deck; cards: Flashcard[] }>;
   pendingDeleteCards: Map<string, Flashcard>;
+}
 
-  // Sync actions
+export interface FlashcardActions {
+  recalibrateFSRS: () => Promise<void>;
   setAuthState: (userId: string | null, isDemo: boolean) => void;
   syncFromSupabase: () => Promise<void>;
   clearStore: () => void;
@@ -79,14 +139,21 @@ interface FlashcardStore {
   trackStudyTime: (minutes: number) => void;
 }
 
+export type FlashcardStore = FlashcardState & FlashcardActions;
+
 export const useFlashcardStore = create<FlashcardStore>()(
-  persist(
+  subscribeWithSelector(
+    persist(
     (set, get) => ({
       cards: [],
       decks: [],
       streak: 0,
       lastStudyDate: null,
       reviewHistory: {},
+      fsrsWeights: [
+        0.4025, 0.9304, 2.5026, 7.8229, 4.9372, 0.9411, 0.8295, 0.0867, 1.4886, 
+        0.1348, 1.0118, 2.0526, 0.1264, 0.4485, 1.4954, 0.254, 2.9466
+      ],
       userId: null,
       isDemo: true,
       userProgress: {
@@ -125,24 +192,36 @@ export const useFlashcardStore = create<FlashcardStore>()(
         const { supabaseStore } = await import('./supabaseStore');
 
         try {
-          const [decks, cards, stats, achievements] = await Promise.all([
+          const [decks, cards, stats, achievements, reviewDates] = await Promise.all([
             supabaseStore.fetchDecks(userId),
             supabaseStore.fetchCards(userId),
             supabaseStore.fetchUserStats(userId),
             supabaseStore.fetchUserAchievements(userId),
+            supabaseStore.fetchReviewDates(userId),
           ]);
+
+          // Reconstruct reviewHistory from actual review logs
+          const reconstructedHistory: Record<string, number> = {};
+          (reviewDates || []).forEach((dateStr) => {
+            reconstructedHistory[dateStr] = (reconstructedHistory[dateStr] || 0) + 1;
+          });
+
+          // Compute dynamic streak metrics to guarantee resilience
+          const { currentStreak: dynStreak, maxStreak: dynMaxStreak } = calculateDynamicStreak(reconstructedHistory);
 
           // Ensure every card has fsrsState (migrate old cards that don't have it)
           const migratedCards = cards.map((c) => ({
             ...c,
-            fsrsState: (c as any).fsrsState ?? createInitialFSRSState(),
+            fsrsState: (c as Partial<Flashcard>).fsrsState ?? createInitialFSRSState(),
           }));
 
           set({
             decks,
             cards: migratedCards,
-            streak: stats.streak,
+            reviewHistory: reconstructedHistory,
+            streak: dynStreak,
             lastStudyDate: stats.lastStudyDate,
+            maxStreak: dynMaxStreak,
             unlockedAchievements: achievements.unlockedAchievements,
             perfectReviewStreak: achievements.perfectReviews,
             totalStudyTime: achievements.totalStudyTime,
@@ -152,7 +231,8 @@ export const useFlashcardStore = create<FlashcardStore>()(
               totalStudyTime: achievements.totalStudyTime,
               decksShared: achievements.decksShared,
               decksImported: achievements.decksImported,
-              maxStreak: achievements.maxStreak,
+              currentStreak: dynStreak,
+              maxStreak: dynMaxStreak,
             },
           });
         } catch (error) {
@@ -189,6 +269,34 @@ export const useFlashcardStore = create<FlashcardStore>()(
         });
       },
 
+      recalibrateFSRS: async () => {
+        const { cards } = get();
+        let totalReps = 0;
+        let totalLapses = 0;
+
+        cards.forEach((c) => {
+          if (c.fsrsState) {
+            totalReps += c.fsrsState.reps || 0;
+            totalLapses += c.fsrsState.lapses || 0;
+          }
+        });
+
+        // Only recalibrate if the user has a statistically meaningful number of reviews (e.g. 80+ repetitions)
+        if (totalReps >= 80) {
+          const actualRetention = 1.0 - totalLapses / totalReps;
+          const { calibrateFSRSWeights } = await import('../utils/fsrs');
+
+          // Build simulated logs corresponding to the user's actual retention rate
+          const simulatedLogs = Array.from({ length: 150 }, (_, i) => ({
+            quality: i < 150 * actualRetention ? 3 : 1,
+          }));
+
+          const newWeights = calibrateFSRSWeights(simulatedLogs);
+          set({ fsrsWeights: newWeights });
+          console.log('[store] FSRS weights dynamically calibrated offline to retention:', actualRetention.toFixed(4), newWeights);
+        }
+      },
+
       // ── Deck Actions ──
       addDeck: async (name, color) => {
         const { userId, isDemo } = get();
@@ -212,13 +320,23 @@ export const useFlashcardStore = create<FlashcardStore>()(
         get().checkAndUnlockAchievements();
 
         if (!isDemo && userId) {
-          const { supabaseStore } = await import('./supabaseStore');
-          const supabaseDeck = await supabaseStore.createDeck(userId, name, color);
-          if (supabaseDeck) {
-            set((state) => ({
-              decks: state.decks.map((d) => d.id === newDeck.id ? supabaseDeck : d),
-            }));
-            return supabaseDeck;
+          try {
+            const { supabaseStore } = await import('./supabaseStore');
+            const supabaseDeck = await supabaseStore.createDeck(userId, name, color, newDeck.id);
+            if (supabaseDeck) {
+              set((state) => ({
+                decks: state.decks.map((d) => d.id === newDeck.id ? supabaseDeck : d),
+              }));
+              return supabaseDeck;
+            }
+          } catch (err) {
+            console.warn('[store] Failed to create deck on Supabase, queuing action:', err);
+            const { syncQueue } = await import('./syncQueue');
+            await syncQueue.enqueue('CREATE_DECK', {
+              id: newDeck.id,
+              name: newDeck.name,
+              color: newDeck.color,
+            });
           }
         }
 
@@ -235,8 +353,14 @@ export const useFlashcardStore = create<FlashcardStore>()(
         }));
 
         if (!isDemo && userId) {
-          const { supabaseStore } = await import('./supabaseStore');
-          await supabaseStore.updateDeck(id, { name, color });
+          try {
+            const { supabaseStore } = await import('./supabaseStore');
+            await supabaseStore.updateDeck(id, { name, color });
+          } catch (err) {
+            console.warn('[store] Failed to update deck on Supabase, queuing action:', err);
+            const { syncQueue } = await import('./syncQueue');
+            await syncQueue.enqueue('UPDATE_DECK', { id, name, color });
+          }
         }
       },
 
@@ -255,8 +379,14 @@ export const useFlashcardStore = create<FlashcardStore>()(
           }));
 
           if (!isDemo && userId) {
-            const { supabaseStore } = await import('./supabaseStore');
-            await supabaseStore.deleteDeck(id);
+            try {
+              const { supabaseStore } = await import('./supabaseStore');
+              await supabaseStore.deleteDeck(id);
+            } catch (err) {
+              console.warn('[store] Failed to delete deck on Supabase, queuing action:', err);
+              const { syncQueue } = await import('./syncQueue');
+              await syncQueue.enqueue('DELETE_DECK', { id });
+            }
           }
         } else {
           // Soft delete (can undo)
@@ -270,13 +400,24 @@ export const useFlashcardStore = create<FlashcardStore>()(
           setTimeout(async () => {
             const stillPending = get().pendingDeleteDecks.has(id);
             if (stillPending && !isDemo && userId) {
-              const { supabaseStore } = await import('./supabaseStore');
-              await supabaseStore.deleteDeck(id);
-              set((state) => {
-                const newPending = new Map(state.pendingDeleteDecks);
-                newPending.delete(id);
-                return { pendingDeleteDecks: newPending };
-              });
+              try {
+                const { supabaseStore } = await import('./supabaseStore');
+                await supabaseStore.deleteDeck(id);
+                set((state) => {
+                  const newPending = new Map(state.pendingDeleteDecks);
+                  newPending.delete(id);
+                  return { pendingDeleteDecks: newPending };
+                });
+              } catch (err) {
+                console.warn('[store] Failed to delete deck on Supabase, queuing action:', err);
+                const { syncQueue } = await import('./syncQueue');
+                await syncQueue.enqueue('DELETE_DECK', { id });
+                set((state) => {
+                  const newPending = new Map(state.pendingDeleteDecks);
+                  newPending.delete(id);
+                  return { pendingDeleteDecks: newPending };
+                });
+              }
             }
           }, 5000);
         }
@@ -333,20 +474,32 @@ export const useFlashcardStore = create<FlashcardStore>()(
         }
 
         if (!isDemo && userId) {
-          const { supabaseStore } = await import('./supabaseStore');
-          const supabaseCard = await supabaseStore.createCard(
-            userId,
-            deckId,
-            question,
-            answer,
-            { interval: 0, repetition: 0, easeFactor: 2.5 }
-          );
-          if (supabaseCard) {
-            set((state) => ({
-              cards: state.cards.map((c) =>
-                c.id === newCard.id ? { ...supabaseCard, fsrsState } : c
-              ),
-            }));
+          try {
+            const { supabaseStore } = await import('./supabaseStore');
+            const supabaseCard = await supabaseStore.createCard(
+              userId,
+              deckId,
+              question,
+              answer,
+              { interval: 0, repetition: 0, easeFactor: 2.5 },
+              newCard.id
+            );
+            if (supabaseCard) {
+              set((state) => ({
+                cards: state.cards.map((c) =>
+                  c.id === newCard.id ? { ...supabaseCard, fsrsState } : c
+                ),
+              }));
+            }
+          } catch (err) {
+            console.warn('[store] Failed to create card on Supabase, queuing action:', err);
+            const { syncQueue } = await import('./syncQueue');
+            await syncQueue.enqueue('CREATE_CARD', {
+              id: newCard.id,
+              deckId: newCard.deckId,
+              question: newCard.question,
+              answer: newCard.answer,
+            });
           }
         }
       },
@@ -361,8 +514,14 @@ export const useFlashcardStore = create<FlashcardStore>()(
         }));
 
         if (!isDemo && userId) {
-          const { supabaseStore } = await import('./supabaseStore');
-          await supabaseStore.updateCard(id, { question, answer });
+          try {
+            const { supabaseStore } = await import('./supabaseStore');
+            await supabaseStore.updateCard(id, { question, answer });
+          } catch (err) {
+            console.warn('[store] Failed to update card on Supabase, queuing action:', err);
+            const { syncQueue } = await import('./syncQueue');
+            await syncQueue.enqueue('UPDATE_CARD', { id, question, answer });
+          }
         }
       },
 
@@ -379,8 +538,14 @@ export const useFlashcardStore = create<FlashcardStore>()(
           }));
 
           if (!isDemo && userId) {
-            const { supabaseStore } = await import('./supabaseStore');
-            await supabaseStore.deleteCard(id);
+            try {
+              const { supabaseStore } = await import('./supabaseStore');
+              await supabaseStore.deleteCard(id);
+            } catch (err) {
+              console.warn('[store] Failed to delete card on Supabase, queuing action:', err);
+              const { syncQueue } = await import('./syncQueue');
+              await syncQueue.enqueue('DELETE_CARD', { id });
+            }
           }
         } else {
           // Soft delete (can undo)
@@ -393,13 +558,24 @@ export const useFlashcardStore = create<FlashcardStore>()(
           setTimeout(async () => {
             const stillPending = get().pendingDeleteCards.has(id);
             if (stillPending && !isDemo && userId) {
-              const { supabaseStore } = await import('./supabaseStore');
-              await supabaseStore.deleteCard(id);
-              set((state) => {
-                const newPending = new Map(state.pendingDeleteCards);
-                newPending.delete(id);
-                return { pendingDeleteCards: newPending };
-              });
+              try {
+                const { supabaseStore } = await import('./supabaseStore');
+                await supabaseStore.deleteCard(id);
+                set((state) => {
+                  const newPending = new Map(state.pendingDeleteCards);
+                  newPending.delete(id);
+                  return { pendingDeleteCards: newPending };
+                });
+              } catch (err) {
+                console.warn('[store] Failed to delete card on Supabase, queuing action:', err);
+                const { syncQueue } = await import('./syncQueue');
+                await syncQueue.enqueue('DELETE_CARD', { id });
+                set((state) => {
+                  const newPending = new Map(state.pendingDeleteCards);
+                  newPending.delete(id);
+                  return { pendingDeleteCards: newPending };
+                });
+              }
             }
           }, 5000);
         }
@@ -451,7 +627,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
           }
 
           const prevFsrs = card.fsrsState ?? createInitialFSRSState();
-          const { newState, nextReviewDate, interval } = calculateFSRS(prevFsrs, quality);
+          const { newState, nextReviewDate, interval } = calculateFSRS(prevFsrs, quality, state.fsrsWeights);
 
           return {
             cards: state.cards.map((c) =>
@@ -479,7 +655,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
 
           try {
             const { supabaseStore } = await import('./supabaseStore');
-            const promises: Promise<any>[] = [];
+            const promises: Promise<unknown>[] = [];
 
             if (!isCramMode && updatedCard) {
               promises.push(
@@ -522,7 +698,11 @@ export const useFlashcardStore = create<FlashcardStore>()(
                 const { syncQueue } = await import('./syncQueue');
                 await syncQueue.enqueue('REVIEW_CARD', {
                   id,
+                  interval: updatedCard2.interval,
+                  repetition: updatedCard2.repetition,
+                  easeFactor: updatedCard2.easeFactor,
                   nextReviewDate: updatedCard2.nextReviewDate,
+                  fsrsState: updatedCard2.fsrsState,
                 });
               }
             }
@@ -530,6 +710,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
         }
 
         await get().updateStreak();
+        await get().recalibrateFSRS();
       },
 
       // ── Getters ──
@@ -557,14 +738,11 @@ export const useFlashcardStore = create<FlashcardStore>()(
 
       // ── Streak ──
       updateStreak: async () => {
-        const { userId, isDemo, lastStudyDate, streak, maxStreak } = get();
+        const { userId, isDemo, reviewHistory } = get();
         const today = new Date().toISOString().slice(0, 10);
 
-        if (lastStudyDate === today) return;
-
-        const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-        const newStreak = lastStudyDate === yesterday ? streak + 1 : 1;
-        const newMaxStreak = Math.max(maxStreak, newStreak);
+        // Derive active and maximum streaks dynamically from the source-of-truth reviewHistory log
+        const { currentStreak: newStreak, maxStreak: newMaxStreak } = calculateDynamicStreak(reviewHistory);
 
         set((state) => ({ 
           streak: newStreak, 
@@ -581,11 +759,15 @@ export const useFlashcardStore = create<FlashcardStore>()(
         get().checkAndUnlockAchievements();
 
         if (!isDemo && userId) {
-          const { supabaseStore } = await import('./supabaseStore');
-          await Promise.all([
-            supabaseStore.updateUserStats(userId, newStreak, today),
-            supabaseStore.updateUserAchievements(userId, { maxStreak: newMaxStreak }),
-          ]);
+          try {
+            const { supabaseStore } = await import('./supabaseStore');
+            await Promise.all([
+              supabaseStore.updateUserStats(userId, newStreak, today),
+              supabaseStore.updateUserAchievements(userId, { maxStreak: newMaxStreak }),
+            ]);
+          } catch (err) {
+            console.warn('[store] Failed to update streak on Supabase:', err);
+          }
         }
       },
 
@@ -685,6 +867,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
         streak: state.streak,
         lastStudyDate: state.lastStudyDate,
         reviewHistory: state.reviewHistory,
+        fsrsWeights: state.fsrsWeights,
         userId: state.userId,
         isDemo: state.isDemo,
         userProgress: state.userProgress,
@@ -697,19 +880,34 @@ export const useFlashcardStore = create<FlashcardStore>()(
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
-        state.decks = (state.decks ?? []).map((d: any) => ({
-          ...d,
-          createdAt: new Date(d.createdAt),
-        }));
-        state.cards = (state.cards ?? []).map((c: any) => ({
-          ...c,
-          nextReviewDate: new Date(c.nextReviewDate),
-          createdAt: new Date(c.createdAt),
-          lastReviewDate: new Date(c.lastReviewDate),
-          // Migrate old cards without fsrsState
-          fsrsState: c.fsrsState ?? createInitialFSRSState(),
-        }));
+        state.fsrsWeights = state.fsrsWeights ?? [
+          0.4025, 0.9304, 2.5026, 7.8229, 4.9372, 0.9411, 0.8295, 0.0867, 1.4886, 
+          0.1348, 1.0118, 2.0526, 0.1264, 0.4485, 1.4954, 0.254, 2.9466
+        ];
+        state.decks = (state.decks ?? []).map((d) => {
+          const raw = d as unknown as Omit<Deck, 'createdAt'> & { createdAt: string | Date };
+          return {
+            ...d,
+            createdAt: new Date(raw.createdAt),
+          };
+        });
+        state.cards = (state.cards ?? []).map((c) => {
+          const raw = c as unknown as Omit<Flashcard, 'nextReviewDate' | 'createdAt' | 'lastReviewDate' | 'fsrsState'> & {
+            nextReviewDate: string | Date;
+            createdAt: string | Date;
+            lastReviewDate: string | Date;
+            fsrsState?: FSRSState;
+          };
+          return {
+            ...c,
+            nextReviewDate: new Date(raw.nextReviewDate),
+            createdAt: new Date(raw.createdAt),
+            lastReviewDate: new Date(raw.lastReviewDate),
+            // Migrate old cards without fsrsState
+            fsrsState: raw.fsrsState ?? createInitialFSRSState(),
+          };
+        });
       },
     }
-  )
+  ))
 );

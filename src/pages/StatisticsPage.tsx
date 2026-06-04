@@ -4,10 +4,43 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useMemo } from 'react';
 import ActivityHeatmap from '../components/ActivityHeatmap';
 import { Brain } from 'lucide-react';
+import { haptics } from '../utils/haptics';
 
 interface StatisticsPageProps {
   dayColor: { gradient: string; shadow: string };
 }
+
+interface StatCardProps {
+  title: string;
+  value: string | number;
+  subtitle?: string;
+  icon: React.ReactNode;
+  color: string;
+  isDark: boolean;
+}
+
+const StatCard = ({ title, value, subtitle, icon, color, isDark }: StatCardProps) => (
+  <motion.div
+    whileHover={{ scale: 1.02, y: -2 }}
+    onClick={() => haptics.light()}
+    className="premium-card accent-glow p-6 rounded-3xl border flex flex-col items-center justify-center text-center cursor-pointer transition-all"
+  >
+    <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${color} flex items-center justify-center mb-3 shadow-lg shadow-purple-500/10`}>
+      {icon}
+    </div>
+    <h3 className={`text-3xl font-bold mb-1 display-font ${isDark ? 'text-white' : 'text-slate-900'}`}>
+      {value}
+    </h3>
+    <p className={`text-sm font-semibold ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+      {title}
+    </p>
+    {subtitle && (
+      <p className={`text-xs mt-1 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+        {subtitle}
+      </p>
+    )}
+  </motion.div>
+);
 
 export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
   const { isDark } = useTheme();
@@ -35,12 +68,12 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
     const today = new Date().toISOString().slice(0, 10);
     const reviewsToday = reviewHistory[today] || 0;
 
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const reviewsThisWeek = Object.entries(reviewHistory)
       .filter(([date]) => new Date(date) >= weekAgo)
       .reduce((sum, [, count]) => sum + count, 0);
 
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const recentReviews = Object.entries(reviewHistory)
       .filter(([date]) => new Date(date) >= thirtyDaysAgo);
     const avgReviewsPerDay = recentReviews.length > 0
@@ -48,7 +81,7 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
       : 0;
 
     const forecast = Array.from({ length: 7 }, (_, i) => {
-      const date = new Date(Date.now() + (i + 1) * 24 * 60 * 60 * 1000);
+      const date = new Date(now.getTime() + (i + 1) * 24 * 60 * 60 * 1000);
       const dueCount = cards.filter(c => {
         const cardDate = new Date(c.nextReviewDate);
         return cardDate.toDateString() === date.toDateString();
@@ -128,32 +161,6 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
   }, [cards, reviewHistory]);
 
 
-  const StatCard = ({ title, value, subtitle, icon, color }: any) => (
-    <motion.div
-      whileHover={{ scale: 1.02, y: -2 }}
-      className={`p-6 rounded-2xl border flex flex-col items-center justify-center text-center ${
-        isDark
-          ? 'bg-slate-800 border-slate-700'
-          : 'bg-white border-slate-200 shadow-sm'
-      }`}
-    >
-      <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${color} flex items-center justify-center mb-3 shadow-lg`}>
-        {icon}
-      </div>
-      <h3 className={`text-3xl font-bold mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-        {value}
-      </h3>
-      <p className={`text-sm font-semibold ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-        {title}
-      </p>
-      {subtitle && (
-        <p className={`text-xs mt-1 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-          {subtitle}
-        </p>
-      )}
-    </motion.div>
-  );
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -162,7 +169,7 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
     >
       {/* Header */}
       <div className="mb-8">
-        <h1 className={`text-3xl font-bold mb-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+        <h1 className={`text-3xl font-bold mb-2 display-font ${isDark ? 'text-white' : 'text-slate-900'}`}>
           สถิติการเรียน
         </h1>
         <p className={isDark ? 'text-slate-400' : 'text-slate-600'}>
@@ -182,6 +189,7 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
             </svg>
           }
           color="from-purple-500 to-purple-600"
+          isDark={isDark}
         />
         <StatCard
           title="ต้องทบทวนวันนี้"
@@ -192,6 +200,7 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
             </svg>
           }
           color="from-rose-500 to-rose-600"
+          isDark={isDark}
         />
         <StatCard
           title="Streak"
@@ -202,6 +211,7 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
             </svg>
           }
           color="from-orange-500 to-orange-600"
+          isDark={isDark}
         />
         <StatCard
           title="อัตราความจำ"
@@ -212,20 +222,19 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
             </svg>
           }
           color="from-emerald-500 to-emerald-600"
+          isDark={isDark}
         />
       </div>
 
       {/* Card Distribution */}
-      <div className={`p-6 rounded-2xl border mb-8 ${
-        isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200 shadow-sm'
-      }`}>
-        <h2 className={`text-xl font-bold mb-6 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+      <div className="premium-card rounded-3xl p-6 border mb-8">
+        <h2 className={`text-xl font-bold mb-6 display-font ${isDark ? 'text-white' : 'text-slate-900'}`}>
           สถานะของการ์ด
         </h2>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-2">
           <div className="text-center">
-            <div className={`text-3xl font-bold mb-1 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
+            <div className={`text-3xl font-bold mb-1 display-font ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
               {stats.newCards}
             </div>
             <div className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
@@ -236,7 +245,7 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
             </div>
           </div>
           <div className="text-center">
-            <div className={`text-3xl font-bold mb-1 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>
+            <div className={`text-3xl font-bold mb-1 display-font ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>
               {stats.learningCards}
             </div>
             <div className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
@@ -247,7 +256,7 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
             </div>
           </div>
           <div className="text-center">
-            <div className={`text-3xl font-bold mb-1 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+            <div className={`text-3xl font-bold mb-1 display-font ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
               {stats.matureCards}
             </div>
             <div className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
@@ -258,7 +267,7 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
             </div>
           </div>
           <div className="text-center">
-            <div className={`text-3xl font-bold mb-1 bg-gradient-to-r ${dayColor.gradient} bg-clip-text text-transparent`}>
+            <div className={`text-3xl font-bold mb-1 display-font bg-gradient-to-r ${dayColor.gradient} bg-clip-text text-transparent`}>
               {stats.avgEaseFactor}
             </div>
             <div className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
@@ -272,12 +281,10 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
       </div>
 
       {/* FSRS Memory Engine Section */}
-      <div className={`p-6 rounded-2xl border mb-8 overflow-hidden relative ${
-        isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200 shadow-sm'
-      }`}>
+      <div className="premium-card rounded-3xl p-6 border mb-8 overflow-hidden relative">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 relative z-10">
           <div>
-            <h2 className={`text-xl font-bold flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+            <h2 className={`text-xl font-bold flex items-center gap-2 display-font ${isDark ? 'text-white' : 'text-slate-900'}`}>
               <Brain className="w-6 h-6 text-indigo-500" /> ระบบช่วยจำ FSRS
             </h2>
             <p className={`text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
@@ -289,23 +296,23 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
         {/* FSRS Real Stats Grid */}
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 relative z-10">
-          <div className={`p-4 rounded-xl text-center ${ isDark ? 'bg-slate-700/50' : 'bg-indigo-50' }`}>
-            <div className={`text-2xl font-bold ${ isDark ? 'text-indigo-400' : 'text-indigo-600' }`}>{stats.avgStability}</div>
+          <div className={`p-4 rounded-xl text-center ${ isDark ? 'bg-slate-700/50' : 'bg-indigo-50/60 backdrop-blur-sm' }`}>
+            <div className={`text-2xl font-bold display-font ${ isDark ? 'text-indigo-400' : 'text-indigo-600' }`}>{stats.avgStability}</div>
             <div className={`text-xs font-semibold mt-1 ${ isDark ? 'text-slate-400' : 'text-slate-600' }`}>Stability (วัน)</div>
             <div className={`text-[10px] mt-0.5 ${ isDark ? 'text-slate-500' : 'text-slate-400' }`}>ค่าเฉลี่ยความคงทนของความจำ</div>
           </div>
-          <div className={`p-4 rounded-xl text-center ${ isDark ? 'bg-slate-700/50' : 'bg-rose-50' }`}>
-            <div className={`text-2xl font-bold ${ isDark ? 'text-rose-400' : 'text-rose-600' }`}>{stats.avgDifficulty}</div>
+          <div className={`p-4 rounded-xl text-center ${ isDark ? 'bg-slate-700/50' : 'bg-rose-50/60 backdrop-blur-sm' }`}>
+            <div className={`text-2xl font-bold display-font ${ isDark ? 'text-rose-400' : 'text-rose-600' }`}>{stats.avgDifficulty}</div>
             <div className={`text-xs font-semibold mt-1 ${ isDark ? 'text-slate-400' : 'text-slate-600' }`}>Difficulty</div>
             <div className={`text-[10px] mt-0.5 ${ isDark ? 'text-slate-500' : 'text-slate-400' }`}>1 = ง่ายสุด / 10 = ยากสุด</div>
           </div>
-          <div className={`p-4 rounded-xl text-center ${ isDark ? 'bg-slate-700/50' : 'bg-emerald-50' }`}>
-            <div className={`text-2xl font-bold ${ isDark ? 'text-emerald-400' : 'text-emerald-600' }`}>{stats.avgInterval} วัน</div>
+          <div className={`p-4 rounded-xl text-center ${ isDark ? 'bg-slate-700/50' : 'bg-emerald-50/60 backdrop-blur-sm' }`}>
+            <div className={`text-2xl font-bold display-font ${ isDark ? 'text-emerald-400' : 'text-emerald-600' }`}>{stats.avgInterval} วัน</div>
             <div className={`text-xs font-semibold mt-1 ${ isDark ? 'text-slate-400' : 'text-slate-600' }`}>Avg Interval</div>
             <div className={`text-[10px] mt-0.5 ${ isDark ? 'text-slate-500' : 'text-slate-400' }`}>ระยะเวลาทบทวนเฉลี่ย</div>
           </div>
-          <div className={`p-4 rounded-xl text-center ${ isDark ? 'bg-slate-700/50' : 'bg-purple-50' }`}>
-            <div className={`text-2xl font-bold ${ isDark ? 'text-purple-400' : 'text-purple-600' }`}>{stats.cardsWithFSRS}</div>
+          <div className={`p-4 rounded-xl text-center ${ isDark ? 'bg-slate-700/50' : 'bg-purple-50/60 backdrop-blur-sm' }`}>
+            <div className={`text-2xl font-bold display-font ${ isDark ? 'text-purple-400' : 'text-purple-600' }`}>{stats.cardsWithFSRS}</div>
             <div className={`text-xs font-semibold mt-1 ${ isDark ? 'text-slate-400' : 'text-slate-600' }`}>การ์ดใน FSRS</div>
             <div className={`text-[10px] mt-0.5 ${ isDark ? 'text-slate-500' : 'text-slate-400' }`}>มี state ของตัวเอง</div>
           </div>
@@ -313,22 +320,30 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
 
         {/* FSRS State Distribution */}
         <div className={`p-4 rounded-xl mb-6 relative z-10 ${ isDark ? 'bg-slate-700/30' : 'bg-slate-50' }`}>
-          <div className={`text-xs font-bold uppercase tracking-widest mb-3 ${ isDark ? 'text-slate-400' : 'text-slate-500' }`}>Card State Distribution</div>
+          <div className={`text-xs font-bold uppercase tracking-widest mb-3 ${ isDark ? 'text-slate-400' : 'text-slate-500' }`}>สัดส่วนสถานะการ์ด (FSRS State)</div>
           <div className="flex gap-2 h-4 rounded-full overflow-hidden">
             {stats.totalCards > 0 && (
               <>
-                {stats.fsrsStateNew > 0 && <div title={`New: ${stats.fsrsStateNew}`} className="bg-blue-400" style={{ width: `${(stats.fsrsStateNew / stats.totalCards) * 100}%` }} />}
-                {stats.fsrsStateLearning > 0 && <div title={`Learning: ${stats.fsrsStateLearning}`} className="bg-amber-400" style={{ width: `${(stats.fsrsStateLearning / stats.totalCards) * 100}%` }} />}
-                {stats.fsrsStateReview > 0 && <div title={`Review: ${stats.fsrsStateReview}`} className="bg-emerald-400" style={{ width: `${(stats.fsrsStateReview / stats.totalCards) * 100}%` }} />}
-                {stats.fsrsStateRelearn > 0 && <div title={`Relearning: ${stats.fsrsStateRelearn}`} className="bg-rose-400" style={{ width: `${(stats.fsrsStateRelearn / stats.totalCards) * 100}%` }} />}
+                {stats.fsrsStateNew > 0 && <div title={`การ์ดใหม่: ${stats.fsrsStateNew}`} className="bg-blue-400" style={{ width: `${(stats.fsrsStateNew / stats.totalCards) * 100}%` }} />}
+                {stats.fsrsStateLearning > 0 && <div title={`กำลังเรียนรู้: ${stats.fsrsStateLearning}`} className="bg-amber-400" style={{ width: `${(stats.fsrsStateLearning / stats.totalCards) * 100}%` }} />}
+                {stats.fsrsStateReview > 0 && <div title={`กำลังทบทวน: ${stats.fsrsStateReview}`} className="bg-emerald-400" style={{ width: `${(stats.fsrsStateReview / stats.totalCards) * 100}%` }} />}
+                {stats.fsrsStateRelearn > 0 && <div title={`เรียนรู้อีกครั้ง: ${stats.fsrsStateRelearn}`} className="bg-rose-400" style={{ width: `${(stats.fsrsStateRelearn / stats.totalCards) * 100}%` }} />}
               </>
             )}
           </div>
           <div className="flex gap-4 mt-2 text-[11px] flex-wrap">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />New ({stats.fsrsStateNew})</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />Learning ({stats.fsrsStateLearning})</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />Review ({stats.fsrsStateReview})</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-400 inline-block" />Relearning ({stats.fsrsStateRelearn})</span>
+            <span className={`flex items-center gap-1.5 font-bold display-font ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+              <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />การ์ดใหม่ ({stats.fsrsStateNew})
+            </span>
+            <span className={`flex items-center gap-1.5 font-bold display-font ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+              <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />กำลังเรียนรู้ ({stats.fsrsStateLearning})
+            </span>
+            <span className={`flex items-center gap-1.5 font-bold display-font ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+              <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />กำลังทบทวน ({stats.fsrsStateReview})
+            </span>
+            <span className={`flex items-center gap-1.5 font-bold display-font ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+              <span className="w-2 h-2 rounded-full bg-rose-400 inline-block" />เรียนรู้อีกครั้ง ({stats.fsrsStateRelearn})
+            </span>
           </div>
         </div>
 
@@ -382,14 +397,14 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
             {/* HTML Overlay for Text (prevents font stretching from preserveAspectRatio="none") */}
             <div className="absolute inset-0 w-full h-full pointer-events-none text-xs">
               {/* Y-axis Labels */}
-              <span className={`absolute left-[0.5%] font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`} style={{ top: 'calc(10% - 18px)' }}>100%</span>
-              <span className={`absolute left-[0.5%] ${isDark ? 'text-slate-400' : 'text-slate-500'}`} style={{ top: 'calc(50% - 16px)' }}>50%</span>
-              <span className={`absolute left-[0.5%] text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`} style={{ top: 'calc(90% - 16px)' }}>0%</span>
+              <span className={`absolute left-[0.5%] font-semibold ${isDark ? 'text-slate-300' : 'text-slate-600'}`} style={{ top: 'calc(10% - 18px)' }}>100%</span>
+              <span className={`absolute left-[0.5%] ${isDark ? 'text-slate-300' : 'text-slate-600'}`} style={{ top: 'calc(50% - 16px)' }}>50%</span>
+              <span className={`absolute left-[0.5%] text-[10px] ${isDark ? 'text-slate-300' : 'text-slate-600'}`} style={{ top: 'calc(90% - 16px)' }}>0%</span>
               
               {/* Day Labels at review points */}
-              <span className={`absolute text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`} style={{ left: `calc(${((stats.reviewX1 + 6) / 1000) * 100}%)`, top: 'calc(90% - 18px)' }}>{stats.dayLabel1}</span>
-              <span className={`absolute text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`} style={{ left: `calc(${((stats.reviewX2 + 6) / 1000) * 100}%)`, top: 'calc(90% - 18px)' }}>{stats.dayLabel2}</span>
-              <span className={`absolute right-[2%] text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`} style={{ top: 'calc(90% - 18px)' }}>{stats.dayLabel3}</span>
+              <span className={`absolute text-[10px] font-semibold ${isDark ? 'text-slate-300' : 'text-slate-600'}`} style={{ left: `calc(${((stats.reviewX1 + 6) / 1000) * 100}%)`, top: 'calc(90% - 18px)' }}>{stats.dayLabel1}</span>
+              <span className={`absolute text-[10px] font-semibold ${isDark ? 'text-slate-300' : 'text-slate-600'}`} style={{ left: `calc(${((stats.reviewX2 + 6) / 1000) * 100}%)`, top: 'calc(90% - 18px)' }}>{stats.dayLabel2}</span>
+              <span className={`absolute right-[2%] text-[10px] font-semibold ${isDark ? 'text-slate-300' : 'text-slate-600'}`} style={{ top: 'calc(90% - 18px)' }}>{stats.dayLabel3}</span>
 
               {/* Segment Labels */}
               <span className="absolute left-[2%] font-semibold text-rose-500" style={{ top: 'calc(75% - 16px)' }}>จำครั้งแรก</span>
@@ -401,40 +416,38 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
       </div>
 
       {/* Review Activity */}
-      <div className={`p-6 rounded-2xl border mb-8 ${
-        isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200 shadow-sm'
-      }`}>
-        <h2 className={`text-xl font-bold mb-6 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+      <div className="premium-card rounded-3xl p-6 border mb-8 animate-fade-in">
+        <h2 className={`text-xl font-bold mb-6 display-font ${isDark ? 'text-white' : 'text-slate-900'}`}>
           กิจกรรมการทบทวน (Activity)
         </h2>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
-          <div className="text-center">
-            <div className={`text-2xl font-bold mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+          <div className="text-center" onClick={() => haptics.light()}>
+            <div className={`text-2xl font-bold display-font mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
               {stats.totalReviews}
             </div>
             <div className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
               ทบทวนทั้งหมด
             </div>
           </div>
-          <div className="text-center">
-            <div className={`text-2xl font-bold mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+          <div className="text-center" onClick={() => haptics.light()}>
+            <div className={`text-2xl font-bold display-font mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
               {stats.reviewsToday}
             </div>
             <div className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
               ทบทวนวันนี้
             </div>
           </div>
-          <div className="text-center">
-            <div className={`text-2xl font-bold mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+          <div className="text-center" onClick={() => haptics.light()}>
+            <div className={`text-2xl font-bold display-font mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
               {stats.reviewsThisWeek}
             </div>
             <div className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
               ทบทวนสัปดาห์นี้
             </div>
           </div>
-          <div className="text-center">
-            <div className={`text-2xl font-bold mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+          <div className="text-center" onClick={() => haptics.light()}>
+            <div className={`text-2xl font-bold display-font mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
               {stats.avgReviewsPerDay}
             </div>
             <div className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
@@ -448,10 +461,8 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
       </div>
 
       {/* Forecast */}
-      <div className={`p-6 rounded-2xl border ${
-        isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200 shadow-sm'
-      }`}>
-        <h2 className={`text-xl font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+      <div className="premium-card rounded-3xl p-6 border">
+        <h2 className={`text-xl font-bold mb-4 display-font ${isDark ? 'text-white' : 'text-slate-900'}`}>
           การ์ดที่ต้องทบทวนใน 7 วันข้างหน้า
         </h2>
         {stats.forecast.every(day => day.count === 0) ? (
@@ -477,7 +488,7 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
                     <span className={`text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                       {day.date}
                     </span>
-                    <span className={`text-sm font-bold ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                    <span className={`text-sm font-bold display-font ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
                       {day.count} การ์ด
                     </span>
                   </div>
