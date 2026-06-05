@@ -1,4 +1,4 @@
-import { useState, useEffect, memo, useCallback } from 'react';
+import { useState, useEffect, memo, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import MathText from './MathText';
 import type { Flashcard } from '../store/store';
@@ -285,31 +285,52 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
     }
   }, [hasBeenFlipped, isExiting, handleReview, x]);
 
-  const MarkdownComponents = (isBack: boolean) => ({
-    p: ({ children }: { children?: React.ReactNode }) => <p className={`mb-3 last:mb-0 ${isBack ? 'text-white' : isDark ? 'text-slate-200' : 'text-slate-800'}`}>{children}</p>,
-    strong: ({ children }: { children?: React.ReactNode }) => <strong className={`font-black ${isBack ? 'text-white' : isDark ? 'text-slate-100' : 'text-slate-900'}`}>{children}</strong>,
+  const markdownComponentsFront = useMemo(() => ({
+    p: ({ children }: { children?: React.ReactNode }) => <p className={`mb-3 last:mb-0 ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{children}</p>,
+    strong: ({ children }: { children?: React.ReactNode }) => <strong className={`font-black ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{children}</strong>,
     em: ({ children }: { children?: React.ReactNode }) => <em className="italic opacity-90">{children}</em>,
     code: ({ children, inline, ...props }: React.ComponentProps<'code'> & { inline?: boolean }) =>
       inline ? (
-        <code className={`px-2 py-0.5 rounded-md text-sm font-mono ${isBack ? 'bg-white/20 text-white' : isDark ? 'bg-slate-700 text-purple-300' : 'bg-slate-100 text-purple-700'}`} {...props}>
+        <code className={`px-2 py-0.5 rounded-md text-sm font-mono ${isDark ? 'bg-slate-700 text-purple-300' : 'bg-slate-100 text-purple-700'}`} {...props}>
           {children}
         </code>
       ) : (
-        <code className={`block p-4 rounded-xl text-left text-sm font-mono overflow-x-hidden w-full ${isBack ? 'bg-black/30 text-emerald-300' : 'bg-slate-800 text-emerald-400'}`} {...props}>
+        <code className={`block p-4 rounded-xl text-left text-sm font-mono overflow-x-hidden w-full bg-slate-800 text-emerald-400`} {...props}>
           {children}
         </code>
       ),
     ul: ({ children }: { children?: React.ReactNode }) => <ul className="list-disc pl-5 mb-3 text-left space-y-1 w-full max-w-sm">{children}</ul>,
     ol: ({ children }: { children?: React.ReactNode }) => <ol className="list-decimal pl-5 mb-3 text-left space-y-1 w-full max-w-sm">{children}</ol>,
-    li: ({ children }: { children?: React.ReactNode }) => <li className={isBack ? 'text-white/90' : isDark ? 'text-slate-300' : 'text-slate-700'}>{children}</li>,
-    // KaTeX math elements inherit text color
+    li: ({ children }: { children?: React.ReactNode }) => <li className={isDark ? 'text-slate-300' : 'text-slate-700'}>{children}</li>,
+    span: ({ className, children, ...props }: React.ComponentProps<'span'>) => {
+      return <span className={className} {...props}>{children}</span>;
+    },
+  }), [isDark]);
+
+  const markdownComponentsBack = useMemo(() => ({
+    p: ({ children }: { children?: React.ReactNode }) => <p className="mb-3 last:mb-0 text-white">{children}</p>,
+    strong: ({ children }: { children?: React.ReactNode }) => <strong className="font-black text-white">{children}</strong>,
+    em: ({ children }: { children?: React.ReactNode }) => <em className="italic opacity-90">{children}</em>,
+    code: ({ children, inline, ...props }: React.ComponentProps<'code'> & { inline?: boolean }) =>
+      inline ? (
+        <code className="px-2 py-0.5 rounded-md text-sm font-mono bg-white/20 text-white" {...props}>
+          {children}
+        </code>
+      ) : (
+        <code className="block p-4 rounded-xl text-left text-sm font-mono overflow-x-hidden w-full bg-black/30 text-emerald-300" {...props}>
+          {children}
+        </code>
+      ),
+    ul: ({ children }: { children?: React.ReactNode }) => <ul className="list-disc pl-5 mb-3 text-left space-y-1 w-full max-w-sm">{children}</ul>,
+    ol: ({ children }: { children?: React.ReactNode }) => <ol className="list-decimal pl-5 mb-3 text-left space-y-1 w-full max-w-sm">{children}</ol>,
+    li: ({ children }: { children?: React.ReactNode }) => <li className="text-white/90">{children}</li>,
     span: ({ className, children, ...props }: React.ComponentProps<'span'>) => {
       if (className?.includes('katex')) {
-        return <span className={`${className} ${isBack ? 'text-white' : ''}`} {...props}>{children}</span>;
+        return <span className={`${className} text-white`} {...props}>{children}</span>;
       }
       return <span className={className} {...props}>{children}</span>;
     },
-  });
+  }), []);
 
   const getExitAnimation = () => {
     switch (selectedQuality) {
@@ -498,7 +519,7 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
                     )}
 
                     <div className="text-xl md:text-2xl font-bold text-center leading-relaxed relative z-10 w-full flex flex-col items-center max-h-full overflow-y-auto overflow-x-hidden no-scrollbar pb-6 pt-4">
-                      <MathText components={MarkdownComponents(false)}>
+                      <MathText components={markdownComponentsFront}>
                         {renderClozeText(card.question, false)}
                       </MathText>
                       {card.questionImage && (
@@ -644,7 +665,7 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
                           {isPreviewMode && !card.question.includes('{{') && (
                             <span className="block text-[10px] font-bold text-white/60 uppercase tracking-widest mb-2">คำถาม</span>
                           )}
-                          <MathText components={MarkdownComponents(true)}>
+                          <MathText components={markdownComponentsBack}>
                             {renderClozeText(card.question, true)}
                           </MathText>
                           {isPreviewMode && card.questionImage && (
@@ -658,7 +679,7 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
                       )}
 
                       {/* Show the actual answer */}
-                      <MathText components={MarkdownComponents(true)}>
+                      <MathText components={markdownComponentsBack}>
                         {renderClozeText(card.answer, true)}
                       </MathText>
                       {card.answerImage && (
