@@ -33,7 +33,7 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
-  const { signIn, signUp, setDemoMode, checkUsernameAvailable } = useAuth();
+  const { signIn, signUp, setDemoMode, checkUsernameAvailable, backendStatus, retryBackend } = useAuth();
   const { isDark } = useTheme();
   const supabaseConfigured = isSupabaseConfigured();
 
@@ -200,6 +200,25 @@ export default function AuthPage() {
               : `bg-white/80 shadow-2xl ${dayColor.from.replace('from-', 'border-').replace('-400', '-100/50')}`
           }`}
         >
+          {supabaseConfigured && backendStatus === 'unavailable' && (
+            <div className={`mb-6 rounded-2xl border p-4 ${isDark ? 'border-amber-800/50 bg-amber-950/30' : 'border-amber-200 bg-amber-50'}`}>
+              <p className={`text-sm font-bold ${isDark ? 'text-amber-300' : 'text-amber-900'}`}>ระบบคลาวด์ไม่พร้อมใช้งาน</p>
+              <p className={`mt-1 text-xs leading-relaxed ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>
+                Supabase อาจถูกพักหรือติดต่อไม่ได้ คุณยังใช้ MemoKard แบบเก็บข้อมูลในเครื่องได้ตามปกติ
+              </p>
+              <button type="button" onClick={() => void retryBackend()}
+                className={`mt-3 rounded-xl px-3 py-2 text-xs font-bold ${isDark ? 'bg-amber-900/50 text-amber-200' : 'bg-amber-100 text-amber-900'}`}>
+                ลองเชื่อมต่ออีกครั้ง
+              </button>
+            </div>
+          )}
+
+          {supabaseConfigured && backendStatus === 'checking' && (
+            <div className={`mb-6 flex items-center gap-2 rounded-2xl border px-4 py-3 text-xs font-medium ${isDark ? 'border-slate-700 bg-slate-800/60 text-slate-300' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>
+              <span className="h-2 w-2 animate-pulse rounded-full bg-sky-500" /> กำลังตรวจสอบระบบคลาวด์…
+            </div>
+          )}
+
           {/* Mode Toggle */}
           <div className={`relative flex mb-8 p-1.5 rounded-2xl ${isDark ? 'bg-slate-950/50' : 'bg-slate-100/80'}`}>
             <motion.div

@@ -20,7 +20,7 @@ export const supabaseStore = {
 
     if (error) {
       console.error('Error fetching decks:', error);
-      return [];
+      throw error;
     }
 
     return (data || []).map((d) => ({
@@ -51,7 +51,7 @@ export const supabaseStore = {
 
     if (error) {
       console.error('Error creating deck:', error);
-      return null;
+      throw error;
     }
 
     return {
@@ -72,7 +72,7 @@ export const supabaseStore = {
 
     if (error) {
       console.error('Error updating deck:', error);
-      return false;
+      throw error;
     }
 
     return true;
@@ -88,7 +88,7 @@ export const supabaseStore = {
 
     if (error) {
       console.error('Error deleting deck:', error);
-      return false;
+      throw error;
     }
 
     return true;
@@ -111,7 +111,7 @@ export const supabaseStore = {
 
     if (error) {
       console.error('Error fetching cards:', error);
-      return [];
+      throw error;
     }
 
     return (data || []).map((c) => ({
@@ -173,7 +173,7 @@ export const supabaseStore = {
 
     if (error) {
       console.error('Error creating card:', error);
-      return null;
+      throw error;
     }
 
     return {
@@ -233,7 +233,7 @@ export const supabaseStore = {
 
     if (error) {
       console.error('Error updating card:', error);
-      return false;
+      throw error;
     }
 
     return true;
@@ -249,7 +249,7 @@ export const supabaseStore = {
 
     if (error) {
       console.error('Error deleting card:', error);
-      return false;
+      throw error;
     }
 
     return true;
@@ -569,7 +569,7 @@ export const supabaseStore = {
 
     if (error) {
       console.error('Error fetching review dates:', error);
-      return [];
+      throw error;
     }
 
     const dates = (data || []).map((r) => new Date(r.reviewed_at).toISOString().slice(0, 10));

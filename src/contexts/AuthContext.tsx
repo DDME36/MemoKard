@@ -1,7 +1,8 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { User, Session, AuthError } from '@supabase/supabase-js';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { checkSupabaseHealth, supabase, isSupabaseConfigured } from '../lib/supabase';
+import type { BackendStatus } from '../lib/supabase';
 import { useFlashcardStore } from '../store/store';
 
 interface AuthContextType {
@@ -17,6 +18,8 @@ interface AuthContextType {
   isDemo: boolean;
   setDemoMode: (demo: boolean) => void;
   checkUsernameAvailable: (username: string) => Promise<boolean>;
+  backendStatus: BackendStatus;
+  retryBackend: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,6 +31,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isDemo, setIsDemo] = useState(() => {
     return localStorage.getItem('demo-mode') === 'true';
   });
+  const [backendStatus, setBackendStatus] = useState<BackendStatus>(() =>
+    isSupabaseConfigured() ? 'checking' : 'unconfigured'
+  );
+
+  const retryBackend = useCallback(async () => {
+    if (!isSupabaseConfigured()) {
+      setBackendStatus('unconfigured');
+      return false;
+    }
+
+    setBackendStatus('checking');
+    const available = await checkSupabaseHealth();
+    setBackendStatus(available ? 'available' : 'unavailable');
+    return available;
+  }, []);
+
+  useEffect(() => {
+    void Promise.resolve().then(retryBackend);
+  }, [retryBackend]);
 
   useEffect(() => {
     if (!isSupabaseConfigured() || isDemo) {
@@ -130,6 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user, session, loading,
       signUp, signIn, signInWithGoogle, signOut,
       isDemo, setDemoMode, checkUsernameAvailable,
+      backendStatus, retryBackend,
     }}>
       {children}
     </AuthContext.Provider>

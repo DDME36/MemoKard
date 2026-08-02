@@ -4,7 +4,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1456187506960633856/FH1QsdGVNMgQaUQyqVlicvjhbcwPNoFRPdUOxbh-sUI4KrjgcOaCutbHbO6N-aia7fOA';
+const DISCORD_WEBHOOK_URL = Deno.env.get('DISCORD_WEBHOOK_URL');
 
 interface ReportPayload {
   type: 'insert';
@@ -12,7 +12,7 @@ interface ReportPayload {
   record: {
     id: string;
     public_deck_id: string;
-    reporter_user_id: string;
+    reporter_id: string;
     reason: string;
     details: string;
     created_at: string;
@@ -30,8 +30,8 @@ serve(async (req) => {
 
     // Get deck details
     const { data: deck } = await supabase
-      .from('public_decks')
-      .select('id, name, creator_username, is_hidden')
+      .from('public_decks_with_stats')
+      .select('id, name, creator_username, is_active')
       .eq('id', payload.record.public_deck_id)
       .single();
 
@@ -43,7 +43,7 @@ serve(async (req) => {
     const { data: reporter } = await supabase
       .from('profiles')
       .select('username')
-      .eq('id', payload.record.reporter_user_id)
+      .eq('id', payload.record.reporter_id)
       .single();
 
     // Count total reports for this deck
@@ -60,7 +60,7 @@ serve(async (req) => {
       other: '❓ อื่นๆ',
     };
 
-    const isAutoHidden = deck.is_hidden && reportCount && reportCount >= 5;
+    const isAutoHidden = !deck.is_active && reportCount && reportCount >= 5;
     const statusEmoji = isAutoHidden ? '🔒' : reportCount && reportCount >= 3 ? '⚠️' : '📝';
 
     const embed = {
@@ -132,6 +132,9 @@ serve(async (req) => {
     }
 
     // Send to Discord
+    if (!DISCORD_WEBHOOK_URL) {
+      throw new Error('DISCORD_WEBHOOK_URL is not configured');
+    }
     const discordResponse = await fetch(DISCORD_WEBHOOK_URL, {
       method: 'POST',
       headers: {

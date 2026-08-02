@@ -411,7 +411,7 @@ export const communityStore = {
       }));
 
       const { error: cardsError } = await supabase
-        .from('flashcards')
+        .from('cards')
         .insert(cardsToInsert);
 
       if (cardsError) {
@@ -744,7 +744,7 @@ export const communityStore = {
       }
 
       // Send Discord notification
-      await this.sendDiscordNotification(publicDeckId, userId, reason, details);
+      // A database webhook invokes the Edge Function; no secret is exposed here.
 
       return true;
     } catch (error) {
@@ -853,20 +853,10 @@ export const communityStore = {
         });
       }
 
-      // Send to Discord
-      const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1456187506960633856/FH1QsdGVNMgQaUQyqVlicvjhbcwPNoFRPdUOxbh-sUI4KrjgcOaCutbHbO6N-aia7fOA';
-      
-      await fetch(DISCORD_WEBHOOK_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          username: 'MemoKard Reports',
-          avatar_url: `${window.location.origin}/pwa-512x512.png`,
-          embeds: [embed],
-        }),
-      });
+      // Keep the formatter available for a future authenticated Edge Function
+      // invocation, but never send a webhook credential from the browser.
+      void embed;
+      return;
     } catch (error) {
       // Don't fail the report if Discord notification fails
       console.error('Error sending Discord notification:', error);
