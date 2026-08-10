@@ -35,6 +35,8 @@ export function VirtualizedCardList<T>({
   };
 
   const totalHeight = items.length * itemHeight;
+  const horizontalGutter = 16;
+  const verticalGutter = 8;
   
   // Buffer size to prevent white flickering during fast scroll
   const bufferCount = 4;
@@ -57,9 +59,9 @@ export function VirtualizedCardList<T>({
         key={i}
         style={{
           position: 'absolute',
-          top: i * itemHeight,
-          left: 0,
-          right: 0,
+          top: i * itemHeight + verticalGutter,
+          left: horizontalGutter,
+          right: horizontalGutter,
           height: itemHeight,
         }}
       >
@@ -80,7 +82,7 @@ export function VirtualizedCardList<T>({
         width: '100%',
       }}
     >
-      <div style={{ height: totalHeight, width: '100%', position: 'relative' }}>
+      <div style={{ height: totalHeight + verticalGutter * 2, width: '100%', position: 'relative' }}>
         {visibleItems}
       </div>
     </div>

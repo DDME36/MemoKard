@@ -387,7 +387,7 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
           >
             {/* Card */}
             <motion.div
-              className="relative w-full h-[52dvh] min-h-[300px] max-h-[430px] cursor-pointer perspective-1000 touch-pan-y outline-none focus-visible:ring-4 focus-visible:ring-violet-400/50 rounded-3xl"
+              className="flip-card-scene relative w-full h-[52dvh] min-h-[300px] max-h-[430px] cursor-pointer touch-pan-y outline-none focus-visible:ring-4 focus-visible:ring-violet-400/50 rounded-3xl"
               onClick={handleFlip}
               role="button"
               tabIndex={0}
@@ -423,20 +423,18 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
               )}
 
               <motion.div
-                className="relative w-full h-full"
+                className="flip-card-inner relative w-full h-full"
                 animate={{ rotateY: isFlipped ? 180 : 0 }}
-                transition={shouldReduceMotion ? { duration: 0.01 } : { duration: 0.55, type: 'spring', stiffness: 90, damping: 14 }}
+                transition={shouldReduceMotion ? { duration: 0.01 } : { duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
                 style={{ transformStyle: 'preserve-3d', WebkitTransformStyle: 'preserve-3d' }}
               >
                 {/* Front — Question */}
-                <div className="absolute w-full h-full backface-hidden" style={{ 
-                  backfaceVisibility: 'hidden', 
-                  WebkitBackfaceVisibility: 'hidden',
-                  zIndex: isFlipped ? 1 : 2,
-                  opacity: isFlipped ? 0 : 1,
-                  pointerEvents: isFlipped ? 'none' : 'auto',
-                  transition: 'opacity 0.25s ease-in-out'
-                }}>
+                <div
+                  className="flip-card-face flip-card-front absolute inset-0"
+                  aria-hidden={isFlipped}
+                  inert={isFlipped}
+                  style={{ pointerEvents: isFlipped ? 'none' : 'auto' }}
+                >
                   <div className={`w-full h-full rounded-3xl p-8 sm:p-10 flex flex-col items-center justify-center relative overflow-hidden premium-card transition-all duration-300 hover:shadow-2xl hover:shadow-purple-500/10 ${
                     isDark
                       ? 'bg-slate-800 border-slate-700'
@@ -586,17 +584,12 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
                 </div>
 
                 {/* Back — Answer */}
-                <div className="absolute w-full h-full backface-hidden"
-                  style={{ 
-                    backfaceVisibility: 'hidden', 
-                    WebkitBackfaceVisibility: 'hidden', 
-                    transform: 'rotateY(180deg)',
-                    WebkitTransform: 'rotateY(180deg)',
-                    zIndex: isFlipped ? 2 : 1,
-                    opacity: isFlipped ? 1 : 0,
-                    pointerEvents: isFlipped ? 'auto' : 'none',
-                    transition: 'opacity 0.25s ease-in-out'
-                  }}>
+                <div
+                  className="flip-card-face flip-card-back absolute inset-0"
+                  aria-hidden={!isFlipped}
+                  inert={!isFlipped}
+                  style={{ pointerEvents: isFlipped ? 'auto' : 'none' }}
+                >
                   <div 
                     className={`w-full h-full bg-gradient-to-br ${gradientClass} rounded-3xl p-8 sm:p-10 flex flex-col items-center justify-center relative overflow-hidden border border-white/20 shadow-2xl shadow-purple-500/20`}
                     style={gradientStyle}

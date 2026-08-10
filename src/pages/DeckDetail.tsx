@@ -395,8 +395,8 @@ export default function DeckDetail({ deck: initialDeck, onStartReview, onShowAdd
                   <motion.div 
                     whileHover={canEdit ? { scale: 1.01, y: -1 } : {}}
                     whileTap={canEdit ? { scale: 0.99 } : {}}
-                    className={`premium-card rounded-3xl p-5 flex items-start gap-4 transition-all duration-300 h-full ${
-                      canEdit ? 'cursor-pointer accent-glow' : 'cursor-default'
+                    className={`premium-card rounded-3xl p-5 flex items-start gap-4 h-full ${
+                      canEdit ? 'cursor-pointer accent-glow hover:border-purple-300/70 dark:hover:border-purple-500/30' : 'cursor-default'
                     }`}
                     onClick={() => {
                       if (canEdit) {
