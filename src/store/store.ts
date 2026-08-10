@@ -5,17 +5,62 @@ import { calculateFSRS, createInitialFSRSState, type FSRSState } from '../utils/
 import { checkAchievements, type UserProgress } from '../utils/achievements';
 import type { Achievement } from '../components/AchievementToast';
 import type { Deck, Flashcard } from './types';
+import { safeLocalStorage } from '../utils/safeStorage';
 export { DECK_COLORS, type Deck, type Flashcard, type DeckColor } from './types';
 
 const idbStorage: StateStorage = {
   getItem: async (name: string): Promise<string | null> => {
-    return (await idbGet(name)) || null;
+    let indexedValue: unknown = null;
+    try {
+      indexedValue = await idbGet(name);
+    } catch (error) {
+      console.debug('[storage] IndexedDB read unavailable, trying localStorage:', error);
+    }
+    if (typeof indexedValue === 'string') {
+      try {
+        JSON.parse(indexedValue);
+        return indexedValue;
+      } catch {
+        try {
+          await idbSet(`${name}-corrupt-backup-${Date.now()}`, indexedValue);
+          await idbDel(name);
+        } catch {
+          safeLocalStorage.set(`${name}-corrupt-backup`, indexedValue);
+        }
+      }
+    }
+
+    // Migrate data from versions that used Zustand's default localStorage.
+    const legacyValue = safeLocalStorage.get(name);
+    if (!legacyValue) return null;
+    try {
+      JSON.parse(legacyValue);
+      try {
+        await idbSet(name, legacyValue);
+      } catch {
+        // Continue using the valid localStorage value when IndexedDB is blocked.
+      }
+      return legacyValue;
+    } catch {
+      safeLocalStorage.set(`${name}-corrupt-backup`, legacyValue);
+      return null;
+    }
   },
   setItem: async (name: string, value: string): Promise<void> => {
-    await idbSet(name, value);
+    try {
+      await idbSet(name, value);
+    } catch (error) {
+      console.debug('[storage] IndexedDB write unavailable, trying localStorage:', error);
+      safeLocalStorage.set(name, value);
+    }
   },
   removeItem: async (name: string): Promise<void> => {
-    await idbDel(name);
+    try {
+      await idbDel(name);
+    } catch (error) {
+      console.debug('[storage] IndexedDB delete unavailable:', error);
+    }
+    safeLocalStorage.remove(name);
   },
 };
 
@@ -140,6 +185,111 @@ export interface FlashcardActions {
 }
 
 export type FlashcardStore = FlashcardState & FlashcardActions;
+
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+
+const asFiniteNumber = (value: unknown, fallback = 0): number =>
+  typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+
+const asValidDate = (value: unknown, fallback = new Date()): Date => {
+  const date = value instanceof Date || typeof value === 'string' || typeof value === 'number'
+    ? new Date(value)
+    : fallback;
+  return Number.isNaN(date.getTime()) ? fallback : date;
+};
+
+const sanitizeFSRSState = (value: unknown): FSRSState => {
+  const fallback = createInitialFSRSState();
+  const raw = asRecord(value);
+  if (!raw) return fallback;
+  return {
+    due: asValidDate(raw.due, new Date(fallback.due)).toISOString(),
+    stability: asFiniteNumber(raw.stability, fallback.stability),
+    difficulty: asFiniteNumber(raw.difficulty, fallback.difficulty),
+    elapsed_days: asFiniteNumber(raw.elapsed_days, fallback.elapsed_days),
+    scheduled_days: asFiniteNumber(raw.scheduled_days, fallback.scheduled_days),
+    reps: asFiniteNumber(raw.reps, fallback.reps),
+    lapses: asFiniteNumber(raw.lapses, fallback.lapses),
+    state: Math.min(3, Math.max(0, asFiniteNumber(raw.state, fallback.state))),
+    last_review: raw.last_review === undefined
+      ? undefined
+      : asValidDate(raw.last_review).toISOString(),
+  };
+};
+
+const sanitizeProgress = (value: unknown, fallback: UserProgress): UserProgress => {
+  const raw = asRecord(value);
+  if (!raw) return fallback;
+  return {
+    cardsCreated: asFiniteNumber(raw.cardsCreated, fallback.cardsCreated),
+    decksCreated: asFiniteNumber(raw.decksCreated, fallback.decksCreated),
+    reviewsCompleted: asFiniteNumber(raw.reviewsCompleted, fallback.reviewsCompleted),
+    currentStreak: asFiniteNumber(raw.currentStreak, fallback.currentStreak),
+    maxStreak: asFiniteNumber(raw.maxStreak, fallback.maxStreak),
+    perfectReviews: asFiniteNumber(raw.perfectReviews, fallback.perfectReviews),
+    totalStudyTime: asFiniteNumber(raw.totalStudyTime, fallback.totalStudyTime),
+    decksShared: asFiniteNumber(raw.decksShared, fallback.decksShared),
+    decksImported: asFiniteNumber(raw.decksImported, fallback.decksImported),
+  };
+};
+
+const mergePersistedState = (persistedState: unknown, currentState: FlashcardStore): FlashcardStore => {
+  const raw = asRecord(persistedState);
+  if (!raw) return currentState;
+
+  const reviewHistory = asRecord(raw.reviewHistory);
+  const achievementRarities = new Set(['common', 'rare', 'epic', 'legendary']);
+  const achievementQueue = Array.isArray(raw.achievementQueue)
+    ? raw.achievementQueue.filter((value): value is Achievement => {
+        const item = asRecord(value);
+        return Boolean(
+          item
+          && typeof item.id === 'string'
+          && typeof item.title === 'string'
+          && typeof item.description === 'string'
+          && typeof item.rarity === 'string'
+          && achievementRarities.has(item.rarity),
+        );
+      })
+    : [];
+
+  return {
+    ...currentState,
+    cards: Array.isArray(raw.cards)
+      ? raw.cards.filter(value => asRecord(value)) as Flashcard[]
+      : [],
+    decks: Array.isArray(raw.decks)
+      ? raw.decks.filter(value => asRecord(value)) as Deck[]
+      : [],
+    streak: asFiniteNumber(raw.streak),
+    lastStudyDate: typeof raw.lastStudyDate === 'string' ? raw.lastStudyDate : null,
+    reviewHistory: reviewHistory
+      ? Object.fromEntries(
+          Object.entries(reviewHistory)
+            .filter(([, count]) => typeof count === 'number' && Number.isFinite(count) && count >= 0),
+        ) as Record<string, number>
+      : {},
+    fsrsWeights: Array.isArray(raw.fsrsWeights) && raw.fsrsWeights.every(Number.isFinite)
+      ? raw.fsrsWeights as number[]
+      : currentState.fsrsWeights,
+    userId: typeof raw.userId === 'string' ? raw.userId : null,
+    isDemo: typeof raw.isDemo === 'boolean' ? raw.isDemo : true,
+    userProgress: sanitizeProgress(raw.userProgress, currentState.userProgress),
+    unlockedAchievements: Array.isArray(raw.unlockedAchievements)
+      ? raw.unlockedAchievements.filter((id): id is string => typeof id === 'string')
+      : [],
+    achievementQueue,
+    perfectReviewStreak: asFiniteNumber(raw.perfectReviewStreak),
+    totalStudyTime: asFiniteNumber(raw.totalStudyTime),
+    maxStreak: asFiniteNumber(raw.maxStreak),
+    previousProgress: raw.previousProgress === null || raw.previousProgress === undefined
+      ? null
+      : sanitizeProgress(raw.previousProgress, currentState.userProgress),
+  };
+};
 
 export const useFlashcardStore = create<FlashcardStore>()(
   subscribeWithSelector(
@@ -853,6 +1003,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
     {
       name: 'daily-memory-storage',
       storage: createJSONStorage(() => idbStorage),
+      merge: mergePersistedState,
       partialize: (state) => ({
         decks: state.decks.map((d) => ({
           ...d,
@@ -888,7 +1039,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
           const raw = d as unknown as Omit<Deck, 'createdAt'> & { createdAt: string | Date };
           return {
             ...d,
-            createdAt: new Date(raw.createdAt),
+            createdAt: asValidDate(raw.createdAt),
           };
         });
         state.cards = (state.cards ?? []).map((c) => {
@@ -900,11 +1051,11 @@ export const useFlashcardStore = create<FlashcardStore>()(
           };
           return {
             ...c,
-            nextReviewDate: new Date(raw.nextReviewDate),
-            createdAt: new Date(raw.createdAt),
-            lastReviewDate: new Date(raw.lastReviewDate),
-            // Migrate old cards without fsrsState
-            fsrsState: raw.fsrsState ?? createInitialFSRSState(),
+            nextReviewDate: asValidDate(raw.nextReviewDate),
+            createdAt: asValidDate(raw.createdAt),
+            lastReviewDate: asValidDate(raw.lastReviewDate),
+            // Migrate and repair old or partially corrupted FSRS state.
+            fsrsState: sanitizeFSRSState(raw.fsrsState),
           };
         });
       },

@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useFlashcardStore, type Deck, type Flashcard } from './store/store';
 import { useAuth } from './contexts/AuthContext';
@@ -20,17 +20,19 @@ import { haptics } from './utils/haptics';
 import { getDeckColorStyles } from './utils/colorUtils';
 import { Zap } from 'lucide-react';
 import { getThaiDayColor, DECK_COLOR_MAP } from './utils/thaiDayColors';
+import { lazyWithRetry } from './utils/lazyWithRetry';
+import { safeSessionStorage } from './utils/safeStorage';
 
 // Lazy loaded page components to optimize bundle size
-const AuthPage = lazy(() => import('./pages/AuthPage'));
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const DeckDetail = lazy(() => import('./pages/DeckDetail'));
-const ReviewSession = lazy(() => import('./pages/ReviewSession'));
-const ExplorePage = lazy(() => import('./pages/ExplorePage'));
-const PublicDeckDetail = lazy(() => import('./pages/PublicDeckDetail'));
-const AdminPage = lazy(() => import('./pages/AdminPage'));
-const AchievementsPage = lazy(() => import('./pages/AchievementsPage'));
-const StatisticsPage = lazy(() => import('./pages/StatisticsPage'));
+const AuthPage = lazyWithRetry(() => import('./pages/AuthPage'), 'auth');
+const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'), 'dashboard');
+const DeckDetail = lazyWithRetry(() => import('./pages/DeckDetail'), 'deck-detail');
+const ReviewSession = lazyWithRetry(() => import('./pages/ReviewSession'), 'review-session');
+const ExplorePage = lazyWithRetry(() => import('./pages/ExplorePage'), 'explore');
+const PublicDeckDetail = lazyWithRetry(() => import('./pages/PublicDeckDetail'), 'public-deck-detail');
+const AdminPage = lazyWithRetry(() => import('./pages/AdminPage'), 'admin');
+const AchievementsPage = lazyWithRetry(() => import('./pages/AchievementsPage'), 'achievements');
+const StatisticsPage = lazyWithRetry(() => import('./pages/StatisticsPage'), 'statistics');
 
 type View = 'home' | 'deck' | 'review' | 'explore' | 'public-deck' | 'admin' | 'achievements' | 'statistics';
 
@@ -51,12 +53,12 @@ function AppContent() {
   }, [isDark]);
 
   const [showSplash, setShowSplash] = useState(() => {
-    return !sessionStorage.getItem('hasSeenSplash');
+    return !safeSessionStorage.get('hasSeenSplash');
   });
 
   const handleSplashComplete = () => {
     setShowSplash(false);
-    sessionStorage.setItem('hasSeenSplash', 'true');
+    safeSessionStorage.set('hasSeenSplash', 'true');
   };
 
   const [view, setView] = useState<View>('home');
@@ -526,7 +528,7 @@ function AppContent() {
       <ConfirmModal
         isOpen={showLogoutConfirm}
         title="ออกจากโหมดทดลอง?"
-        message={`คุณต้องการออกจากโหมดทดลองเพื่อไปหน้าล็อคอินใช่ไหม?\n\nข้อมูลในโหมดทดลองจะยังคงอยู่ใน localStorage`}
+        message={`คุณต้องการออกจากโหมดทดลองเพื่อไปหน้าล็อคอินใช่ไหม?\n\nข้อมูลในโหมดทดลองจะยังคงอยู่ในเครื่องนี้`}
         confirmText="ออกจากระบบ" cancelText="ยกเลิก" type="warning"
         onConfirm={() => { setDemoMode(false); window.location.reload(); }}
         onCancel={() => setShowLogoutConfirm(false)}

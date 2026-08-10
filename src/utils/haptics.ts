@@ -1,3 +1,5 @@
+import { safeLocalStorage } from './safeStorage';
+
 /**
  * Haptic Feedback Utilities
  * Provides tactile feedback for better UX on mobile devices
@@ -59,11 +61,7 @@ const SOUND_ENABLED_KEY = 'memokard-sound-effects-enabled';
 
 function readSoundEnabled(): boolean {
   if (typeof window === 'undefined') return true;
-  try {
-    return window.localStorage.getItem(SOUND_ENABLED_KEY) !== 'false';
-  } catch {
-    return true;
-  }
+  return safeLocalStorage.get(SOUND_ENABLED_KEY) !== 'false';
 }
 
 let _soundEnabled = readSoundEnabled();
@@ -90,11 +88,7 @@ export const sounds = {
 
   setEnabled: (enabled: boolean) => {
     _soundEnabled = enabled;
-    try {
-      window.localStorage.setItem(SOUND_ENABLED_KEY, String(enabled));
-    } catch {
-      // Preferences are optional when storage is unavailable.
-    }
+    safeLocalStorage.set(SOUND_ENABLED_KEY, String(enabled));
   },
 
   /**

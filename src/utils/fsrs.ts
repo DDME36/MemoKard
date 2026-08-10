@@ -5,7 +5,7 @@
  * FSRS ให้ผลลัพธ์แม่นยำกว่า SM-2 เพราะใช้ neural network model
  * แต่ต้องการ fields เพิ่มเติมใน card: stability, difficulty, state, lapses
  *
- * Strategy: เก็บ FSRS state ใน localStorage ผ่าน Zustand
+ * Strategy: เก็บ FSRS state ใน IndexedDB ผ่าน Zustand พร้อม localStorage fallback
  * โดยไม่แตะ Supabase schema (backward compatible)
  */
 
@@ -31,7 +31,7 @@ export function qualityToRating(quality: number): Rating {
 }
 
 /**
- * FSRS state ที่เก็บต่อการ์ด (เก็บใน Zustand/localStorage)
+ * FSRS state ที่เก็บต่อการ์ด (เก็บผ่าน Zustand persist)
  */
 export interface FSRSState {
   due: string;        // ISO date string

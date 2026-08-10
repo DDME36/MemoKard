@@ -70,23 +70,27 @@ function AchievementIcon({ icon, className }: { icon?: string; className?: strin
 
 export default function AchievementsPage({ dayColor }: { dayColor: { gradient: string; shadow: string } }) {
   const { isDark } = useTheme();
-  const store = useFlashcardStore();
+  const cards = useFlashcardStore(state => state.cards);
+  const decks = useFlashcardStore(state => state.decks);
+  const reviewHistory = useFlashcardStore(state => state.reviewHistory);
+  const streak = useFlashcardStore(state => state.streak);
+  const userProgress = useFlashcardStore(state => state.userProgress);
   
   const progress: UserProgress = useMemo(() => ({
-    cardsCreated: store.cards.length,
-    decksCreated: store.decks.length,
+    cardsCreated: cards.length,
+    decksCreated: decks.length,
     // Sum all daily review counts from the history map
-    reviewsCompleted: Object.values(store.reviewHistory || {}).reduce((a, b) => a + b, 0),
-    currentStreak: store.streak,
+    reviewsCompleted: Object.values(reviewHistory).reduce((a, b) => a + b, 0),
+    currentStreak: streak,
     // ✅ userProgress.maxStreak is updated by updateMaxStreak in the store
-    maxStreak: store.userProgress?.maxStreak ?? store.streak,
+    maxStreak: userProgress.maxStreak ?? streak,
     // ✅ userProgress.perfectReviews = peak consecutive perfect streak
-    perfectReviews: store.userProgress?.perfectReviews ?? 0,
+    perfectReviews: userProgress.perfectReviews ?? 0,
     // ✅ userProgress.totalStudyTime = accumulated minutes (via trackStudyTime)
-    totalStudyTime: store.userProgress?.totalStudyTime ?? 0,
-    decksShared: store.userProgress?.decksShared ?? 0,
-    decksImported: store.userProgress?.decksImported ?? 0,
-  }), [store.cards.length, store.decks.length, store.reviewHistory, store.streak, store.userProgress]);
+    totalStudyTime: userProgress.totalStudyTime ?? 0,
+    decksShared: userProgress.decksShared ?? 0,
+    decksImported: userProgress.decksImported ?? 0,
+  }), [cards.length, decks.length, reviewHistory, streak, userProgress]);
 
   const achievements = getAllAchievements();
   const completed = getAchievementProgress(progress);
@@ -140,7 +144,7 @@ export default function AchievementsPage({ dayColor }: { dayColor: { gradient: s
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {sortedAchievements.map((achievement, index) => {
           const isCompleted = completed[achievement.id];
-          const cfg = rarityConfig[achievement.rarity];
+          const cfg = rarityConfig[achievement.rarity] ?? rarityConfig.common;
           const isLegendary = achievement.rarity === 'legendary';
 
           return (

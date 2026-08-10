@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { safeLocalStorage } from '../utils/safeStorage';
 
 // Extending Window interface for beforeinstallprompt event
 interface BeforeInstallPromptEvent extends Event {
@@ -52,7 +53,7 @@ export default function InstallPrompt({ dayColor }: InstallPromptProps) {
     }
 
     // Check if user dismissed the prompt before
-    const dismissedAt = localStorage.getItem('installPromptDismissed');
+    const dismissedAt = safeLocalStorage.get('installPromptDismissed');
     if (dismissedAt) {
       const daysSinceDismissed = (Date.now() - parseInt(dismissedAt)) / (1000 * 60 * 60 * 24);
       if (daysSinceDismissed < 7) {
@@ -92,7 +93,7 @@ export default function InstallPrompt({ dayColor }: InstallPromptProps) {
   };
 
   const handleDismiss = () => {
-    localStorage.setItem('installPromptDismissed', Date.now().toString());
+    safeLocalStorage.set('installPromptDismissed', Date.now().toString());
     setShowPrompt(false);
   };
 

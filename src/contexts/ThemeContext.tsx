@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { safeLocalStorage } from '../utils/safeStorage';
 
 interface ThemeContextType {
   isDark: boolean;
@@ -18,8 +19,8 @@ function isNightTimeInThailand(): boolean {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [isDark, setIsDark] = useState(() => {
-    const saved = localStorage.getItem('theme');
-    const isAuto = localStorage.getItem('themeAuto') !== 'false';
+    const saved = safeLocalStorage.get('theme');
+    const isAuto = safeLocalStorage.get('themeAuto') !== 'false';
     
     if (saved === 'dark') return true;
     if (saved === 'light') return false;
@@ -29,7 +30,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   });
 
   const [isAutoMode, setIsAutoMode] = useState(() => {
-    return localStorage.getItem('themeAuto') !== 'false';
+    return safeLocalStorage.get('themeAuto') !== 'false';
   });
 
   // Auto-update theme based on time (check every minute)
@@ -53,11 +54,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (isAutoMode) {
-      localStorage.removeItem('theme');
-      localStorage.setItem('themeAuto', 'true');
+      safeLocalStorage.remove('theme');
+      safeLocalStorage.set('themeAuto', 'true');
     } else {
-      localStorage.setItem('theme', isDark ? 'dark' : 'light');
-      localStorage.setItem('themeAuto', 'false');
+      safeLocalStorage.set('theme', isDark ? 'dark' : 'light');
+      safeLocalStorage.set('themeAuto', 'false');
     }
 
     if (isDark) {

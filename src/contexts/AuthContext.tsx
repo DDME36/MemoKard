@@ -4,6 +4,7 @@ import type { User, Session, AuthError } from '@supabase/supabase-js';
 import { checkSupabaseHealth, supabase, isSupabaseConfigured } from '../lib/supabase';
 import type { BackendStatus } from '../lib/supabase';
 import { useFlashcardStore } from '../store/store';
+import { safeLocalStorage } from '../utils/safeStorage';
 
 interface AuthContextType {
   user: User | null;
@@ -29,7 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [isDemo, setIsDemo] = useState(() => {
-    return localStorage.getItem('demo-mode') === 'true';
+    return safeLocalStorage.get('demo-mode') === 'true';
   });
   const [backendStatus, setBackendStatus] = useState<BackendStatus>(() =>
     isSupabaseConfigured() ? 'checking' : 'unconfigured'
@@ -130,7 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setDemoMode = (demo: boolean) => {
     setIsDemo(demo);
-    localStorage.setItem('demo-mode', demo.toString());
+    safeLocalStorage.set('demo-mode', demo.toString());
   };
 
   const checkUsernameAvailable = async (username: string) => {

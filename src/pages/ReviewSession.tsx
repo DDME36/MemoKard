@@ -9,6 +9,7 @@ import ReviewModeSelector, { type AnswerMode, type ReviewMode } from '../compone
 import ZenModePanel from '../components/ZenModePanel';
 import { Headphones } from 'lucide-react';
 import { haptics, sounds } from '../utils/haptics';
+import { safeLocalStorage } from '../utils/safeStorage';
 
 interface ReviewSessionProps {
   activeDeck: Deck | null;
@@ -40,11 +41,7 @@ const createSessionStats = (): SessionStats => ({
 });
 
 const getSavedAnswerMode = (): AnswerMode => {
-  try {
-    return localStorage.getItem('review-answer-mode') === 'type' ? 'type' : 'flip';
-  } catch {
-    return 'flip';
-  }
+  return safeLocalStorage.get('review-answer-mode') === 'type' ? 'type' : 'flip';
 };
 
 const ReviewSession = memo(function ReviewSession({ 
@@ -83,11 +80,7 @@ const ReviewSession = memo(function ReviewSession({
 
   const handleAnswerModeChange = useCallback((mode: AnswerMode) => {
     setAnswerMode(mode);
-    try {
-      localStorage.setItem('review-answer-mode', mode);
-    } catch {
-      // Storage can be blocked in private/restricted browser contexts.
-    }
+    safeLocalStorage.set('review-answer-mode', mode);
   }, []);
 
   // Helper: build initial card list (called once on mount and on deck change)

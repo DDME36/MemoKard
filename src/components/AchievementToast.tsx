@@ -72,7 +72,7 @@ export default function AchievementToast({ achievement, onClose }: AchievementTo
 
   if (!achievement) return null;
 
-  const colors = rarityColors[achievement.rarity];
+  const colors = rarityColors[achievement.rarity] ?? rarityColors.common;
 
   return (
     <AnimatePresence>
