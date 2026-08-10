@@ -1,31 +1,35 @@
 import { useState, useEffect, memo, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useReducedMotion, useTransform, type PanInfo } from 'framer-motion';
 import MathText from './MathText';
 import type { Flashcard } from '../store/store';
 import { useTheme } from '../contexts/ThemeContext';
 import { haptics, sounds } from '../utils/haptics';
 import Scratchpad from './Scratchpad';
 import { Edit2 } from 'lucide-react';
+import type { AnswerMode } from './ReviewModeSelector';
 
 interface ReviewCardProps {
   card: Flashcard;
-  onReview: (quality: number) => void;
+  onReview: (quality: number) => void | Promise<void>;
   onEditCard?: (card: Flashcard) => void;
   dayColor: { gradient: string; shadow: string };
   isPreviewMode?: boolean;
   isTimeAttack?: boolean;
+  answerMode?: AnswerMode;
 }
 
-const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayColor, isPreviewMode = false, isTimeAttack = false }: ReviewCardProps) {
-  const [isFlipped, setIsFlipped] = useState(isPreviewMode); // Auto-flip in preview mode
-  const [hasBeenFlipped, setHasBeenFlipped] = useState(isPreviewMode); // Track if it has been flipped at least once
+const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayColor, isPreviewMode = false, isTimeAttack = false, answerMode = 'flip' }: ReviewCardProps) {
+  const [isFlipped, setIsFlipped] = useState(false);
+  const [hasBeenFlipped, setHasBeenFlipped] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
   const [selectedQuality, setSelectedQuality] = useState<number | null>(null);
   const [typedAnswer, setTypedAnswer] = useState('');
   const [showScratchpad, setShowScratchpad] = useState(false);
   const [timeLeft, setTimeLeft] = useState(10);
   const [isTimeOut, setIsTimeOut] = useState(false);
+  const [reviewError, setReviewError] = useState('');
   const { isDark } = useTheme();
+  const shouldReduceMotion = useReducedMotion();
 
   const isCustomGradient = dayColor.gradient.includes('gradient(');
   const gradientClass = isCustomGradient ? '' : dayColor.gradient;
@@ -47,7 +51,7 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
   const rotateY = useMotionValue(0);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (isPreviewMode) return;
+    if (isPreviewMode || shouldReduceMotion) return;
     const cardEl = e.currentTarget;
     const rect = cardEl.getBoundingClientRect();
     const width = rect.width;
@@ -63,7 +67,7 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
     
     rotateY.set(rY);
     rotateX.set(rX);
-  }, [isPreviewMode, rotateX, rotateY]);
+  }, [isPreviewMode, rotateX, rotateY, shouldReduceMotion]);
 
   const handleMouseLeave = useCallback(() => {
     rotateX.set(0);
@@ -131,15 +135,14 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
 
   const handleFlip = useCallback(() => {
     if (showScratchpad) return; // Prevent flip when drawing
-    if (!isPreviewMode) {
-      setIsFlipped(prev => {
-        if (!prev) setHasBeenFlipped(true);
-        return !prev;
-      });
-      haptics.cardFlip();
-      sounds.play('flip');
-    }
-  }, [isPreviewMode, showScratchpad]);
+    setReviewError('');
+    setIsFlipped(prev => {
+      if (!prev) setHasBeenFlipped(true);
+      return !prev;
+    });
+    haptics.cardFlip();
+    sounds.play('flip');
+  }, [showScratchpad]);
 
   const handleEdit = useCallback((e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -150,18 +153,27 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
 
   const handleReview = useCallback(async (quality: number) => {
     if (isExiting) return;
+    setReviewError('');
     haptics.reviewQuality(quality);
     sounds.play('tap');
     setSelectedQuality(quality);
     setIsExiting(true);
     setTimeout(async () => {
-      await onReview(quality);
-      setIsFlipped(false);
-      setIsExiting(false);
-      setSelectedQuality(null);
-      x.set(0); // Reset drag position
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel(); // Stop TTS on next card
+      try {
+        await onReview(quality);
+        setIsFlipped(false);
+        setSelectedQuality(null);
+        x.set(0); // Reset drag position
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel(); // Stop TTS on next card
+        }
+      } catch (error) {
+        console.error('Failed to save review:', error);
+        setReviewError('บันทึกผลทบทวนไม่สำเร็จ ข้อมูลการ์ดยังอยู่ กรุณาลองกดอีกครั้ง');
+        haptics.error();
+        sounds.play('error');
+      } finally {
+        setIsExiting(false);
       }
     }, 300);
   }, [isExiting, onReview, x]);
@@ -169,19 +181,25 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
   const handleSpeak = useCallback((text: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent card flip
     if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel(); // Stop any current speech
-      
-      // Clean up text before speaking (remove markdown, cloze syntax)
-      const cleanText = text
-        .replace(/\{\{(.*?)\}\}/g, '$1') // Remove cloze brackets
-        .replace(/[*_#`]/g, '') // Remove basic markdown
-        .trim();
+      try {
+        window.speechSynthesis.cancel(); // Stop any current speech
+        const cleanText = text
+          .replace(/\{\{(.*?)\}\}/g, '$1')
+          .replace(/[*_#`]/g, '')
+          .trim();
+        if (!cleanText) throw new Error('No readable text');
 
-      const utterance = new SpeechSynthesisUtterance(cleanText);
-      // Optional: Try to guess language based on text, or default to user's browser language
-      utterance.lang = /^[A-Za-z0-9\s.,!?'-]+$/.test(cleanText) ? 'en-US' : 'th-TH';
-      utterance.rate = 0.9; // Slightly slower for clearer pronunciation
-      window.speechSynthesis.speak(utterance);
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        utterance.lang = /^[A-Za-z0-9\s.,!?'-]+$/.test(cleanText) ? 'en-US' : 'th-TH';
+        utterance.rate = 0.9;
+        utterance.onerror = () => setReviewError('อุปกรณ์นี้ไม่สามารถเล่นเสียงข้อความนี้ได้');
+        window.speechSynthesis.speak(utterance);
+      } catch (error) {
+        console.error('Text-to-speech failed:', error);
+        setReviewError('ไม่สามารถเล่นเสียงบนอุปกรณ์นี้ได้');
+      }
+    } else {
+      setReviewError('เบราว์เซอร์นี้ยังไม่รองรับการอ่านออกเสียง');
     }
   }, []);
 
@@ -212,7 +230,7 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
         return;
       }
 
-      if (!isFlipped && !isPreviewMode && (e.code === 'Space' || e.code === 'Enter')) {
+      if (!isFlipped && (e.code === 'Space' || e.code === 'Enter')) {
         e.preventDefault();
         handleFlip();
       } else if (hasBeenFlipped && !isExiting) {
@@ -262,14 +280,15 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
 
   // Reset state when card changes
   useEffect(() => {
-    setIsFlipped(isPreviewMode);
-    setHasBeenFlipped(isPreviewMode);
+    setIsFlipped(false);
+    setHasBeenFlipped(false);
     setIsExiting(false);
     setTypedAnswer('');
     setShowScratchpad(false);
     setIsTimeOut(false);
     setTimeLeft(10);
-  }, [card.id, isPreviewMode]);
+    setReviewError('');
+  }, [card.id]);
 
   const handleDragEnd = useCallback((_e: unknown, info: PanInfo) => {
     if (!hasBeenFlipped || isExiting) return;
@@ -333,6 +352,8 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
   }), []);
 
   const getExitAnimation = () => {
+    if (shouldReduceMotion) return { opacity: 0 };
+
     switch (selectedQuality) {
       case 1: return { 
         opacity: 0, 
@@ -366,9 +387,12 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
           >
             {/* Card */}
             <motion.div
-              className="relative w-full h-[50dvh] min-h-[280px] max-h-[400px] cursor-pointer perspective-1000 touch-pan-y"
+              className="relative w-full h-[52dvh] min-h-[300px] max-h-[430px] cursor-pointer perspective-1000 touch-pan-y outline-none focus-visible:ring-4 focus-visible:ring-violet-400/50 rounded-3xl"
               onClick={handleFlip}
-              drag={hasBeenFlipped && !showScratchpad ? "x" : false}
+              role="button"
+              tabIndex={0}
+              aria-label={isFlipped ? 'ด้านคำตอบ แตะเพื่อกลับไปดูคำถาม' : 'ด้านคำถาม แตะเพื่อดูคำตอบ'}
+              drag={!isPreviewMode && hasBeenFlipped && !showScratchpad ? "x" : false}
               dragConstraints={{ left: 0, right: 0 }}
               dragElastic={0.7}
               onDragEnd={handleDragEnd}
@@ -401,7 +425,7 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
               <motion.div
                 className="relative w-full h-full"
                 animate={{ rotateY: isFlipped ? 180 : 0 }}
-                transition={{ duration: 0.55, type: 'spring', stiffness: 90, damping: 14 }}
+                transition={shouldReduceMotion ? { duration: 0.01 } : { duration: 0.55, type: 'spring', stiffness: 90, damping: 14 }}
                 style={{ transformStyle: 'preserve-3d', WebkitTransformStyle: 'preserve-3d' }}
               >
                 {/* Front — Question */}
@@ -527,13 +551,14 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
                       )}
                     </div>
 
-                    {/* Typed Answer Input Box (Optional) */}
+                    {/* Typed answer is an explicit challenge mode, never required for normal review. */}
+                    {answerMode === 'type' && !isPreviewMode && (
                     <div className="w-full max-w-sm mt-1 mb-8 z-20" onClick={e => e.stopPropagation()}>
                       <textarea
                         value={typedAnswer}
                         onChange={e => setTypedAnswer(e.target.value)}
                         onKeyDown={e => e.stopPropagation()}
-                        placeholder="พิมพ์คำตอบเพื่อตรวจสอบเปรียบเทียบ (ทางเลือก)..."
+                        placeholder="พิมพ์สิ่งที่จำได้ แล้วแตะการ์ดเพื่อดูเฉลย…"
                         rows={2}
                         className={`w-full px-4 py-3 rounded-2xl border text-sm font-medium transition-all focus:ring-2 no-scrollbar ${
                           isDark 
@@ -542,15 +567,16 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
                         }`}
                       />
                     </div>
+                    )}
                     <motion.div
-                      animate={{ y: [0, 5, 0] }}
-                      transition={{ repeat: Infinity, duration: 2 }}
+                      animate={shouldReduceMotion ? undefined : { y: [0, 5, 0] }}
+                      transition={shouldReduceMotion ? undefined : { repeat: Infinity, duration: 2 }}
                       className={`absolute bottom-6 flex flex-col items-center gap-1 text-xs font-semibold`}>
                       <span 
                         className={`bg-gradient-to-r ${gradientClass} bg-clip-text text-transparent`}
                         style={textGradientStyle}
                       >
-                        แตะเพื่อดูคำตอบ
+                        {isPreviewMode ? 'แตะเพื่อพลิกดูอีกด้าน' : 'คิดคำตอบในใจ แล้วแตะเพื่อดูเฉลย'}
                       </span>
                       <span className={`text-[10px] ${isDark ? 'text-slate-600' : 'text-slate-400'}`}>
                         หรือกด Space
@@ -691,9 +717,24 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
               </motion.div>
             </motion.div>
 
+            <AnimatePresence>
+              {reviewError && (
+                <motion.div
+                  role="alert"
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className={`mt-4 flex items-start justify-between gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold ${isDark ? 'border-rose-900/60 bg-rose-950/30 text-rose-300' : 'border-rose-200 bg-rose-50 text-rose-700'}`}
+                >
+                  <span>{reviewError}</span>
+                  <button type="button" onClick={() => setReviewError('')} className="shrink-0 opacity-70 hover:opacity-100" aria-label="ปิดข้อความ">×</button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Review Buttons */}
             <AnimatePresence>
-              {hasBeenFlipped && (
+              {isFlipped && hasBeenFlipped && (
                 <motion.div
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}

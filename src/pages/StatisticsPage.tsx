@@ -44,7 +44,9 @@ const StatCard = ({ title, value, subtitle, icon, color, isDark }: StatCardProps
 
 export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
   const { isDark } = useTheme();
-  const { cards, reviewHistory, streak } = useFlashcardStore();
+  const cards = useFlashcardStore(state => state.cards);
+  const reviewHistory = useFlashcardStore(state => state.reviewHistory);
+  const streak = useFlashcardStore(state => state.streak);
 
   const stats = useMemo(() => {
     const totalCards = cards.length;
@@ -55,11 +57,6 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
     const matureCards = cards.filter(c => c.repetition >= 3).length;
 
     const reviewedCards = cards.filter(c => c.repetition > 0);
-    const successfulCards = reviewedCards.filter(c => c.interval >= 1);
-    const retentionRate = reviewedCards.length > 0 
-      ? Math.round((successfulCards.length / reviewedCards.length) * 100) 
-      : 0;
-
     const avgEaseFactor = reviewedCards.length > 0
       ? (reviewedCards.reduce((sum, c) => sum + c.easeFactor, 0) / reviewedCards.length).toFixed(2)
       : '2.50';
@@ -91,6 +88,20 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
 
     // ✅ Real FSRS metrics from card.fsrsState
     const cardsWithFSRS = cards.filter(c => c.fsrsState && c.fsrsState.reps > 0);
+    const totalFsrsReps = cardsWithFSRS.reduce((sum, c) => sum + (c.fsrsState?.reps ?? 0), 0);
+    const totalLapses = cardsWithFSRS.reduce((sum, c) => sum + (c.fsrsState?.lapses ?? 0), 0);
+    const retentionRate = totalFsrsReps > 0
+      ? Math.max(0, Math.round((1 - totalLapses / totalFsrsReps) * 100))
+      : 0;
+    const leechCards = cardsWithFSRS.filter(c => (c.fsrsState?.lapses ?? 0) >= 8).length;
+    const strongCards = cardsWithFSRS.filter(c => (c.fsrsState?.stability ?? 0) >= 30).length;
+    const memoryInsight = cardsWithFSRS.length === 0
+      ? 'เริ่มทบทวนสักหนึ่งรอบ ระบบจะค่อย ๆ วิเคราะห์ความจำให้แม่นขึ้น'
+      : leechCards > 0
+        ? `มี ${leechCards} ใบที่ลืมบ่อย ลองแก้คำถามให้สั้นลงหรือเพิ่มตัวอย่างช่วยจำ`
+        : dueCards > 0
+          ? `วันนี้มี ${dueCards} ใบรอทบทวน ทำรอบสั้น ๆ ก่อนเพื่อรักษาความจำต่อเนื่อง`
+          : 'ตอนนี้ไม่มีการ์ดค้าง เยี่ยมมาก—กลับมาตามกำหนดเพื่อรักษาเส้นความจำนี้ไว้';
     const avgStability = cardsWithFSRS.length > 0
       ? (cardsWithFSRS.reduce((s, c) => s + (c.fsrsState?.stability ?? 0), 0) / cardsWithFSRS.length).toFixed(1)
       : '0.0';
@@ -152,6 +163,7 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
       avgStability, avgDifficulty, avgInterval,
       fsrsStateNew, fsrsStateLearning, fsrsStateReview, fsrsStateRelearn,
       cardsWithFSRS: cardsWithFSRS.length,
+      leechCards, strongCards, memoryInsight,
       // FSRS Forgetting Curve paths (real math)
       curvePath1, curvePath2, curvePath3,
       fillPath1, fillPath2, fillPath3,
@@ -315,6 +327,33 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
             <div className={`text-2xl font-bold display-font ${ isDark ? 'text-purple-400' : 'text-purple-600' }`}>{stats.cardsWithFSRS}</div>
             <div className={`text-xs font-semibold mt-1 ${ isDark ? 'text-slate-400' : 'text-slate-600' }`}>การ์ดใน FSRS</div>
             <div className={`text-[10px] mt-0.5 ${ isDark ? 'text-slate-500' : 'text-slate-400' }`}>มี state ของตัวเอง</div>
+          </div>
+        </div>
+
+        <div className={`mb-6 rounded-2xl border p-4 relative z-10 ${isDark ? 'border-indigo-500/20 bg-indigo-500/10' : 'border-indigo-100 bg-indigo-50/70'}`}>
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className={`text-sm font-black display-font ${isDark ? 'text-indigo-300' : 'text-indigo-700'}`}>
+                สรุปที่ทำต่อได้เลย
+              </div>
+              <p className={`mt-1 text-sm leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                {stats.memoryInsight}
+              </p>
+            </div>
+            <div className="grid shrink-0 grid-cols-3 gap-2 text-center">
+              <div className={`rounded-xl px-3 py-2 ${isDark ? 'bg-slate-900/50' : 'bg-white'}`}>
+                <div className="font-black text-emerald-500">{stats.strongCards}</div>
+                <div className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>จำได้นาน</div>
+              </div>
+              <div className={`rounded-xl px-3 py-2 ${isDark ? 'bg-slate-900/50' : 'bg-white'}`}>
+                <div className="font-black text-amber-500">{stats.dueCards}</div>
+                <div className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>ควรทบทวน</div>
+              </div>
+              <div className={`rounded-xl px-3 py-2 ${isDark ? 'bg-slate-900/50' : 'bg-white'}`}>
+                <div className="font-black text-rose-500">{stats.leechCards}</div>
+                <div className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>ลืมบ่อย</div>
+              </div>
+            </div>
           </div>
         </div>
 

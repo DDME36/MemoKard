@@ -5,7 +5,7 @@ import { useFlashcardStore, type Deck, type Flashcard } from '../store/store';
 import { useTheme } from '../contexts/ThemeContext';
 import ReviewCard from '../components/ReviewCard';
 import LoadingSkeleton from '../components/LoadingSkeleton';
-import ReviewModeSelector, { type ReviewMode } from '../components/ReviewModeSelector';
+import ReviewModeSelector, { type AnswerMode, type ReviewMode } from '../components/ReviewModeSelector';
 import ZenModePanel from '../components/ZenModePanel';
 import { Headphones } from 'lucide-react';
 import { haptics, sounds } from '../utils/haptics';
@@ -39,6 +39,14 @@ const createSessionStats = (): SessionStats => ({
   4: 0,
 });
 
+const getSavedAnswerMode = (): AnswerMode => {
+  try {
+    return localStorage.getItem('review-answer-mode') === 'type' ? 'type' : 'flip';
+  } catch {
+    return 'flip';
+  }
+};
+
 const ReviewSession = memo(function ReviewSession({ 
   activeDeck, 
   isCramMode = false, 
@@ -62,6 +70,7 @@ const ReviewSession = memo(function ReviewSession({
   const [showCelebration, setShowCelebration] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [reviewMode, setReviewMode] = useState<ReviewMode>('normal');
+  const [answerMode, setAnswerMode] = useState<AnswerMode>(getSavedAnswerMode);
   const [showModeSelector, setShowModeSelector] = useState(!skipModeSelector);
   const [failedCardIds, setFailedCardIds] = useState<Set<string>>(new Set());
   const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
@@ -71,6 +80,15 @@ const ReviewSession = memo(function ReviewSession({
   const [frozenExamCards, setFrozenExamCards] = useState<ReturnType<typeof getCardsByDeck>>([]);
   // Phase 2: after answering all cards, repeat only the ones answered wrong
   const [isRepeatPhase, setIsRepeatPhase] = useState(false);
+
+  const handleAnswerModeChange = useCallback((mode: AnswerMode) => {
+    setAnswerMode(mode);
+    try {
+      localStorage.setItem('review-answer-mode', mode);
+    } catch {
+      // Storage can be blocked in private/restricted browser contexts.
+    }
+  }, []);
 
   // Helper: build initial card list (called once on mount and on deck change)
   const buildCardList = useCallback(() => {
@@ -272,6 +290,8 @@ const ReviewSession = memo(function ReviewSession({
       >
         <ReviewModeSelector
           selectedMode={reviewMode}
+          answerMode={answerMode}
+          onSelectAnswerMode={handleAnswerModeChange}
           onSelectMode={(mode) => {
             setReviewMode(mode);
             setShowModeSelector(false);
@@ -279,6 +299,7 @@ const ReviewSession = memo(function ReviewSession({
             setIsRepeatPhase(false);
             setFailedCardIds(new Set());
             setSessionStats(createSessionStats());
+            setSessionStartTime(null);
             // ✅ Freeze exam/preview cards NOW (once) so they never re-shuffle mid-session
             if (mode === 'exam' || mode === 'preview') {
               const allCards = activeDeck
@@ -409,9 +430,17 @@ const ReviewSession = memo(function ReviewSession({
     const totalRated = sessionStats[1] + sessionStats[2] + sessionStats[3] + sessionStats[4];
     const correctRated = sessionStats[3] + sessionStats[4];
     const accuracy = totalRated > 0 ? Math.round((correctRated / totalRated) * 100) : 100;
-    const elapsedMinutes = sessionStartTime
-      ? Math.max(1, Math.round((Date.now() - sessionStartTime) / 60000))
-      : 0;
+    const elapsedSeconds = sessionStartTime ? Math.max(1, Math.round((Date.now() - sessionStartTime) / 1000)) : 0;
+    const elapsedMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
+    const secondsPerCard = totalRated > 0 ? Math.max(1, Math.round(elapsedSeconds / totalRated)) : 0;
+    const memoryScore = totalRated > 0
+      ? Math.round(((sessionStats[2] * 0.45) + (sessionStats[3] * 0.8) + sessionStats[4]) / totalRated * 100)
+      : 100;
+    const memoryInsight = memoryScore >= 85
+      ? 'จำได้คล่องมาก เว้นช่วงตามกำหนดเพื่อให้ความจำแข็งแรงขึ้น'
+      : memoryScore >= 65
+        ? 'ภาพรวมดี แต่ยังมีบางใบที่ต้องใช้เวลานึก ระบบจะพากลับมาทบทวนเร็วขึ้น'
+        : 'ยังมีจุดที่สับสน ลองทำคำตอบให้สั้นลงหรือเพิ่มตัวอย่างช่วยเชื่อมโยง';
 
     return (
       <motion.div 
@@ -459,7 +488,7 @@ const ReviewSession = memo(function ReviewSession({
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.35 }}
-            className={`mx-auto mb-8 grid max-w-md grid-cols-3 gap-3 rounded-2xl border p-3 ${
+            className={`mx-auto mb-4 grid max-w-xl grid-cols-2 gap-3 rounded-2xl border p-3 sm:grid-cols-4 ${
               isDark ? 'border-slate-800 bg-slate-900/70' : 'border-slate-100 bg-white/80 shadow-sm'
             }`}
           >
@@ -485,8 +514,29 @@ const ReviewSession = memo(function ReviewSession({
                 เวลา
               </div>
             </div>
+            <div>
+              <div className="text-2xl font-black text-violet-500">{secondsPerCard}s</div>
+              <div className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                ต่อใบ
+              </div>
+            </div>
           </motion.div>
         )}
+        {reviewMode !== 'preview' && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className={`mx-auto mb-8 max-w-xl rounded-2xl border px-5 py-4 text-left ${isDark ? 'border-violet-900/40 bg-violet-950/20' : 'border-violet-100 bg-violet-50/80'}`}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className={`text-xs font-black uppercase tracking-widest ${isDark ? 'text-violet-400' : 'text-violet-600'}`}>Memory score</span>
+              <span className={`text-xl font-black ${memoryScore >= 80 ? 'text-emerald-500' : memoryScore >= 60 ? 'text-amber-500' : 'text-rose-500'}`}>{memoryScore}%</span>
+            </div>
+            <p className={`mt-2 text-sm leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{memoryInsight}</p>
+          </motion.div>
+        )}
+        <div className="flex flex-col justify-center gap-3 sm:flex-row">
         <motion.button
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -501,6 +551,26 @@ const ReviewSession = memo(function ReviewSession({
         >
           กลับหน้าแรก
         </motion.button>
+        <motion.button
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.45 }}
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
+          onClick={() => {
+            setShowCelebration(false);
+            setShowModeSelector(true);
+            setCurrentCardIndex(0);
+            setSessionStats(createSessionStats());
+            setFailedCardIds(new Set());
+            setIsRepeatPhase(false);
+            setSessionStartTime(null);
+          }}
+          className={`rounded-xl border-2 px-8 py-4 font-bold transition-colors ${isDark ? 'border-slate-700 text-slate-200 hover:bg-slate-800' : 'border-slate-200 text-slate-700 hover:bg-white'}`}
+        >
+          เล่นโหมดอื่นต่อ
+        </motion.button>
+        </div>
       </motion.div>
     );
   }
@@ -578,6 +648,20 @@ const ReviewSession = memo(function ReviewSession({
             >
               <Headphones className="w-3.5 h-3.5" /> โหมดเซน (Zen Mode)
             </button>
+            {reviewMode !== 'preview' && (
+              <button
+                type="button"
+                onClick={() => handleAnswerModeChange(answerMode === 'flip' ? 'type' : 'flip')}
+                className={`px-2 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                  isDark
+                    ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm'
+                }`}
+                title="สลับวิธีตอบ"
+              >
+                {answerMode === 'flip' ? '↻ แตะพลิก' : '⌨ พิมพ์ตอบ'}
+              </button>
+            )}
           </div>
           <span 
             className={`text-sm font-bold bg-gradient-to-r ${activeGradientClass} bg-clip-text text-transparent`}
@@ -615,6 +699,7 @@ const ReviewSession = memo(function ReviewSession({
         dayColor={activeColor}
         isPreviewMode={reviewMode === 'preview'}
         isTimeAttack={reviewMode === 'time_attack'}
+        answerMode={answerMode}
       />
     </motion.div>
   );

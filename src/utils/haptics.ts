@@ -55,6 +55,18 @@ export const haptics = {
 
 // ✅ Singleton — one context for the entire app lifetime
 let _sharedCtx: AudioContext | null = null;
+const SOUND_ENABLED_KEY = 'memokard-sound-effects-enabled';
+
+function readSoundEnabled(): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    return window.localStorage.getItem(SOUND_ENABLED_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+let _soundEnabled = readSoundEnabled();
 
 function getAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
@@ -74,12 +86,24 @@ async function ensureRunning(ctx: AudioContext) {
 }
 
 export const sounds = {
+  isEnabled: () => _soundEnabled,
+
+  setEnabled: (enabled: boolean) => {
+    _soundEnabled = enabled;
+    try {
+      window.localStorage.setItem(SOUND_ENABLED_KEY, String(enabled));
+    } catch {
+      // Preferences are optional when storage is unavailable.
+    }
+  },
+
   /**
    * Play a sound effect.
    * Safe to call multiple times rapidly — reuses the same AudioContext.
    */
   play: async (type: 'flip' | 'success' | 'tap' | 'celebration' | 'error') => {
     try {
+      if (!_soundEnabled) return;
       const ctx = getAudioContext();
       if (!ctx) return;
       await ensureRunning(ctx);

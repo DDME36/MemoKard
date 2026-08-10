@@ -5,10 +5,13 @@ import { useFlashcardStore } from '../store/store';
 import { haptics } from '../utils/haptics';
 
 export type ReviewMode = 'normal' | 'focus' | 'quick' | 'exam' | 'weak' | 'preview' | 'new_cards' | 'time_attack';
+export type AnswerMode = 'flip' | 'type';
 
 interface ReviewModeSelectorProps {
   selectedMode: ReviewMode;
   onSelectMode: (mode: ReviewMode) => void;
+  answerMode: AnswerMode;
+  onSelectAnswerMode: (mode: AnswerMode) => void;
   dayColor: { gradient: string; shadow: string };
   deckId?: string; // Optional deck ID to filter cards by deck
 }
@@ -72,8 +75,8 @@ const MODES = [
   },
   {
     id: 'preview' as ReviewMode,
-    name: 'ดูการ์ด',
-    description: 'ดูการ์ดทั้งหมดก่อนทบทวน',
+    name: 'อ่าน & พลิก',
+    description: 'อ่านคำถาม พลิกดูเฉลย ไม่บันทึกคะแนน',
     icon: (
       <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -102,14 +105,26 @@ const MODES = [
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     ),
-    color: 'from-orange-550 to-rose-600',
+    color: 'from-orange-500 to-rose-600',
   },
 ];
 
-export default function ReviewModeSelector({ selectedMode, onSelectMode, dayColor, deckId }: ReviewModeSelectorProps) {
+const PRIMARY_MODES: ReviewMode[] = ['normal', 'preview', 'quick', 'new_cards'];
+
+export default function ReviewModeSelector({
+  selectedMode,
+  onSelectMode,
+  answerMode,
+  onSelectAnswerMode,
+  dayColor,
+  deckId,
+}: ReviewModeSelectorProps) {
   const { isDark } = useTheme();
-  const store = useFlashcardStore();
+  const cards = useFlashcardStore((state) => state.cards);
+  const getCardsByDeck = useFlashcardStore((state) => state.getCardsByDeck);
+  const getDueCards = useFlashcardStore((state) => state.getDueCards);
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const isCustomGradient = dayColor.gradient.includes('gradient(');
   const dayShadowClass = isCustomGradient ? '' : dayColor.shadow;
@@ -118,10 +133,10 @@ export default function ReviewModeSelector({ selectedMode, onSelectMode, dayColo
   // Check card availability for each mode
   const checkModeAvailability = (mode: ReviewMode): { available: boolean; reason: string; count: number } => {
     // Filter cards by deck if deckId is provided
-    const allCards = deckId ? store.getCardsByDeck(deckId) : store.cards;
+    const allCards = deckId ? getCardsByDeck(deckId) : cards;
     const dueCards = deckId 
       ? allCards.filter(card => new Date(card.nextReviewDate) <= new Date())
-      : store.getDueCards();
+      : getDueCards();
 
     switch (mode) {
       case 'normal':
@@ -203,21 +218,89 @@ export default function ReviewModeSelector({ selectedMode, onSelectMode, dayColo
 
   return (
     <div className="mb-8">
-      <h3 className={`text-lg font-bold mb-4 display-font ${isDark ? 'text-white' : 'text-slate-900'}`}>
-        เลือกโหมดทบทวน
-      </h3>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="mb-7">
+        <div className="mb-3 flex items-end justify-between gap-3">
+          <div>
+            <p className={`text-xs font-black uppercase tracking-[0.2em] ${isDark ? 'text-violet-400' : 'text-violet-600'}`}>
+              ขั้นที่ 1
+            </p>
+            <h3 className={`mt-1 text-lg font-bold display-font ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              อยากตอบแบบไหน?
+            </h3>
+          </div>
+          <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>เปลี่ยนได้ทุกครั้ง</span>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <motion.button
+            type="button"
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => onSelectAnswerMode('flip')}
+            aria-pressed={answerMode === 'flip'}
+            className={`relative rounded-3xl border-2 p-5 text-left transition-colors ${
+              answerMode === 'flip'
+                ? `border-transparent ${isCustomGradient ? '' : `bg-gradient-to-br ${dayColor.gradient}`} text-white shadow-lg`
+                : isDark
+                  ? 'border-slate-700 bg-slate-900/70 text-slate-200 hover:border-violet-500/60'
+                  : 'border-slate-200 bg-white/80 text-slate-800 shadow-sm hover:border-violet-300'
+            }`}
+            style={answerMode === 'flip' && isCustomGradient ? { backgroundImage: dayColor.gradient, ...dayShadowStyle } : undefined}
+          >
+            <span className={`absolute right-4 top-4 rounded-full px-2.5 py-1 text-[10px] font-black ${answerMode === 'flip' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'}`}>
+              แนะนำ
+            </span>
+            <div className="mb-3 text-3xl" aria-hidden="true">↻</div>
+            <div className="font-black">แตะเพื่อพลิก</div>
+            <div className={`mt-1 text-xs leading-relaxed ${answerMode === 'flip' ? 'text-white/80' : isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              คิดในใจแล้วแตะดูเฉลย ไม่ต้องพิมพ์ เหมาะกับการทบทวนทุกวัน
+            </div>
+          </motion.button>
+
+          <motion.button
+            type="button"
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => onSelectAnswerMode('type')}
+            aria-pressed={answerMode === 'type'}
+            className={`rounded-3xl border-2 p-5 text-left transition-colors ${
+              answerMode === 'type'
+                ? 'border-transparent bg-gradient-to-br from-sky-500 to-indigo-600 text-white shadow-lg'
+                : isDark
+                  ? 'border-slate-700 bg-slate-900/70 text-slate-200 hover:border-sky-500/60'
+                  : 'border-slate-200 bg-white/80 text-slate-800 shadow-sm hover:border-sky-300'
+            }`}
+          >
+            <div className="mb-3 text-3xl" aria-hidden="true">⌨</div>
+            <div className="font-black">พิมพ์ท้าทาย</div>
+            <div className={`mt-1 text-xs leading-relaxed ${answerMode === 'type' ? 'text-white/80' : isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              พิมพ์ก่อนเปิดเฉลย แล้วดูความใกล้เคียง เหมาะกับคำศัพท์และคำตอบสั้น
+            </div>
+          </motion.button>
+        </div>
+      </div>
+
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <p className={`text-xs font-black uppercase tracking-[0.2em] ${isDark ? 'text-violet-400' : 'text-violet-600'}`}>ขั้นที่ 2</p>
+          <h3 className={`mt-1 text-lg font-bold display-font ${isDark ? 'text-white' : 'text-slate-900'}`}>เลือกชุดที่จะเล่น</h3>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowAdvanced((value) => !value)}
+          className={`rounded-xl px-3 py-2 text-xs font-bold transition-colors ${isDark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+          aria-expanded={showAdvanced}
+        >
+          {showAdvanced ? 'ซ่อนโหมดขั้นสูง' : 'โหมดขั้นสูง'}
+        </button>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {MODES
+          .filter((mode) => showAdvanced || PRIMARY_MODES.includes(mode.id))
           .map((mode) => ({
             mode,
             ...checkModeAvailability(mode.id)
           }))
-          .sort((a, b) => {
-            // Sort: available modes first, then unavailable
-            if (a.available && !b.available) return -1;
-            if (!a.available && b.available) return 1;
-            return 0;
-          })
           .map(({ mode, available, reason, count }) => {
           const isSelected = selectedMode === mode.id;
           const isShowingTooltip = showTooltip === mode.id;
@@ -225,6 +308,8 @@ export default function ReviewModeSelector({ selectedMode, onSelectMode, dayColo
           return (
             <div key={mode.id} className="relative">
               <motion.button
+                type="button"
+                aria-disabled={!available}
                 whileHover={available ? { scale: 1.02, y: -1 } : {}}
                 whileTap={available ? { scale: 0.98 } : {}}
                 onClick={() => handleModeClick(mode.id)}

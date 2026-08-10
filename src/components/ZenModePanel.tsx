@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Headphones, CloudRain, Flame, Radio, X, Minus, GripHorizontal } from 'lucide-react';
+import { motion, AnimatePresence, useDragControls } from 'framer-motion';
+import { Headphones, CloudRain, Flame, Radio, X, Minus, GripHorizontal, Volume2, VolumeX } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
-import { haptics } from '../utils/haptics';
+import { haptics, sounds } from '../utils/haptics';
 
 interface ZenModePanelProps {
   isOpen: boolean;
@@ -133,6 +133,7 @@ class AudioMixer {
 
 export default function ZenModePanel({ isOpen, onClose, dayColor }: ZenModePanelProps) {
   const { isDark } = useTheme();
+  const dragControls = useDragControls();
   
   const [isMinimized, setIsMinimized] = useState(false);
 
@@ -149,6 +150,8 @@ export default function ZenModePanel({ isOpen, onClose, dayColor }: ZenModePanel
   const [rainVol, setRainVol] = useState(0);
   const [brownVol, setBrownVol] = useState(0);
   const mixerRef = useRef<AudioMixer | null>(null);
+  const [audioError, setAudioError] = useState('');
+  const [effectsEnabled, setEffectsEnabled] = useState(() => sounds.isEnabled());
 
   // YouTube Lofi State
   const [showLofi, setShowLofi] = useState(false);
@@ -157,11 +160,23 @@ export default function ZenModePanel({ isOpen, onClose, dayColor }: ZenModePanel
     if (isOpen) {
       Promise.resolve().then(() => setIsMinimized(false));
       if (!mixerRef.current) {
-        mixerRef.current = new AudioMixer();
-        mixerRef.current.init();
+        try {
+          const mixer = new AudioMixer();
+          mixer.init();
+          mixerRef.current = mixer;
+          Promise.resolve().then(() => setAudioError(''));
+        } catch (error) {
+          console.debug('[zen] Ambient audio unavailable:', error);
+          Promise.resolve().then(() => setAudioError('เบราว์เซอร์ไม่สามารถเปิดเสียงบรรยากาศได้ ลองแตะหน้าเว็บแล้วเปิดใหม่อีกครั้ง'));
+        }
       }
     }
   }, [isOpen]);
+
+  useEffect(() => () => {
+    mixerRef.current?.stop();
+    mixerRef.current = null;
+  }, []);
 
   useEffect(() => {
     if (mixerRef.current) mixerRef.current.setRainVolume(rainVol);
@@ -245,6 +260,8 @@ export default function ZenModePanel({ isOpen, onClose, dayColor }: ZenModePanel
       {isOpen && (
         <motion.div
           drag
+          dragListener={false}
+          dragControls={dragControls}
           dragMomentum={false}
           initial={{ opacity: 0, y: 20, scale: 0.95 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -270,7 +287,11 @@ export default function ZenModePanel({ isOpen, onClose, dayColor }: ZenModePanel
           {isMinimized ? (
             <>
               {/* Drag Handle */}
-              <div className="px-2 opacity-40 hover:opacity-100 transition-opacity">
+              <div
+                onPointerDown={(event) => dragControls.start(event)}
+                className="cursor-grab touch-none px-2 opacity-40 transition-opacity hover:opacity-100 active:cursor-grabbing"
+                aria-label="ลากแผงโหมดสมาธิ"
+              >
                 <GripHorizontal className="w-4 h-4 text-slate-400" />
               </div>
               
@@ -303,10 +324,20 @@ export default function ZenModePanel({ isOpen, onClose, dayColor }: ZenModePanel
             </>
           ) : (
             <>
-              <div className="flex justify-between items-center mb-6 cursor-grab active:cursor-grabbing">
-                <h3 className="font-bold text-lg flex items-center gap-2 pointer-events-none display-font text-slate-800 dark:text-slate-100">
-                  <Headphones className="w-5 h-5 text-indigo-500 animate-pulse" /> โหมดสมาธิ
-                </h3>
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onPointerDown={(event) => dragControls.start(event)}
+                    className="cursor-grab touch-none rounded-lg p-1 text-slate-400 hover:bg-white/10 active:cursor-grabbing"
+                    aria-label="ลากแผงโหมดสมาธิ"
+                  >
+                    <GripHorizontal className="h-4 w-4" />
+                  </button>
+                  <h3 className="font-bold text-lg flex items-center gap-2 pointer-events-none display-font text-slate-800 dark:text-slate-100">
+                    <Headphones className="w-5 h-5 text-indigo-500 animate-pulse" /> โหมดสมาธิ
+                  </h3>
+                </div>
                 <div className="flex items-center gap-1">
                   <button 
                     onClick={() => {
@@ -367,7 +398,30 @@ export default function ZenModePanel({ isOpen, onClose, dayColor }: ZenModePanel
 
               {/* Ambient Sounds */}
               <div className="space-y-4 mb-6">
-                <div className="text-[10px] font-bold uppercase tracking-widest opacity-50 display-font text-slate-500 dark:text-slate-400">Ambient Sounds</div>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-[10px] font-bold uppercase tracking-widest opacity-50 display-font text-slate-500 dark:text-slate-400">Ambient Sounds</div>
+                  <button
+                    type="button"
+                    aria-pressed={effectsEnabled}
+                    onClick={() => {
+                      const next = !effectsEnabled;
+                      setEffectsEnabled(next);
+                      sounds.setEnabled(next);
+                      haptics.light();
+                    }}
+                    className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold transition-colors ${effectsEnabled ? 'bg-indigo-500/10 text-indigo-500' : 'bg-slate-500/10 text-slate-500'}`}
+                    title={effectsEnabled ? 'ปิดเสียงเอฟเฟกต์ของแอป' : 'เปิดเสียงเอฟเฟกต์ของแอป'}
+                  >
+                    {effectsEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+                    เอฟเฟกต์
+                  </button>
+                </div>
+
+                {audioError && (
+                  <p role="alert" className="rounded-xl bg-rose-500/10 px-3 py-2 text-xs leading-relaxed text-rose-500">
+                    {audioError}
+                  </p>
+                )}
                 
                 <div className="flex items-center gap-3" onClick={() => haptics.light()}>
                   <CloudRain className={`w-5 h-5 ${rainVol > 0 ? 'text-blue-400' : 'text-slate-400'}`} />
@@ -375,8 +429,12 @@ export default function ZenModePanel({ isOpen, onClose, dayColor }: ZenModePanel
                     type="range" min="0" max="0.5" step="0.01" 
                     value={rainVol} 
                     onChange={(e) => setRainVol(parseFloat(e.target.value))}
+                    aria-label="ระดับเสียงฝน"
+                    aria-valuetext={`${Math.round(rainVol * 200)} เปอร์เซ็นต์`}
+                    disabled={Boolean(audioError)}
                     className="w-full accent-blue-500 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer"
                   />
+                  <span className="w-8 text-right text-[10px] tabular-nums text-slate-400">{Math.round(rainVol * 200)}%</span>
                 </div>
                 
                 <div className="flex items-center gap-3" onClick={() => haptics.light()}>
@@ -385,14 +443,20 @@ export default function ZenModePanel({ isOpen, onClose, dayColor }: ZenModePanel
                     type="range" min="0" max="0.5" step="0.01" 
                     value={brownVol} 
                     onChange={(e) => setBrownVol(parseFloat(e.target.value))}
+                    aria-label="ระดับเสียง Brown noise"
+                    aria-valuetext={`${Math.round(brownVol * 200)} เปอร์เซ็นต์`}
+                    disabled={Boolean(audioError)}
                     className="w-full accent-orange-500 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer"
                   />
+                  <span className="w-8 text-right text-[10px] tabular-nums text-slate-400">{Math.round(brownVol * 200)}%</span>
                 </div>
               </div>
 
               {/* Lofi Radio Toggle */}
               <div className={`p-3 rounded-2xl ${isDark ? 'bg-slate-900/40 border border-white/5' : 'bg-white/40 border border-white/40 shadow-sm'}`}>
                 <button 
+                  type="button"
+                  aria-pressed={showLofi}
                   onClick={() => {
                     haptics.medium();
                     setShowLofi(!showLofi);
@@ -402,8 +466,9 @@ export default function ZenModePanel({ isOpen, onClose, dayColor }: ZenModePanel
                   <span className="flex items-center gap-2 display-font">
                     <Radio className={`w-4 h-4 ${showLofi ? 'text-rose-500 animate-pulse' : 'text-slate-400'}`} /> 
                     Lofi Radio
+                    <span className="text-[9px] font-medium text-slate-400">ออนไลน์</span>
                   </span>
-                  <div className={`w-10 h-5 rounded-full relative transition-colors ${showLofi ? 'bg-rose-500' : isDark ? 'bg-slate-700' : 'bg-slate-350'}`}>
+                  <div className={`w-10 h-5 rounded-full relative transition-colors ${showLofi ? 'bg-rose-500' : isDark ? 'bg-slate-700' : 'bg-slate-300'}`}>
                     <motion.div 
                       layout 
                       className="absolute top-0.5 bottom-0.5 bg-white rounded-full w-4 shadow-sm" 
@@ -411,6 +476,11 @@ export default function ZenModePanel({ isOpen, onClose, dayColor }: ZenModePanel
                     />
                   </div>
                 </button>
+                {showLofi && (
+                  <p className="mt-2 text-[10px] leading-relaxed text-slate-400">
+                    สตรีมผ่าน YouTube และต้องใช้อินเทอร์เน็ต หากไม่มีเสียงให้ตรวจระดับเสียงหรือสิทธิ์เล่นสื่อของเบราว์เซอร์
+                  </p>
+                )}
               </div>
             </>
           )}
