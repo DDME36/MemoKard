@@ -1,4 +1,4 @@
-import { useState, useEffect, memo, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence, useMotionValue, useReducedMotion, useTransform, type PanInfo } from 'framer-motion';
 import MathText from './MathText';
 import type { Flashcard } from '../store/store';
@@ -28,6 +28,7 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
   const [timeLeft, setTimeLeft] = useState(10);
   const [isTimeOut, setIsTimeOut] = useState(false);
   const [reviewError, setReviewError] = useState('');
+  const lastFlipTimestampRef = useRef<number>(0);
   const { isDark } = useTheme();
   const shouldReduceMotion = useReducedMotion();
 
@@ -136,6 +137,7 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
   const handleFlip = useCallback(() => {
     if (showScratchpad) return; // Prevent flip when drawing
     setReviewError('');
+    lastFlipTimestampRef.current = Date.now();
     setIsFlipped(prev => {
       if (!prev) setHasBeenFlipped(true);
       return !prev;
@@ -234,6 +236,9 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
         e.preventDefault();
         handleFlip();
       } else if (hasBeenFlipped && !isExiting) {
+        // Prevent accidental double-press rating if flipped within 350ms
+        if (Date.now() - lastFlipTimestampRef.current < 350) return;
+
         if (isPreviewMode) {
           // In preview mode, any key goes to next
           if (e.code === 'Space' || e.code === 'Enter' || e.key === 'ArrowRight') {
