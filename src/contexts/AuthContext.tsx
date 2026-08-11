@@ -30,7 +30,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [isDemo, setIsDemo] = useState(() => {
-    return safeLocalStorage.get('demo-mode') === 'true';
+    const stored = safeLocalStorage.get('demo-mode');
+    return stored !== 'false';
   });
   const [backendStatus, setBackendStatus] = useState<BackendStatus>(() =>
     isSupabaseConfigured() ? 'checking' : 'unconfigured'

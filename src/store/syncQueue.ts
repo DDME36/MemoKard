@@ -1,6 +1,7 @@
 import { get as idbGet, set as idbSet } from 'idb-keyval';
 import { v4 as uuidv4 } from 'uuid';
 import type { FSRSState } from '../utils/fsrs';
+import { safeLocalStorage } from '../utils/safeStorage';
 
 const SYNC_QUEUE_KEY = 'offline-sync-queue';
 
@@ -44,11 +45,32 @@ export class SyncQueueManager {
   }
 
   async getQueue(): Promise<SyncAction[]> {
-    return (await idbGet<SyncAction[]>(SYNC_QUEUE_KEY)) || [];
+    let queue: SyncAction[] | undefined;
+    try {
+      queue = await idbGet<SyncAction[]>(SYNC_QUEUE_KEY);
+    } catch {
+      // IndexedDB read error fallback
+    }
+    if (!queue || !Array.isArray(queue)) {
+      const stored = safeLocalStorage.get(SYNC_QUEUE_KEY);
+      if (stored) {
+        try {
+          queue = JSON.parse(stored);
+        } catch {
+          queue = [];
+        }
+      }
+    }
+    return queue || [];
   }
 
   async saveQueue(queue: SyncAction[]): Promise<void> {
-    await idbSet(SYNC_QUEUE_KEY, queue);
+    safeLocalStorage.set(SYNC_QUEUE_KEY, JSON.stringify(queue));
+    try {
+      await idbSet(SYNC_QUEUE_KEY, queue);
+    } catch {
+      // safeLocalStorage backup stored
+    }
   }
 
   async enqueue(type: SyncActionType, payload: SyncAction['payload']): Promise<void> {

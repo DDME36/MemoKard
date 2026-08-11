@@ -1,12 +1,14 @@
-import { useMemo, useState, memo } from 'react';
+import { useMemo, useState, useRef, memo } from 'react';
 import { motion } from 'framer-motion';
-import { Filter, Search, SlidersHorizontal, X } from 'lucide-react';
+import { Filter, Search, SlidersHorizontal, X, Download, Upload } from 'lucide-react';
 import { useFlashcardStore, type Deck } from '../store/store';
 import { useTheme } from '../contexts/ThemeContext';
+import { useToast } from '../contexts/ToastContext';
 import ReviewForecast from '../components/ReviewForecast';
 import CustomSelect from '../components/CustomSelect';
 import { getDailyQuote } from '../utils/quotes';
 import { getDeckColorStyles } from '../utils/colorUtils';
+import { exportFullBackup, importFullBackup } from '../utils/deckIO';
 import { haptics } from '../utils/haptics';
 
 interface DashboardProps {
@@ -18,11 +20,39 @@ interface DashboardProps {
 
 const Dashboard = memo(function Dashboard({ onOpenDeck, onStartReview, onShowAddDeck, dayColor }: DashboardProps) {
   const store = useFlashcardStore();
-  const { decks, getTotalCards, getDueCount } = store;
+  const { decks, getTotalCards, getDueCount, importFullBackupData } = store;
   const { isDark } = useTheme();
+  const { showToast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [deckFilter, setDeckFilter] = useState<'all' | 'due'>('all');
   const [sortMode, setSortMode] = useState<'due' | 'recent' | 'name'>('due');
+
+  const handleExportBackup = () => {
+    try {
+      exportFullBackup(store);
+      haptics.success();
+      showToast('ดาวน์โหลดไฟล์สำรองข้อมูลสำเร็จ!', 'success');
+    } catch {
+      showToast('เกิดข้อผิดพลาดในการดาวน์โหลดไฟล์สำรอง', 'error');
+    }
+  };
+
+  const handleImportBackupFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const backup = await importFullBackup(file);
+      importFullBackupData(backup);
+      haptics.success();
+      showToast('นำเข้าข้อมูลสำรองเรียบร้อยแล้ว!', 'success');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการนำเข้าไฟล์';
+      showToast(msg, 'error');
+    } finally {
+      if (e.target) e.target.value = '';
+    }
+  };
 
   // ✅ Fix: read store.cards directly instead of getDueCards (unstable reference)
   const allDueCards = useMemo(() => {
@@ -211,6 +241,13 @@ const Dashboard = memo(function Dashboard({ onOpenDeck, onStartReview, onShowAdd
         </div>
       ) : (
         <div>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImportBackupFile}
+            accept=".json"
+            className="hidden"
+          />
           <div className="mb-4 flex items-center justify-between gap-3 px-2">
             <div>
               <h2 className={`text-sm font-bold uppercase tracking-widest ${
@@ -220,22 +257,50 @@ const Dashboard = memo(function Dashboard({ onOpenDeck, onStartReview, onShowAdd
                 แสดง {deckSummaries.length} จาก {decks.length} ชุด
               </p>
             </div>
-            {hasActiveDeckControls && (
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  setSearchQuery('');
-                  setDeckFilter('all');
-                  setSortMode('due');
-                }}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-colors ${
-                  isDark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white text-slate-600 shadow-sm hover:bg-slate-50'
+                onClick={handleExportBackup}
+                title="ดาวน์โหลดไฟล์สำรองข้อมูลทั้งหมด"
+                className={`inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-bold transition-all ${
+                  isDark
+                    ? 'bg-slate-800 text-purple-400 hover:bg-slate-700'
+                    : 'bg-white text-purple-600 shadow-sm hover:bg-purple-50 border border-purple-100'
                 }`}
               >
-                <X className="h-3.5 w-3.5" />
-                ล้าง
+                <Download className="h-3.5 w-3.5" />
+                <span className="hidden xs:inline">สำรองข้อมูล</span>
               </button>
-            )}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                title="นำเข้าไฟล์สำรองข้อมูล (.json)"
+                className={`inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-bold transition-all ${
+                  isDark
+                    ? 'bg-slate-800 text-teal-400 hover:bg-slate-700'
+                    : 'bg-white text-teal-600 shadow-sm hover:bg-teal-50 border border-teal-100'
+                }`}
+              >
+                <Upload className="h-3.5 w-3.5" />
+                <span className="hidden xs:inline">นำเข้าสำรอง</span>
+              </button>
+              {hasActiveDeckControls && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setDeckFilter('all');
+                    setSortMode('due');
+                  }}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold transition-colors ${
+                    isDark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white text-slate-600 shadow-sm hover:bg-slate-50'
+                  }`}
+                >
+                  <X className="h-3.5 w-3.5" />
+                  ล้าง
+                </button>
+              )}
+            </div>
           </div>
 
           <div className={`mb-4 rounded-2xl border p-3 ${

@@ -425,7 +425,7 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
               <motion.div
                 className="flip-card-inner relative w-full h-full"
                 animate={{ rotateY: isFlipped ? 180 : 0 }}
-                transition={shouldReduceMotion ? { duration: 0.01 } : { duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+                transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
                 style={{ transformStyle: 'preserve-3d', WebkitTransformStyle: 'preserve-3d' }}
               >
                 {/* Front — Question */}
@@ -847,6 +847,21 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Desktop Keyboard Shortcuts Cue */}
+      <div className="hidden md:flex items-center justify-center gap-2 mt-4 text-[11px] font-medium text-slate-400 dark:text-slate-500 select-none">
+        <span className="px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-800 font-mono text-[10px] bg-slate-100 dark:bg-slate-900">Space</span>
+        <span>{isFlipped ? 'พอได้' : 'พลิกการ์ด'}</span>
+        <span className="opacity-40">•</span>
+        <span className="px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-800 font-mono text-[10px] bg-slate-100 dark:bg-slate-900">1-4</span>
+        <span>ให้คะแนน</span>
+        <span className="opacity-40">•</span>
+        <span className="px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-800 font-mono text-[10px] bg-slate-100 dark:bg-slate-900">E</span>
+        <span>แก้ไข</span>
+        <span className="opacity-40">•</span>
+        <span className="px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-800 font-mono text-[10px] bg-slate-100 dark:bg-slate-900">S</span>
+        <span>อ่านเสียง</span>
+      </div>
     </div>
   );
 });

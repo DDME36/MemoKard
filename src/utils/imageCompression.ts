@@ -28,9 +28,12 @@ export async function compressImage(file: File): Promise<string> {
         canvas.width = width;
         canvas.height = height;
 
-        // Draw and compress
+        // Draw and compress with WebP and JPEG fallback
         ctx.drawImage(img, 0, 0, width, height);
-        const compressed = canvas.toDataURL('image/webp', 0.75);
+        let compressed = canvas.toDataURL('image/webp', 0.75);
+        if (!compressed.startsWith('data:image/webp')) {
+          compressed = canvas.toDataURL('image/jpeg', 0.75);
+        }
         resolve(compressed);
       };
       

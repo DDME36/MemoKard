@@ -16,9 +16,12 @@ const idbStorage: StateStorage = {
     } catch (error) {
       console.debug('[storage] IndexedDB read unavailable, trying localStorage:', error);
     }
+    
     if (typeof indexedValue === 'string') {
       try {
         JSON.parse(indexedValue);
+        // Guarantee dual backup in localStorage
+        safeLocalStorage.set(name, indexedValue);
         return indexedValue;
       } catch {
         try {
@@ -30,15 +33,16 @@ const idbStorage: StateStorage = {
       }
     }
 
-    // Migrate data from versions that used Zustand's default localStorage.
+    // Fallback/Recovery from localStorage (e.g. when Brave Shields clears IndexedDB on close)
     const legacyValue = safeLocalStorage.get(name);
     if (!legacyValue) return null;
     try {
       JSON.parse(legacyValue);
       try {
+        // Re-populate IndexedDB from safeLocalStorage backup
         await idbSet(name, legacyValue);
       } catch {
-        // Continue using the valid localStorage value when IndexedDB is blocked.
+        // Continue using valid localStorage value when IndexedDB is blocked
       }
       return legacyValue;
     } catch {
@@ -47,20 +51,21 @@ const idbStorage: StateStorage = {
     }
   },
   setItem: async (name: string, value: string): Promise<void> => {
+    // ALWAYS write to localStorage as dual-storage backup for Brave Shields & ephemeral IDB
+    safeLocalStorage.set(name, value);
     try {
       await idbSet(name, value);
     } catch (error) {
-      console.debug('[storage] IndexedDB write unavailable, trying localStorage:', error);
-      safeLocalStorage.set(name, value);
+      console.debug('[storage] IndexedDB write unavailable, saved to localStorage:', error);
     }
   },
   removeItem: async (name: string): Promise<void> => {
+    safeLocalStorage.remove(name);
     try {
       await idbDel(name);
     } catch (error) {
       console.debug('[storage] IndexedDB delete unavailable:', error);
     }
-    safeLocalStorage.remove(name);
   },
 };
 
@@ -154,6 +159,7 @@ export interface FlashcardActions {
   setAuthState: (userId: string | null, isDemo: boolean) => void;
   syncFromSupabase: () => Promise<void>;
   clearStore: () => void;
+  importFullBackupData: (backupData: any) => void;
 
   // Deck actions
   addDeck: (name: string, color: string) => Promise<Deck>;
@@ -414,9 +420,33 @@ export const useFlashcardStore = create<FlashcardStore>()(
           achievementQueue: [],
           perfectReviewStreak: 0,
           totalStudyTime: 0,
-          maxStreak: 0,
           previousProgress: null,
         });
+      },
+
+      importFullBackupData: (backupData: any) => {
+        if (!backupData) return;
+        const validDecks = (Array.isArray(backupData.decks) ? backupData.decks : []).map((d: any) => ({
+          ...d,
+          createdAt: asValidDate(d.createdAt),
+        }));
+        const validCards = (Array.isArray(backupData.cards) ? backupData.cards : []).map((c: any) => ({
+          ...c,
+          createdAt: asValidDate(c.createdAt),
+          nextReviewDate: asValidDate(c.nextReviewDate),
+          lastReviewDate: asValidDate(c.lastReviewDate),
+          fsrsState: sanitizeFSRSState(c.fsrsState),
+        }));
+
+        set((state) => ({
+          decks: validDecks,
+          cards: validCards,
+          streak: asFiniteNumber(backupData.streak, state.streak),
+          lastStudyDate: typeof backupData.lastStudyDate === 'string' ? backupData.lastStudyDate : state.lastStudyDate,
+          reviewHistory: typeof backupData.reviewHistory === 'object' && backupData.reviewHistory !== null ? backupData.reviewHistory : state.reviewHistory,
+          userProgress: sanitizeProgress(backupData.userProgress, state.userProgress),
+          unlockedAchievements: Array.isArray(backupData.unlockedAchievements) ? backupData.unlockedAchievements : state.unlockedAchievements,
+        }));
       },
 
       recalibrateFSRS: async () => {

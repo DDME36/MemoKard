@@ -3,7 +3,7 @@
  * Allows users to share flashcard decks as JSON files
  */
 
-import type { Deck } from '../store/store';
+import type { Deck, FlashcardStore } from '../store/store';
 
 export interface ExportedDeck {
   version: string;
@@ -18,6 +18,73 @@ export interface ExportedDeck {
     answer: string;
   }>;
 }
+
+export interface FullBackupData {
+  type: 'memokard_full_backup';
+  version: string;
+  exportedAt: string;
+  decks: any[];
+  cards: any[];
+  streak: number;
+  lastStudyDate: string | null;
+  reviewHistory: Record<string, number>;
+  userProgress: any;
+  unlockedAchievements: string[];
+}
+
+/**
+ * Export full MemoKard system backup to JSON file
+ */
+export const exportFullBackup = (store: FlashcardStore) => {
+  const backupData: FullBackupData = {
+    type: 'memokard_full_backup',
+    version: '3.0.0',
+    exportedAt: new Date().toISOString(),
+    decks: store.decks,
+    cards: store.cards,
+    streak: store.streak,
+    lastStudyDate: store.lastStudyDate,
+    reviewHistory: store.reviewHistory,
+    userProgress: store.userProgress,
+    unlockedAchievements: store.unlockedAchievements,
+  };
+
+  const jsonString = JSON.stringify(backupData, null, 2);
+  const blob = new Blob([jsonString], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  
+  const link = document.createElement('a');
+  link.href = url;
+  const dateStr = new Date().toISOString().slice(0, 10);
+  link.download = `MemoKard_Backup_${dateStr}.json`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+/**
+ * Import and parse full MemoKard backup file
+ */
+export const importFullBackup = (file: File): Promise<FullBackupData> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const data = JSON.parse(content) as FullBackupData;
+        if (!data || data.type !== 'memokard_full_backup' || !Array.isArray(data.decks) || !Array.isArray(data.cards)) {
+          throw new Error('ไฟล์สำรองไม่ถูกต้องหรือโครงสร้างข้อมูลไม่สมบูรณ์');
+        }
+        resolve(data);
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error('ไม่สามารถอ่านไฟล์สำรองได้'));
+      }
+    };
+    reader.onerror = () => reject(new Error('เกิดข้อผิดพลาดในการอ่านไฟล์'));
+    reader.readAsText(file);
+  });
+};
 
 /**
  * Export a deck to JSON file
