@@ -4,6 +4,9 @@
 import { forgetting_curve } from 'ts-fsrs';
 import { scheduler, type FSRSState } from './fsrs';
 
+/** การ์ดที่ลืมตั้งแต่ครั้งนี้ขึ้นไปถือว่า "ลืมบ่อย" (leech) ควรเขียนใหม่ */
+export const LEECH_LAPSES = 8;
+
 /** เกณฑ์ "จำได้แม่น" แบบ Anki: ระยะทบทวนตั้งแต่ 21 วันขึ้นไป */
 export const MATURE_INTERVAL_DAYS = 21;
 

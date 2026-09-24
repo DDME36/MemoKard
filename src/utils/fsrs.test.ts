@@ -43,4 +43,21 @@ describe('FSRS scheduler', () => {
     expect(state.state).toBe(2);
     expect(state.scheduled_days).toBeGreaterThanOrEqual(1);
   });
+
+  it('schedules sooner when the learner asks for higher retention', () => {
+    const mature: FSRSState = {
+      ...createInitialFSRSState(),
+      due: '2026-09-01T00:00:00.000Z',
+      last_review: '2026-08-02T00:00:00.000Z',
+      stability: 30,
+      difficulty: 5,
+      reps: 5,
+      scheduled_days: 30,
+      state: 2,
+    };
+    const at = new Date('2026-09-01T00:00:00.000Z');
+    const relaxed = calculateFSRS(mature, 3, at, 0.85).interval;
+    const exam = calculateFSRS(mature, 3, at, 0.95).interval;
+    expect(exam).toBeLessThan(relaxed);
+  });
 });

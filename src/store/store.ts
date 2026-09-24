@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage, type StateStorage, subscribeWithSelector } from 'zustand/middleware';
 import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval';
-import { calculateFSRS, createInitialFSRSState, type FSRSState } from '../utils/fsrs';
+import { calculateFSRS, createInitialFSRSState, DEFAULT_RETENTION, MAX_RETENTION, MIN_RETENTION, type FSRSState } from '../utils/fsrs';
 import { checkAchievements, type UserProgress } from '../utils/achievements';
 import type { Achievement } from '../components/AchievementToast';
 import type { Deck, Flashcard } from './types';
@@ -122,6 +122,8 @@ export interface FlashcardState {
   lastPulledAt: string | null;
   deviceId: string;
   pendingAdoption: boolean;
+  /** เป้าความจำของผู้ใช้ (0.80–0.97) — สูง = ทบทวนถี่ขึ้น, ต่ำ = ทบทวนน้อยลง */
+  desiredRetention: number;
   // log ที่อยู่พอดีขอบเคอร์เซอร์ pull ครั้งก่อน (กันนับซ้ำ)
   pullBoundaryLogIds: string[];
 
@@ -149,6 +151,7 @@ export interface FlashcardActions {
   resetForAccount: (userId: string) => void;
   adoptLocalData: () => Promise<void>;
   declineAdoption: () => Promise<void>;
+  setDesiredRetention: (retention: number) => void;
   clearStore: () => void;
   importFullBackupData: (backupData: Record<string, unknown> | null | undefined) => void;
 
@@ -278,6 +281,7 @@ const mergePersistedState = (persistedState: unknown, currentState: FlashcardSto
     ownerId: typeof raw.ownerId === 'string' ? raw.ownerId : null,
     lastPulledAt: typeof raw.lastPulledAt === 'string' ? raw.lastPulledAt : null,
     deviceId: typeof raw.deviceId === 'string' ? raw.deviceId : currentState.deviceId,
+    desiredRetention: clampRetention(asFiniteNumber(raw.desiredRetention, DEFAULT_RETENTION)),
     pullBoundaryLogIds: Array.isArray(raw.pullBoundaryLogIds)
       ? raw.pullBoundaryLogIds.filter((id): id is string => typeof id === 'string')
       : [],
@@ -294,6 +298,9 @@ const mergePersistedState = (persistedState: unknown, currentState: FlashcardSto
       : sanitizeProgress(raw.previousProgress, currentState.userProgress),
   };
 };
+
+const clampRetention = (value: number) =>
+  Math.round(Math.min(MAX_RETENTION, Math.max(MIN_RETENTION, value)) * 100) / 100;
 
 /** ส่งเข้าคิวเฉพาะเมื่อข้อมูลในเครื่องเป็นของผู้ใช้ที่ล็อกอินอยู่ */
 function queueSync(
@@ -323,6 +330,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
       lastPulledAt: null,
       deviceId: newId(),
       pendingAdoption: false,
+      desiredRetention: DEFAULT_RETENTION,
       pullBoundaryLogIds: [],
       userProgress: {
         cardsCreated: 0,
@@ -423,6 +431,8 @@ export const useFlashcardStore = create<FlashcardStore>()(
         queueSync(state, 'UPSERT_PROGRESS', userId);
         await get().syncFromServer();
       },
+
+      setDesiredRetention: (retention) => set({ desiredRetention: clampRetention(retention) }),
 
       declineAdoption: async () => {
         const { userId } = get();
@@ -680,7 +690,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
           }
 
           const prevFsrs = card.fsrsState ?? createInitialFSRSState();
-          const { newState, nextReviewDate, interval } = calculateFSRS(prevFsrs, quality);
+          const { newState, nextReviewDate, interval } = calculateFSRS(prevFsrs, quality, new Date(), state.desiredRetention);
 
           return {
             cards: state.cards.map((c) =>
@@ -861,6 +871,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
         ownerId: state.ownerId,
         lastPulledAt: state.lastPulledAt,
         deviceId: state.deviceId,
+        desiredRetention: state.desiredRetention,
         pullBoundaryLogIds: state.pullBoundaryLogIds,
         userProgress: state.userProgress,
         unlockedAchievements: state.unlockedAchievements,

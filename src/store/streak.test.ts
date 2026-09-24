@@ -56,3 +56,15 @@ describe('getDueCards', () => {
     expect(due).not.toContain('learning');
   });
 });
+
+describe('desired retention setting', () => {
+  it('defaults to 90% and clamps to the supported 80–97% range', async () => {
+    const { useFlashcardStore } = await import('./store');
+    expect(useFlashcardStore.getState().desiredRetention).toBe(0.9);
+    useFlashcardStore.getState().setDesiredRetention(0.5);
+    expect(useFlashcardStore.getState().desiredRetention).toBe(0.8);
+    useFlashcardStore.getState().setDesiredRetention(0.95);
+    expect(useFlashcardStore.getState().desiredRetention).toBe(0.95);
+    useFlashcardStore.getState().setDesiredRetention(0.9);
+  });
+});

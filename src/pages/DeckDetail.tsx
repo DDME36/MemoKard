@@ -16,6 +16,7 @@ import { haptics } from '../utils/haptics';
 import { VirtualizedCardList } from '../components/VirtualizedCardList';
 import { RefreshCw } from 'lucide-react';
 import { isCardDue } from '../utils/studyDay';
+import { LEECH_LAPSES, recallAt } from '../utils/memoryStats';
 
 interface DeckDetailProps {
   deck: Deck;
@@ -397,6 +398,11 @@ export default function DeckDetail({ deck: initialDeck, onStartReview, onShowAdd
             containerHeight={480}
             renderItem={(card) => {
               const isDue = isCardDue(card);
+              // โอกาสจำได้ตอนนี้ (FSRS) — แสดงเฉพาะการ์ดที่เคยทบทวนและยังไม่ถึงกำหนด
+              const recall = !isDue && card.fsrsState && card.fsrsState.state !== 0
+                ? Math.round(recallAt(card.fsrsState) * 100)
+                : null;
+              const isLeech = (card.fsrsState?.lapses ?? 0) >= LEECH_LAPSES;
               return (
                 <div className="pb-3 pr-1 h-full">
                   <motion.div 
@@ -424,8 +430,25 @@ export default function DeckDetail({ deck: initialDeck, onStartReview, onShowAdd
                       </div>
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
+                      {isLeech && (
+                        <span title="ลืมบ่อย ลองเขียนคำถามใหม่ให้สั้นลงหรือเพิ่มตัวอย่าง" className={`text-xs font-bold px-2.5 py-1 rounded-xl ${isDark ? 'bg-orange-950/60 text-orange-300' : 'bg-orange-100 text-orange-700'}`}>ลืมบ่อย</span>
+                      )}
                       {isDue && (
                         <span className="text-xs font-bold bg-gradient-to-r from-rose-500 to-pink-500 text-white px-3 py-1 rounded-xl display-font shadow-lg shadow-rose-500/10">ถึงเวลา</span>
+                      )}
+                      {recall !== null && (
+                        <span
+                          title="โอกาสที่ยังจำการ์ดใบนี้ได้ตอนนี้ (คำนวณด้วย FSRS)"
+                          className={`text-xs font-bold px-2.5 py-1 rounded-xl tabular-nums ${
+                            recall >= 90
+                              ? isDark ? 'bg-emerald-950/60 text-emerald-300' : 'bg-emerald-100 text-emerald-700'
+                              : recall >= 75
+                                ? isDark ? 'bg-amber-950/60 text-amber-300' : 'bg-amber-100 text-amber-700'
+                                : isDark ? 'bg-rose-950/60 text-rose-300' : 'bg-rose-100 text-rose-700'
+                          }`}
+                        >
+                          จำได้ {recall}%
+                        </span>
                       )}
                       {canEdit && (
                         <svg className={`w-5 h-5 ${

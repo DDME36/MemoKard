@@ -15,6 +15,22 @@ export { Rating };
 
 export const scheduler = fsrs({ enable_fuzz: true });
 
+/** เป้าความจำเริ่มต้น (โอกาสจำได้ตอนถึงวันทบทวน) และช่วงที่อนุญาต */
+export const DEFAULT_RETENTION = 0.9;
+export const MIN_RETENTION = 0.8;
+export const MAX_RETENTION = 0.97;
+
+const schedulers = new Map<number, typeof scheduler>([[DEFAULT_RETENTION, scheduler]]);
+/** scheduler ตามเป้าความจำ (สูงขึ้น = ทบทวนถี่ขึ้น จำแม่นขึ้น) */
+function schedulerFor(retention: number) {
+  let s = schedulers.get(retention);
+  if (!s) {
+    s = fsrs({ enable_fuzz: true, request_retention: retention });
+    schedulers.set(retention, s);
+  }
+  return s;
+}
+
 /**
  * Map quality (1/2/3/4) → FSRS Rating
  * 1 = จำไม่ได้      → Again
@@ -71,6 +87,7 @@ export function calculateFSRS(
   prevState: FSRSState,
   quality: number,
   now: Date = new Date(),
+  retention: number = DEFAULT_RETENTION,
 ): { newState: FSRSState; nextReviewDate: Date; interval: number } {
   const rating = qualityToRating(quality);
 
@@ -89,7 +106,7 @@ export function calculateFSRS(
     last_review: prevState.last_review ? new Date(prevState.last_review) : undefined,
   };
 
-  const result: RecordLog = scheduler.repeat(card, now);
+  const result: RecordLog = schedulerFor(retention).repeat(card, now);
   const scheduled = result[rating as keyof RecordLog];
 
   const newState: FSRSState = {

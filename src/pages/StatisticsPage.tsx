@@ -1,6 +1,7 @@
 import { forgetting_curve } from 'ts-fsrs';
-import { averageRecall, cardBuckets } from '../utils/memoryStats';
+import { averageRecall, cardBuckets, LEECH_LAPSES } from '../utils/memoryStats';
 import { scheduler } from '../utils/fsrs';
+import RetentionPicker from '../components/RetentionPicker';
 import { motion } from 'framer-motion';
 import { useFlashcardStore } from '../store/store';
 import { useTheme } from '../contexts/ThemeContext';
@@ -93,7 +94,7 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
     const retentionRate = totalFsrsReps > 0
       ? Math.max(0, Math.round((1 - totalLapses / totalFsrsReps) * 100))
       : 0;
-    const leechCards = cardsWithFSRS.filter(c => (c.fsrsState?.lapses ?? 0) >= 8).length;
+    const leechCards = cardsWithFSRS.filter(c => (c.fsrsState?.lapses ?? 0) >= LEECH_LAPSES).length;
     const strongCards = cardsWithFSRS.filter(c => (c.fsrsState?.stability ?? 0) >= 30).length;
     const memoryInsight = cardsWithFSRS.length === 0
       ? 'เริ่มทบทวนสักหนึ่งรอบ ระบบจะค่อย ๆ วิเคราะห์ความจำให้แม่นขึ้น'
@@ -302,6 +303,8 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
             </p>
           </div>
         </div>
+
+        <RetentionPicker />
 
         {/* FSRS Real Stats Grid */}
 
