@@ -31,4 +31,16 @@ describe('FSRS scheduler', () => {
     const { nextReviewDate } = calculateFSRS(createInitialFSRSState(), 3, now);
     expect(nextReviewDate.getTime() - now.getTime()).toBeLessThanOrEqual(30 * 60 * 1000);
   });
+
+  it('graduates a new card to review after two "Good" answers instead of looping every 10 minutes', () => {
+    let state = createInitialFSRSState();
+    let now = new Date('2026-09-24T02:00:00.000Z');
+    for (let i = 0; i < 2; i++) {
+      const result = calculateFSRS(state, 3, now);
+      state = result.newState;
+      now = result.nextReviewDate;
+    }
+    expect(state.state).toBe(2);
+    expect(state.scheduled_days).toBeGreaterThanOrEqual(1);
+  });
 });

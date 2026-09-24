@@ -214,6 +214,7 @@ const sanitizeFSRSState = (value: unknown): FSRSState => {
     reps: asFiniteNumber(raw.reps, fallback.reps),
     lapses: asFiniteNumber(raw.lapses, fallback.lapses),
     state: Math.min(3, Math.max(0, asFiniteNumber(raw.state, fallback.state))),
+    learning_steps: Math.max(0, asFiniteNumber(raw.learning_steps, 0)),
     last_review: raw.last_review === undefined
       ? undefined
       : asValidDate(raw.last_review).toISOString(),

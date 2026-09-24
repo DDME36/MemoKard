@@ -42,6 +42,8 @@ export interface FSRSState {
   lapses: number;
   state: number;      // 0=New, 1=Learning, 2=Review, 3=Relearning
   last_review?: string;
+  /** ขั้นเรียนปัจจุบัน (FSRS-6) — ถ้าไม่เก็บ การ์ดใหม่จะวนขั้นแรกไม่จบเมื่อกด "พอได้" */
+  learning_steps?: number;
 }
 
 /**
@@ -58,6 +60,7 @@ export function createInitialFSRSState(): FSRSState {
     reps: empty.reps,
     lapses: empty.lapses,
     state: empty.state as number,
+    learning_steps: empty.learning_steps,
   };
 }
 
@@ -81,6 +84,7 @@ export function calculateFSRS(
     scheduled_days: prevState.scheduled_days,
     reps: prevState.reps,
     lapses: prevState.lapses,
+    learning_steps: prevState.learning_steps ?? 0,
     state: prevState.state as State,
     last_review: prevState.last_review ? new Date(prevState.last_review) : undefined,
   };
@@ -96,6 +100,7 @@ export function calculateFSRS(
     scheduled_days: scheduled.card.scheduled_days,
     reps: scheduled.card.reps,
     lapses: scheduled.card.lapses,
+    learning_steps: scheduled.card.learning_steps,
     state: scheduled.card.state as number,
     last_review: now.toISOString(),
   };
