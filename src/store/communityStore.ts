@@ -1,4 +1,6 @@
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import type { RecordModel } from 'pocketbase';
+import { pb } from '../lib/pocketbase';
+import { imageToBlob } from './pocketbaseStore';
 
 // ============================================
 // Types
@@ -26,6 +28,7 @@ export interface PublicDeck {
 export interface PublicDeckCard {
   id: string;
   publicDeckId: string;
+  sourceCardId: string | null;
   question: string;
   answer: string;
   questionImage?: string;
@@ -33,23 +36,15 @@ export interface PublicDeckCard {
   createdAt: Date;
 }
 
-export interface DeckRating {
+export interface ShareCard {
   id: string;
-  publicDeckId: string;
-  userId: string;
-  rating: number;
-  createdAt: Date;
-  updatedAt: Date;
+  question: string;
+  answer: string;
+  questionImage?: string;
+  answerImage?: string;
 }
 
-export interface DeckReport {
-  id: string;
-  publicDeckId: string;
-  reporterId: string;
-  reason: 'spam' | 'inappropriate' | 'copyright' | 'other';
-  details: string | null;
-  createdAt: Date;
-}
+export type ReportReason = 'spam' | 'inappropriate' | 'copyright' | 'other';
 
 export const DECK_CATEGORIES = [
   'ภาษา',
@@ -70,12 +65,74 @@ export const REPORT_REASONS = [
 ] as const;
 
 // ============================================
+// Helpers
+// ============================================
+
+const status = (err: unknown) => (err as { status?: number })?.status;
+const asDate = (value: string) => new Date(value.replace(' ', 'T'));
+
+async function orNull<T>(promise: Promise<T>): Promise<T | null> {
+  try {
+    return await promise;
+  } catch (err) {
+    if (status(err) === 404) return null;
+    throw err;
+  }
+}
+
+const toPublicDeck = (r: RecordModel): PublicDeck => ({
+  id: r.id,
+  creatorId: r.owner,
+  creatorUsername: r.owner_name || 'ไม่ทราบชื่อ',
+  sourceDeckId: r.source_deck || null,
+  name: r.name,
+  description: r.description || null,
+  color: r.color || 'violet',
+  category: r.category || 'ทั่วไป',
+  tags: Array.isArray(r.tags) ? r.tags : [],
+  importCount: r.import_count || 0,
+  isActive: !r.hidden,
+  cardCount: r.card_count || 0,
+  avgRating: r.rating_avg || 0,
+  ratingCount: r.rating_count || 0,
+  createdAt: asDate(r.created),
+  updatedAt: asDate(r.updated),
+});
+
+const toPublicCard = (r: RecordModel): PublicDeckCard => ({
+  id: r.id,
+  publicDeckId: r.public_deck,
+  sourceCardId: r.source_card || null,
+  question: r.question,
+  answer: r.answer,
+  questionImage: r.question_image ? pb.files.getURL(r, r.question_image) : undefined,
+  answerImage: r.answer_image ? pb.files.getURL(r, r.answer_image) : undefined,
+  createdAt: asDate(r.created),
+});
+
+async function publicCardForm(publicDeckId: string, card: ShareCard, position: number): Promise<FormData> {
+  const form = new FormData();
+  form.set('public_deck', publicDeckId);
+  form.set('source_card', card.id);
+  form.set('position', String(position));
+  form.set('question', card.question);
+  form.set('answer', card.answer);
+  for (const [field, value] of [['question_image', card.questionImage], ['answer_image', card.answerImage]] as const) {
+    const blob = await imageToBlob(value);
+    if (blob) form.set(field, blob, `${field}.${blob.type.split('/')[1] || 'png'}`);
+  }
+  return form;
+}
+
+const BATCH_SIZE = 50;
+
+// ============================================
 // Community Store Operations
 // ============================================
 
 export const communityStore = {
-  // ── Share Functions ──
-  
+  // ── Share ──
+
   async shareDeckToCommunity(
     userId: string,
     deckId: string,
@@ -84,819 +141,247 @@ export const communityStore = {
     category: DeckCategory,
     tags: string[],
     color: string,
-    cards: { question: string; answer: string }[]
+    cards: ShareCard[],
   ): Promise<PublicDeck | null> {
-    if (!isSupabaseConfigured()) return null;
+    if (await this.getPublicDeckBySourceDeckId(deckId, userId)) return null;
 
+    const record = await pb.collection('public_decks').create({
+      owner: userId,
+      source_deck: deckId,
+      name,
+      description: description || `ชุดการ์ด ${name}`,
+      color,
+      category,
+      tags,
+      card_count: cards.length,
+    });
     try {
-      // Check if deck already shared
-      const { data: existing } = await supabase
-        .from('public_decks')
-        .select('id')
-        .eq('source_deck_id', deckId)
-        .eq('creator_id', userId)
-        .eq('is_active', true)
-        .single();
-
-      if (existing) {
-        console.log('Deck already shared');
-        return null;
+      for (let i = 0; i < cards.length; i += BATCH_SIZE) {
+        const batch = pb.createBatch();
+        const chunk = cards.slice(i, i + BATCH_SIZE);
+        for (const [offset, card] of chunk.entries()) {
+          batch.collection('public_deck_cards').create(await publicCardForm(record.id, card, i + offset));
+        }
+        await batch.send();
       }
-
-      // Create public deck
-      const { data: publicDeck, error: deckError } = await supabase
-        .from('public_decks')
-        .insert({
-          creator_id: userId,
-          source_deck_id: deckId,
-          name,
-          description: description || `ชุดการ์ด ${name}`,
-          color,
-          category,
-          tags,
-          import_count: 0,
-          is_active: true,
-        })
-        .select()
-        .single();
-
-      if (deckError || !publicDeck) {
-        console.error('Error creating public deck:', deckError);
-        return null;
-      }
-
-      // Insert cards
-      const cardsToInsert = cards.map((card) => ({
-        public_deck_id: publicDeck.id,
-        question: card.question,
-        answer: card.answer,
-      }));
-
-      const { error: cardsError } = await supabase
-        .from('public_deck_cards')
-        .insert(cardsToInsert);
-
-      if (cardsError) {
-        console.error('Error inserting cards:', cardsError);
-        // Rollback: delete public deck
-        await supabase.from('public_decks').delete().eq('id', publicDeck.id);
-        return null;
-      }
-
-      // Fetch complete deck with stats
-      return await this.getPublicDeckById(publicDeck.id);
-    } catch (error) {
-      console.error('Error sharing deck:', error);
-      return null;
+    } catch (err) {
+      await pb.collection('public_decks').delete(record.id); // cascade ลบการ์ดที่ขึ้นไปแล้ว
+      throw err;
     }
+    return this.getPublicDeckById(record.id);
   },
 
   async unshareDecktoCommunity(publicDeckId: string): Promise<boolean> {
-    if (!isSupabaseConfigured()) return false;
-
-    const { error } = await supabase
-      .from('public_decks')
-      .update({ is_active: false })
-      .eq('id', publicDeckId);
-
-    if (error) {
-      console.error('Error unsharing deck:', error);
-      return false;
-    }
-
+    await pb.collection('public_decks').delete(publicDeckId);
     return true;
   },
 
   async updatePublicDeck(
     publicDeckId: string,
-    updates: {
-      name?: string;
-      description?: string;
-      category?: DeckCategory;
-      tags?: string[];
-    }
+    updates: { name?: string; description?: string; category?: DeckCategory; tags?: string[] },
   ): Promise<boolean> {
-    if (!isSupabaseConfigured()) return false;
-
-    const { error } = await supabase
-      .from('public_decks')
-      .update(updates)
-      .eq('id', publicDeckId);
-
-    if (error) {
-      console.error('Error updating public deck:', error);
-      return false;
-    }
-
+    await pb.collection('public_decks').update(publicDeckId, updates);
     return true;
   },
 
-  async updatePublicDeckCards(
-    publicDeckId: string,
-    cards: { question: string; answer: string }[]
-  ): Promise<boolean> {
-    if (!isSupabaseConfigured()) return false;
+  /** อัปเดตแบบ diff ตาม source_card เพื่อให้ ID การ์ดสาธารณะคงเดิม (ผู้ติดตามจับคู่ได้) */
+  async updatePublicDeckCards(publicDeckId: string, cards: ShareCard[]): Promise<boolean> {
+    const existing = await pb.collection('public_deck_cards').getFullList({
+      filter: pb.filter('public_deck = {:id}', { id: publicDeckId }),
+    });
+    const bySource = new Map(existing.map((r) => [r.source_card as string, r]));
+    const keep = new Set(cards.map((c) => c.id));
 
-    try {
-      // Delete existing cards
-      const { error: deleteError } = await supabase
-        .from('public_deck_cards')
-        .delete()
-        .eq('public_deck_id', publicDeckId);
-
-      if (deleteError) {
-        console.error('Error deleting old cards:', deleteError);
-        return false;
+    const ops: ((batch: ReturnType<typeof pb.createBatch>) => Promise<void>)[] = [];
+    cards.forEach((card, position) => {
+      const current = bySource.get(card.id);
+      if (!current) {
+        ops.push(async (b) => { b.collection('public_deck_cards').create(await publicCardForm(publicDeckId, card, position)); });
+      } else if (current.question !== card.question || current.answer !== card.answer || current.position !== position) {
+        ops.push(async (b) => {
+          b.collection('public_deck_cards').update(current.id, { question: card.question, answer: card.answer, position });
+        });
       }
+    });
+    existing.filter((r) => !keep.has(r.source_card)).forEach((r) => {
+      ops.push(async (b) => { b.collection('public_deck_cards').delete(r.id); });
+    });
 
-      // Insert new cards
-      const cardsToInsert = cards.map((card) => ({
-        public_deck_id: publicDeckId,
-        question: card.question,
-        answer: card.answer,
-      }));
-
-      const { error: insertError } = await supabase
-        .from('public_deck_cards')
-        .insert(cardsToInsert);
-
-      if (insertError) {
-        console.error('Error inserting new cards:', insertError);
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error updating public deck cards:', error);
-      return false;
+    for (let i = 0; i < ops.length; i += BATCH_SIZE) {
+      const batch = pb.createBatch();
+      for (const op of ops.slice(i, i + BATCH_SIZE)) await op(batch);
+      await batch.send();
     }
+    await pb.collection('public_decks').update(publicDeckId, { card_count: cards.length });
+    return true;
   },
 
+  // ── Read ──
+
   async getPublicDeckById(publicDeckId: string): Promise<PublicDeck | null> {
-    if (!isSupabaseConfigured()) return null;
-
-    const { data, error } = await supabase
-      .from('public_decks_with_stats')
-      .select('*')
-      .eq('id', publicDeckId)
-      .single();
-
-    if (error || !data) {
-      console.error('Error fetching public deck:', error);
-      return null;
-    }
-
-    return {
-      id: data.id,
-      creatorId: data.creator_id,
-      creatorUsername: data.creator_username || 'Unknown',
-      sourceDeckId: data.source_deck_id,
-      name: data.name,
-      description: data.description,
-      color: data.color,
-      category: data.category,
-      tags: data.tags || [],
-      importCount: data.import_count,
-      isActive: data.is_active,
-      cardCount: data.card_count || 0,
-      avgRating: data.avg_rating || 0,
-      ratingCount: data.rating_count || 0,
-      createdAt: new Date(data.created_at),
-      updatedAt: new Date(data.updated_at),
-    };
+    const record = await orNull(pb.collection('public_decks').getOne(publicDeckId));
+    return record ? toPublicDeck(record) : null;
   },
 
   async getPublicDeckBySourceDeckId(sourceDeckId: string, userId: string): Promise<PublicDeck | null> {
-    if (!isSupabaseConfigured()) return null;
-
-    const { data, error } = await supabase
-      .from('public_decks_with_stats')
-      .select('*')
-      .eq('source_deck_id', sourceDeckId)
-      .eq('creator_id', userId)
-      .eq('is_active', true)
-      .single();
-
-    if (error || !data) {
-      return null;
-    }
-
-    return {
-      id: data.id,
-      creatorId: data.creator_id,
-      creatorUsername: data.creator_username || 'Unknown',
-      sourceDeckId: data.source_deck_id,
-      name: data.name,
-      description: data.description,
-      color: data.color,
-      category: data.category,
-      tags: data.tags || [],
-      importCount: data.import_count,
-      isActive: data.is_active,
-      cardCount: data.card_count || 0,
-      avgRating: data.avg_rating || 0,
-      ratingCount: data.rating_count || 0,
-      createdAt: new Date(data.created_at),
-      updatedAt: new Date(data.updated_at),
-    };
+    const record = await orNull(pb.collection('public_decks').getFirstListItem(
+      pb.filter('owner = {:uid} && source_deck = {:src}', { uid: userId, src: sourceDeckId }),
+    ));
+    return record ? toPublicDeck(record) : null;
   },
 
   async getPublicDeckCards(publicDeckId: string): Promise<PublicDeckCard[]> {
-    if (!isSupabaseConfigured()) return [];
-
-    const { data, error } = await supabase
-      .from('public_deck_cards')
-      .select('*')
-      .eq('public_deck_id', publicDeckId)
-      .order('created_at', { ascending: true });
-
-    if (error || !data) {
-      console.error('Error fetching public deck cards:', error);
-      return [];
-    }
-
-    return data.map((card) => ({
-      id: card.id,
-      publicDeckId: card.public_deck_id,
-      question: card.question,
-      answer: card.answer,
-      createdAt: new Date(card.created_at),
-    }));
+    const records = await pb.collection('public_deck_cards').getFullList({
+      filter: pb.filter('public_deck = {:id}', { id: publicDeckId }),
+      sort: 'position,created',
+    });
+    return records.map(toPublicCard);
   },
 
-  // ── Import/Subscribe Functions ──
+  // ── Subscribe / duplicate (สร้างในเครื่องผ่าน store แล้วซิงก์ผ่านคิว) ──
 
-  async subscribePublicDeck(
-    publicDeckId: string,
-    userId: string,
-    deckName: string,
-    deckColor: string
-  ): Promise<string | null> {
-    if (!isSupabaseConfigured()) return null;
+  async copyIntoLocalStore(publicDeckId: string, deckName: string, color: string, linked: boolean): Promise<string> {
+    const { useFlashcardStore } = await import('./store');
+    const cards = await this.getPublicDeckCards(publicDeckId);
+    const store = useFlashcardStore.getState();
+    const deck = await store.addDeck(deckName, color, linked ? { linkedPublicDeckId: publicDeckId } : undefined);
+    for (const card of cards) {
+      await store.addCard(deck.id, card.question, card.answer, card.questionImage, card.answerImage, {
+        skipAchievementCheck: true,
+        sourceCardId: linked ? card.id : undefined,
+      });
+    }
+    return deck.id;
+  },
 
+  async recordImport(publicDeckId: string, userId: string): Promise<void> {
     try {
-      // Check if already subscribed
-      const existing = await this.hasUserImportedDeck(publicDeckId, userId);
-      if (existing) return null;
-
-      // Create local deck using existing columns only
-      const { data: newDeck, error } = await supabase
-        .from('decks')
-        .insert({
-          user_id: userId,
-          name: deckName,
-          color: deckColor,
-        })
-        .select()
-        .single();
-
-      if (error || !newDeck) {
-        console.error('Error subscribing to deck:', error);
-        return null;
-      }
-
-      // Record subscription in deck_imports
-      await supabase
-        .from('deck_imports')
-        .insert({
-          public_deck_id: publicDeckId,
-          user_id: userId,
-          imported_deck_id: newDeck.id,
-        });
-
-      return newDeck.id;
-    } catch (error) {
-      console.error('Error in subscribePublicDeck:', error);
-      return null;
+      await pb.collection('deck_imports').create({ user: userId, public_deck: publicDeckId });
+    } catch (err) {
+      if (status(err) !== 400) throw err; // 400 = เคยนำเข้าแล้ว
     }
   },
 
-  async duplicatePublicDeck(
-    publicDeckId: string,
-    userId: string,
-    newDeckName: string
-  ): Promise<string | null> {
-    if (!isSupabaseConfigured()) return null;
-
-    try {
-      // Get public deck details
-      const publicDeck = await this.getPublicDeckById(publicDeckId);
-      if (!publicDeck) return null;
-
-      // Get all cards
-      const cards = await this.getPublicDeckCards(publicDeckId);
-
-      // Create new deck (not synced)
-      const { data: newDeck, error: deckError } = await supabase
-        .from('decks')
-        .insert({
-          user_id: userId,
-          name: newDeckName,
-          color: publicDeck.color,
-          is_synced: false,
-          linked_public_deck_id: null,
-        })
-        .select()
-        .single();
-
-      if (deckError || !newDeck) {
-        console.error('Error creating duplicate deck:', deckError);
-        return null;
-      }
-
-      // Copy all cards
-      const cardsToInsert = cards.map((card) => ({
-        deck_id: newDeck.id,
-        user_id: userId,
-        question: card.question,
-        answer: card.answer,
-      }));
-
-      const { error: cardsError } = await supabase
-        .from('cards')
-        .insert(cardsToInsert);
-
-      if (cardsError) {
-        console.error('Error copying cards:', cardsError);
-        // Rollback: delete deck
-        await supabase.from('decks').delete().eq('id', newDeck.id);
-        return null;
-      }
-
-      // Record import
-      await supabase
-        .from('deck_imports')
-        .insert({
-          public_deck_id: publicDeckId,
-          user_id: userId,
-          imported_deck_id: newDeck.id,
-        });
-
-      return newDeck.id;
-    } catch (error) {
-      console.error('Error in duplicatePublicDeck:', error);
-      return null;
-    }
+  async subscribePublicDeck(publicDeckId: string, userId: string, deckName: string, deckColor: string): Promise<string | null> {
+    if (await this.hasUserImportedDeck(publicDeckId, userId)) return null;
+    const localDeckId = await this.copyIntoLocalStore(publicDeckId, deckName, deckColor, true);
+    await this.recordImport(publicDeckId, userId);
+    return localDeckId;
   },
 
-  async getSyncedDeckCards(linkedPublicDeckId: string): Promise<PublicDeckCard[]> {
-    if (!isSupabaseConfigured()) return [];
-
-    // Read cards directly from public_deck_cards
-    return this.getPublicDeckCards(linkedPublicDeckId);
+  async duplicatePublicDeck(publicDeckId: string, userId: string, newDeckName: string): Promise<string | null> {
+    const publicDeck = await this.getPublicDeckById(publicDeckId);
+    if (!publicDeck) return null;
+    const localDeckId = await this.copyIntoLocalStore(publicDeckId, newDeckName, publicDeck.color, false);
+    await this.recordImport(publicDeckId, userId);
+    return localDeckId;
   },
 
   async unsubscribePublicDeck(localDeckId: string): Promise<boolean> {
-    if (!isSupabaseConfigured()) return false;
-
-    try {
-      // Delete the local deck (this will also delete review progress)
-      const { error } = await supabase
-        .from('decks')
-        .delete()
-        .eq('id', localDeckId);
-
-      if (error) {
-        console.error('Error unsubscribing deck:', error);
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error in unsubscribePublicDeck:', error);
-      return false;
-    }
-  },
-
-  // Legacy import function (deprecated - use subscribePublicDeck instead)
-  async importPublicDeck(
-    publicDeckId: string,
-    userId: string,
-    importedDeckId: string
-  ): Promise<boolean> {
-    if (!isSupabaseConfigured()) return false;
-
-    try {
-      const { error } = await supabase
-        .from('deck_imports')
-        .insert({
-          public_deck_id: publicDeckId,
-          user_id: userId,
-          imported_deck_id: importedDeckId,
-        });
-
-      if (error) {
-        console.error('Error recording import:', error);
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error importing deck:', error);
-      return false;
-    }
+    const { useFlashcardStore } = await import('./store');
+    await useFlashcardStore.getState().deleteDeck(localDeckId, true);
+    return true;
   },
 
   async hasUserImportedDeck(publicDeckId: string, userId: string): Promise<boolean> {
-    if (!isSupabaseConfigured()) return false;
-
-    const { data, error } = await supabase
-      .from('deck_imports')
-      .select('id')
-      .eq('public_deck_id', publicDeckId)
-      .eq('user_id', userId)
-      .limit(1);
-
-    if (error) {
-      console.error('Error checking import status:', error);
-      return false;
-    }
-
-    return (data?.length || 0) > 0;
+    const record = await orNull(pb.collection('deck_imports').getFirstListItem(
+      pb.filter('user = {:uid} && public_deck = {:id}', { uid: userId, id: publicDeckId }),
+    ));
+    return record !== null;
   },
 
   async getImportedDecks(userId: string): Promise<string[]> {
-    if (!isSupabaseConfigured()) return [];
-
-    const { data, error } = await supabase
-      .from('deck_imports')
-      .select('public_deck_id')
-      .eq('user_id', userId);
-
-    if (error || !data) {
-      console.error('Error fetching imported decks:', error);
-      return [];
-    }
-
-    return data.map((item) => item.public_deck_id);
+    const records = await pb.collection('deck_imports').getFullList({ filter: pb.filter('user = {:uid}', { uid: userId }) });
+    return records.map((r) => r.public_deck);
   },
 
-  // ── Explore/Discovery Functions ──
+  // ── Explore ──
 
   async getPublicDecks(
-    page: number = 1,
-    limit: number = 50,
-    sortBy: 'import_count' | 'rating' | 'newest' = 'import_count'
+    page = 1,
+    limit = 50,
+    sortBy: 'import_count' | 'rating' | 'newest' = 'import_count',
   ): Promise<{ decks: PublicDeck[]; total: number }> {
-    if (!isSupabaseConfigured()) return { decks: [], total: 0 };
-
-    const offset = (page - 1) * limit;
-
-    let query = supabase
-      .from('public_decks_with_stats')
-      .select('*', { count: 'exact' })
-      .eq('is_active', true);
-
-    // Apply sorting
-    if (sortBy === 'import_count') {
-      query = query.order('import_count', { ascending: false });
-    } else if (sortBy === 'rating') {
-      query = query.order('avg_rating', { ascending: false });
-    } else if (sortBy === 'newest') {
-      query = query.order('created_at', { ascending: false });
-    }
-
-    query = query.range(offset, offset + limit - 1);
-
-    const { data, error, count } = await query;
-
-    if (error || !data) {
-      console.error('Error fetching public decks:', error);
-      return { decks: [], total: 0 };
-    }
-
-    const decks = data.map((d) => ({
-      id: d.id,
-      creatorId: d.creator_id,
-      creatorUsername: d.creator_username || 'Unknown',
-      sourceDeckId: d.source_deck_id,
-      name: d.name,
-      description: d.description,
-      color: d.color,
-      category: d.category,
-      tags: d.tags || [],
-      importCount: d.import_count,
-      isActive: d.is_active,
-      cardCount: d.card_count || 0,
-      avgRating: d.avg_rating || 0,
-      ratingCount: d.rating_count || 0,
-      createdAt: new Date(d.created_at),
-      updatedAt: new Date(d.updated_at),
-    }));
-
-    return { decks, total: count || 0 };
+    const sort = { import_count: '-import_count', rating: '-rating_avg', newest: '-created' }[sortBy];
+    const result = await pb.collection('public_decks').getList(page, limit, { filter: 'hidden = false', sort });
+    return { decks: result.items.map(toPublicDeck), total: result.totalItems };
   },
 
   async searchPublicDecks(
     query: string,
     category?: DeckCategory,
     tags?: string[],
-    page: number = 1,
-    limit: number = 50
+    page = 1,
+    limit = 50,
   ): Promise<{ decks: PublicDeck[]; total: number }> {
-    if (!isSupabaseConfigured()) return { decks: [], total: 0 };
-
-    const offset = (page - 1) * limit;
-
-    let dbQuery = supabase
-      .from('public_decks_with_stats')
-      .select('*', { count: 'exact' })
-      .eq('is_active', true);
-
-    // Search by name or description
-    if (query) {
-      dbQuery = dbQuery.or(`name.ilike.%${query}%,description.ilike.%${query}%`);
+    const parts = ['hidden = false'];
+    const params: Record<string, string> = {};
+    if (query.trim()) {
+      parts.push('(name ~ {:q} || description ~ {:q})');
+      params.q = query.trim();
     }
-
-    // Filter by category
     if (category) {
-      dbQuery = dbQuery.eq('category', category);
+      parts.push('category = {:c}');
+      params.c = category;
     }
-
-    // Filter by tags
-    if (tags && tags.length > 0) {
-      dbQuery = dbQuery.contains('tags', tags);
-    }
-
-    dbQuery = dbQuery
-      .order('import_count', { ascending: false })
-      .range(offset, offset + limit - 1);
-
-    const { data, error, count } = await dbQuery;
-
-    if (error || !data) {
-      console.error('Error searching public decks:', error);
-      return { decks: [], total: 0 };
-    }
-
-    const decks = data.map((d) => ({
-      id: d.id,
-      creatorId: d.creator_id,
-      creatorUsername: d.creator_username || 'Unknown',
-      sourceDeckId: d.source_deck_id,
-      name: d.name,
-      description: d.description,
-      color: d.color,
-      category: d.category,
-      tags: d.tags || [],
-      importCount: d.import_count,
-      isActive: d.is_active,
-      cardCount: d.card_count || 0,
-      avgRating: d.avg_rating || 0,
-      ratingCount: d.rating_count || 0,
-      createdAt: new Date(d.created_at),
-      updatedAt: new Date(d.updated_at),
-    }));
-
-    return { decks, total: count || 0 };
+    (tags ?? []).forEach((tag, i) => {
+      parts.push(`tags ~ {:t${i}}`);
+      params[`t${i}`] = tag;
+    });
+    const result = await pb.collection('public_decks').getList(page, limit, {
+      filter: pb.filter(parts.join(' && '), params),
+      sort: '-import_count',
+    });
+    return { decks: result.items.map(toPublicDeck), total: result.totalItems };
   },
 
-  async getPublicDecksByCategory(
-    category: DeckCategory,
-    page: number = 1,
-    limit: number = 50
-  ): Promise<{ decks: PublicDeck[]; total: number }> {
+  async getPublicDecksByCategory(category: DeckCategory, page = 1, limit = 50) {
     return this.searchPublicDecks('', category, undefined, page, limit);
   },
 
-  // ── Rating Functions ──
+  // ── Rating ──
 
-  async ratePublicDeck(
-    publicDeckId: string,
-    userId: string,
-    rating: number
-  ): Promise<boolean> {
-    if (!isSupabaseConfigured()) return false;
-
-    const { error } = await supabase
-      .from('deck_ratings')
-      .upsert({
-        public_deck_id: publicDeckId,
-        user_id: userId,
-        rating,
-      });
-
-    if (error) {
-      console.error('Error rating deck:', error);
-      return false;
-    }
-
+  async ratePublicDeck(publicDeckId: string, userId: string, rating: number): Promise<boolean> {
+    const existing = await orNull(pb.collection('deck_ratings').getFirstListItem(
+      pb.filter('user = {:uid} && public_deck = {:id}', { uid: userId, id: publicDeckId }),
+    ));
+    if (existing) await pb.collection('deck_ratings').update(existing.id, { stars: rating });
+    else await pb.collection('deck_ratings').create({ user: userId, public_deck: publicDeckId, stars: rating });
     return true;
   },
 
   async getUserRating(publicDeckId: string, userId: string): Promise<number | null> {
-    if (!isSupabaseConfigured()) return null;
-
-    const { data, error } = await supabase
-      .from('deck_ratings')
-      .select('rating')
-      .eq('public_deck_id', publicDeckId)
-      .eq('user_id', userId)
-      .single();
-
-    if (error || !data) {
-      return null;
-    }
-
-    return data.rating;
+    const record = await orNull(pb.collection('deck_ratings').getFirstListItem(
+      pb.filter('user = {:uid} && public_deck = {:id}', { uid: userId, id: publicDeckId }),
+    ));
+    return record ? record.stars : null;
   },
 
   async getAverageRating(publicDeckId: string): Promise<{ avg: number; count: number }> {
-    if (!isSupabaseConfigured()) return { avg: 0, count: 0 };
-
-    const { data, error } = await supabase
-      .from('deck_ratings')
-      .select('rating')
-      .eq('public_deck_id', publicDeckId);
-
-    if (error || !data || data.length === 0) {
-      return { avg: 0, count: 0 };
-    }
-
-    const sum = data.reduce((acc, item) => acc + item.rating, 0);
-    const avg = Math.round((sum / data.length) * 10) / 10; // Round to 1 decimal
-
-    return { avg, count: data.length };
+    const deck = await this.getPublicDeckById(publicDeckId);
+    return { avg: deck?.avgRating ?? 0, count: deck?.ratingCount ?? 0 };
   },
 
-  // ── Moderation Functions ──
+  // ── Moderation ──
 
-  async reportPublicDeck(
-    publicDeckId: string,
-    userId: string,
-    reason: 'spam' | 'inappropriate' | 'copyright' | 'other',
-    details?: string
-  ): Promise<boolean> {
-    if (!isSupabaseConfigured()) return false;
-
+  async reportPublicDeck(publicDeckId: string, userId: string, reason: ReportReason, details?: string): Promise<boolean> {
     try {
-      // Insert report to database
-      const { error } = await supabase
-        .from('deck_reports')
-        .insert({
-          public_deck_id: publicDeckId,
-          reporter_id: userId,
-          reason,
-          details: details || null,
-        });
-
-      if (error) {
-        console.error('Error reporting deck:', error);
-        return false;
-      }
-
-      // Send Discord notification
-      // A database webhook invokes the Edge Function; no secret is exposed here.
-
-      return true;
-    } catch (error) {
-      console.error('Error in reportPublicDeck:', error);
-      return false;
-    }
-  },
-
-  async sendDiscordNotification(
-    publicDeckId: string,
-    reporterId: string,
-    reason: string,
-    details?: string
-  ): Promise<void> {
-    try {
-      // Get deck details
-      const deck = await this.getPublicDeckById(publicDeckId);
-      if (!deck) return;
-
-      // Get reporter username
-      const { data: reporter } = await supabase
-        .from('profiles')
-        .select('username')
-        .eq('id', reporterId)
-        .single();
-
-      // Get report count
-      const reportCount = await this.getReportCount(publicDeckId);
-
-      // Prepare Discord message
-      const reasonMap: Record<string, string> = {
-        spam: '🚫 สแปม',
-        inappropriate: '⚠️ เนื้อหาไม่เหมาะสม',
-        copyright: '©️ ละเมิดลิขสิทธิ์',
-        other: '❓ อื่นๆ',
-      };
-
-      const isAutoHidden = deck.isActive === false && reportCount >= 5;
-      const statusEmoji = isAutoHidden ? '🔒' : reportCount >= 3 ? '⚠️' : '📝';
-
-      const embed = {
-        title: `${statusEmoji} รายงานชุดการ์ด${isAutoHidden ? ' (ถูกซ่อนอัตโนมัติ)' : ''}`,
-        color: isAutoHidden ? 0xff0000 : reportCount >= 3 ? 0xffa500 : 0x5865f2,
-        fields: [
-          {
-            name: '📚 ชุดการ์ด',
-            value: `**${deck.name}**`,
-            inline: false,
-          },
-          {
-            name: '👤 เจ้าของชุด',
-            value: deck.creatorUsername,
-            inline: true,
-          },
-          {
-            name: '🚨 ผู้รายงาน',
-            value: reporter?.username || 'Unknown',
-            inline: true,
-          },
-          {
-            name: '📊 จำนวนรายงาน',
-            value: `**${reportCount}** ครั้ง`,
-            inline: true,
-          },
-          {
-            name: '⚠️ เหตุผล',
-            value: reasonMap[reason] || reason,
-            inline: false,
-          },
-        ],
-        timestamp: new Date().toISOString(),
-        footer: {
-          text: 'MemoKard - Daily Memory',
-        },
-      };
-
-      // Add details if provided
-      if (details && details.trim()) {
-        embed.fields.push({
-          name: '📝 รายละเอียด',
-          value: details.substring(0, 1024),
-          inline: false,
-        });
-      }
-
-      // Add deck link
-      const deckUrl = `${window.location.origin}/deck/${deck.id}`;
-      embed.fields.push({
-        name: '🔗 ลิงก์',
-        value: deckUrl,
-        inline: false,
+      await pb.collection('deck_reports').create({
+        user: userId,
+        public_deck: publicDeckId,
+        reason,
+        detail: (details ?? '').slice(0, 500),
       });
-
-      // Add status message
-      if (isAutoHidden) {
-        embed.fields.push({
-          name: '🔒 สถานะ',
-          value: '**ชุดการ์ดถูกซ่อนอัตโนมัติ** (รายงาน ≥ 5 ครั้ง)',
-          inline: false,
-        });
-      } else if (reportCount >= 3) {
-        embed.fields.push({
-          name: '⚠️ คำเตือน',
-          value: `อีก **${5 - reportCount}** รายงานจะถูกซ่อนอัตโนมัติ`,
-          inline: false,
-        });
-      }
-
-      // Keep the formatter available for a future authenticated Edge Function
-      // invocation, but never send a webhook credential from the browser.
-      void embed;
-      return;
-    } catch (error) {
-      // Don't fail the report if Discord notification fails
-      console.error('Error sending Discord notification:', error);
+    } catch (err) {
+      if (status(err) !== 400 || !(await this.getUserReportStatus(publicDeckId, userId))) throw err;
     }
+    return true;
   },
 
   async getUserReportStatus(publicDeckId: string, userId: string): Promise<boolean> {
-    if (!isSupabaseConfigured()) return false;
-
-    const { data, error } = await supabase
-      .from('deck_reports')
-      .select('id')
-      .eq('public_deck_id', publicDeckId)
-      .eq('reporter_id', userId)
-      .limit(1);
-
-    if (error) {
-      console.error('Error checking report status:', error);
-      return false;
-    }
-
-    return (data?.length || 0) > 0;
-  },
-
-  async getReportCount(publicDeckId: string): Promise<number> {
-    if (!isSupabaseConfigured()) return 0;
-
-    const { error, count } = await supabase
-      .from('deck_reports')
-      .select('id', { count: 'exact', head: true })
-      .eq('public_deck_id', publicDeckId);
-
-    if (error) {
-      console.error('Error getting report count:', error);
-      return 0;
-    }
-
-    return count || 0;
+    const record = await orNull(pb.collection('deck_reports').getFirstListItem(
+      pb.filter('user = {:uid} && public_deck = {:id}', { uid: userId, id: publicDeckId }),
+    ));
+    return record !== null;
   },
 };
-

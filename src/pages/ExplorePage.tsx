@@ -17,12 +17,15 @@ export default function ExplorePage({ onOpenDeck }: ExplorePageProps) {
   const [sortBy, setSortBy] = useState<'import_count' | 'rating' | 'newest'>('import_count');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const limit = 50;
 
   useEffect(() => {
     const loadDecks = async () => {
       setLoading(true);
+      setLoadError(false);
       try {
         let result;
         if (searchQuery || selectedCategory !== 'all') {
@@ -40,13 +43,14 @@ export default function ExplorePage({ onOpenDeck }: ExplorePageProps) {
         setTotal(result.total);
       } catch (error) {
         console.error('Error loading decks:', error);
+        setLoadError(true);
       } finally {
         setLoading(false);
       }
     };
 
     loadDecks();
-  }, [page, sortBy, selectedCategory, searchQuery]);
+  }, [page, sortBy, selectedCategory, searchQuery, reloadKey]);
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
@@ -163,6 +167,12 @@ export default function ExplorePage({ onOpenDeck }: ExplorePageProps) {
               }`}
             />
           ))}
+        </div>
+      ) : loadError ? (
+        <div role="alert" className={`p-8 rounded-3xl text-center ${isDark ? 'bg-slate-800 text-slate-300' : 'bg-white text-slate-600'}`}>
+          <p className="font-bold">ติดต่อเซิร์ฟเวอร์ไม่ได้</p>
+          <p className="text-sm mt-1">ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่อีกครั้ง</p>
+          <button onClick={() => setReloadKey((k) => k + 1)} className="mt-4 px-5 py-2 rounded-xl bg-violet-500 text-white font-bold">ลองใหม่</button>
         </div>
       ) : decks.length === 0 ? (
         <div

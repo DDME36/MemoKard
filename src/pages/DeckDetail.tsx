@@ -88,8 +88,11 @@ export default function DeckDetail({ deck: initialDeck, onStartReview, onShowAdd
 
     try {
       const cardsData = cards.map((c) => ({
+        id: c.id,
         question: c.question,
         answer: c.answer,
+        questionImage: c.questionImage,
+        answerImage: c.answerImage,
       }));
 
       const result = await communityStore.shareDeckToCommunity(
@@ -134,8 +137,11 @@ export default function DeckDetail({ deck: initialDeck, onStartReview, onShowAdd
 
     try {
       const cardsData = cards.map((c) => ({
+        id: c.id,
         question: c.question,
         answer: c.answer,
+        questionImage: c.questionImage,
+        answerImage: c.answerImage,
       }));
 
       await communityStore.updatePublicDeckCards(publicDeck.id, cardsData);
