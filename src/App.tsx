@@ -217,6 +217,12 @@ function AppContent() {
   };
 
   const isAdmin = user?.role === 'admin';
+  const [openReports, setOpenReports] = useState(0);
+  useEffect(() => {
+    if (!isAdmin) return;
+    void import('./store/adminStore').then(({ adminStore }) =>
+      adminStore.countOpenReports().then(setOpenReports).catch(() => setOpenReports(0)));
+  }, [isAdmin, view]);
 
   // deckColor = สีของ deck ที่กำลัง review (ถ้ามี)
   const liveActiveDeck = activeDeck ? decks.find(d => d.id === activeDeck.id) || activeDeck : null;
@@ -350,7 +356,8 @@ function AppContent() {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={goAdmin}
-                    className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg transition-colors ${
+                    aria-label={openReports > 0 ? `ผู้ดูแลระบบ (รายงานค้าง ${openReports})` : 'ผู้ดูแลระบบ'}
+                    className={`relative w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg transition-colors ${
                       isDark
                         ? 'text-rose-400 hover:bg-slate-800'
                         : 'text-rose-600 hover:bg-rose-50'
@@ -360,6 +367,11 @@ function AppContent() {
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                     </svg>
+                    {openReports > 0 && (
+                      <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
+                        {openReports > 99 ? '99+' : openReports}
+                      </span>
+                    )}
                   </motion.button>
                 )}
 

@@ -1,30 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../contexts/ThemeContext';
-import { supabase } from '../lib/supabase';
+import { adminStore, type ReportedDeck } from '../store/adminStore';
+import AdminPasswordReset from '../components/AdminPasswordReset';
 import { useToast } from '../contexts/ToastContext';
-
-interface ReportedDeck {
-  id: string;
-  name: string;
-  creator_username: string;
-  creator_id: string;
-  category: string;
-  import_count: number;
-  is_active: boolean;
-  is_hidden: boolean;
-  report_count: number;
-  created_at: string;
-  reports: Report[];
-}
-
-interface Report {
-  id: string;
-  reporter_username: string;
-  reason: string;
-  details: string | null;
-  created_at: string;
-}
 
 const REASON_LABEL: Record<string, string> = {
   spam: 'สแปม',
@@ -46,87 +25,14 @@ export default function AdminPage() {
   const loadReportedDecks = useCallback(async () => {
     setLoading(true);
     try {
-      // Get all decks that have at least 1 report
-      const { data: reportData, error } = await supabase
-        .from('deck_reports')
-        .select(`
-          id,
-          reason,
-          details,
-          created_at,
-          public_deck_id,
-          reporter_id
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error || !reportData) {
-        console.error('Error loading reports:', error);
-        setLoading(false);
-        return;
-      }
-
-      // Get unique deck IDs
-      const deckIds = [...new Set(reportData.map((r) => r.public_deck_id))];
-
-      if (deckIds.length === 0) {
-        setDecks([]);
-        setLoading(false);
-        return;
-      }
-
-      // Get deck details
-      const { data: deckData } = await supabase
-        .from('public_decks_with_stats')
-        .select('*')
-        .in('id', deckIds);
-
-      // Get reporter usernames
-      const reporterIds = [...new Set(reportData.map((r) => r.reporter_id))];
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('id, username')
-        .in('id', reporterIds);
-
-      const profileMap = Object.fromEntries(
-        (profileData || []).map((p) => [p.id, p.username])
-      );
-
-      // Combine data
-      const combined: ReportedDeck[] = (deckData || []).map((deck) => {
-        const deckReports = reportData
-          .filter((r) => r.public_deck_id === deck.id)
-          .map((r) => ({
-            id: r.id,
-            reporter_username: profileMap[r.reporter_id] || 'Unknown',
-            reason: r.reason,
-            details: r.details,
-            created_at: r.created_at,
-          }));
-
-        return {
-          id: deck.id,
-          name: deck.name,
-          creator_username: deck.creator_username || 'Unknown',
-          creator_id: deck.creator_id,
-          category: deck.category,
-          import_count: deck.import_count || 0,
-          is_active: deck.is_active,
-          is_hidden: !deck.is_active,
-          report_count: deckReports.length,
-          created_at: deck.created_at,
-          reports: deckReports,
-        };
-      });
-
-      // Sort by report count descending
-      combined.sort((a, b) => b.report_count - a.report_count);
-      setDecks(combined);
+      setDecks(await adminStore.loadReportedDecks());
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error loading reports:', error);
+      showToast('โหลดรายงานไม่สำเร็จ', 'error');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     Promise.resolve().then(() => {
@@ -137,12 +43,7 @@ export default function AdminPage() {
   const handleHide = async (deckId: string) => {
     setActionLoading(deckId);
     try {
-      const { error } = await supabase
-        .from('public_decks')
-        .update({ is_active: false })
-        .eq('id', deckId);
-
-      if (error) throw error;
+      await adminStore.setHidden(deckId, true);
 
       setDecks((prev) =>
         prev.map((d) => (d.id === deckId ? { ...d, is_active: false, is_hidden: true } : d))
@@ -158,12 +59,7 @@ export default function AdminPage() {
   const handleRestore = async (deckId: string) => {
     setActionLoading(deckId);
     try {
-      const { error } = await supabase
-        .from('public_decks')
-        .update({ is_active: true })
-        .eq('id', deckId);
-
-      if (error) throw error;
+      await adminStore.setHidden(deckId, false);
 
       setDecks((prev) =>
         prev.map((d) => (d.id === deckId ? { ...d, is_active: true, is_hidden: false } : d))
@@ -181,16 +77,7 @@ export default function AdminPage() {
 
     setActionLoading(deckId);
     try {
-      const { error } = await supabase
-        .from('public_decks')
-        .delete()
-        .eq('id', deckId);
-
-      if (error) {
-        console.error('Delete error:', error);
-        showToast(`ลบไม่ได้: ${error.message}`, 'error');
-        return;
-      }
+      await adminStore.deletePublicDeck(deckId);
 
       setDecks((prev) => prev.filter((d) => d.id !== deckId));
       showToast('ลบชุดการ์ดแล้ว', 'success');
@@ -205,12 +92,7 @@ export default function AdminPage() {
   const handleDismissReports = async (deckId: string) => {
     setActionLoading(deckId + '_dismiss');
     try {
-      const { error } = await supabase
-        .from('deck_reports')
-        .delete()
-        .eq('public_deck_id', deckId);
-
-      if (error) throw error;
+      await adminStore.dismissReports(deckId);
 
       setDecks((prev) => prev.filter((d) => d.id !== deckId));
       showToast('ยกเลิกรายงานทั้งหมดแล้ว', 'success');
@@ -228,7 +110,8 @@ export default function AdminPage() {
   });
 
   const formatDate = (dateStr: string) =>
-    new Date(dateStr).toLocaleDateString('th-TH', {
+    // PocketBase ส่งวันที่แบบ 'YYYY-MM-DD HH:mm:ss.sssZ' ซึ่ง Safari parse ไม่ได้ถ้าไม่เปลี่ยนช่องว่างเป็น T
+    new Date(dateStr.replace(' ', 'T')).toLocaleDateString('th-TH', {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
@@ -495,6 +378,7 @@ export default function AdminPage() {
           </AnimatePresence>
         </div>
       )}
+      <AdminPasswordReset />
     </motion.div>
   );
 }
