@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { isSupabaseConfigured } from '../lib/supabase';
+import { isPocketBaseConfigured } from '../lib/pocketbase';
 import HandwritingLogo from '../components/HandwritingLogo';
 import { translateAuthError } from '../utils/errorMapper';
 
@@ -35,7 +35,7 @@ export default function AuthPage() {
   
   const { signIn, signUp, setDemoMode, checkUsernameAvailable, backendStatus, retryBackend } = useAuth();
   const { isDark } = useTheme();
-  const supabaseConfigured = isSupabaseConfigured();
+  const backendConfigured = isPocketBaseConfigured();
 
   // คำนวณสีตามวันในสัปดาห์ (เวลาไทย UTC+7)
   const dayColor = useMemo(() => {
@@ -200,11 +200,11 @@ export default function AuthPage() {
               : `bg-white/80 shadow-2xl ${dayColor.from.replace('from-', 'border-').replace('-400', '-100/50')}`
           }`}
         >
-          {supabaseConfigured && backendStatus === 'unavailable' && (
+          {backendConfigured && backendStatus === 'unavailable' && (
             <div className={`mb-6 rounded-2xl border p-4 ${isDark ? 'border-amber-800/50 bg-amber-950/30' : 'border-amber-200 bg-amber-50'}`}>
-              <p className={`text-sm font-bold ${isDark ? 'text-amber-300' : 'text-amber-900'}`}>ระบบคลาวด์ไม่พร้อมใช้งาน</p>
+              <p className={`text-sm font-bold ${isDark ? 'text-amber-300' : 'text-amber-900'}`}>เซิร์ฟเวอร์คลาวด์ไม่พร้อมใช้งาน</p>
               <p className={`mt-1 text-xs leading-relaxed ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>
-                Supabase อาจถูกพักหรือติดต่อไม่ได้ คุณยังใช้ MemoKard แบบเก็บข้อมูลในเครื่องได้ตามปกติ
+                เซิร์ฟเวอร์ PocketBase อาจยังไม่เปิดหรือติดต่อไม่ได้ คุณยังใช้ MemoKard ทบทวนการ์ดแบบออฟไลน์ในเครื่องได้ตามปกติ
               </p>
               <button type="button" onClick={() => void retryBackend()}
                 className={`mt-3 rounded-xl px-3 py-2 text-xs font-bold ${isDark ? 'bg-amber-900/50 text-amber-200' : 'bg-amber-100 text-amber-900'}`}>
@@ -213,9 +213,9 @@ export default function AuthPage() {
             </div>
           )}
 
-          {supabaseConfigured && backendStatus === 'checking' && (
+          {backendConfigured && backendStatus === 'checking' && (
             <div className={`mb-6 flex items-center gap-2 rounded-2xl border px-4 py-3 text-xs font-medium ${isDark ? 'border-slate-700 bg-slate-800/60 text-slate-300' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>
-              <span className="h-2 w-2 animate-pulse rounded-full bg-sky-500" /> กำลังตรวจสอบระบบคลาวด์…
+              <span className="h-2 w-2 animate-pulse rounded-full bg-sky-500" /> กำลังตรวจสอบเซิร์ฟเวอร์…
             </div>
           )}
 
@@ -235,11 +235,11 @@ export default function AuthPage() {
           </div>
 
           <AnimatePresence mode="wait">
-            {!supabaseConfigured ? (
+            {!backendConfigured ? (
               <motion.div key="no-config" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center py-4">
                 <div className={`border rounded-2xl p-4 mb-4 ${isDark ? 'bg-amber-900/20 border-amber-800/40' : 'bg-amber-50 border-amber-200'}`}>
-                  <p className={`text-sm font-medium ${isDark ? 'text-amber-400' : 'text-amber-800'}`}>ยังไม่ได้ตั้งค่า Supabase</p>
-                  <p className={`text-xs mt-1 ${isDark ? 'text-amber-500' : 'text-amber-600'}`}>กรุณาตั้งค่า VITE_SUPABASE_URL และ VITE_SUPABASE_ANON_KEY</p>
+                  <p className={`text-sm font-medium ${isDark ? 'text-amber-400' : 'text-amber-800'}`}>ยังไม่ได้ตั้งค่า Backend URL</p>
+                  <p className={`text-xs mt-1 ${isDark ? 'text-amber-500' : 'text-amber-600'}`}>กรุณาตั้งค่า VITE_POCKETBASE_URL ในไฟล์ .env หรือใช้งานแบบออฟไลน์</p>
                 </div>
               </motion.div>
             ) : (

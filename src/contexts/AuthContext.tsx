@@ -1,20 +1,33 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { User, Session, AuthError } from '@supabase/supabase-js';
-import { checkSupabaseHealth, supabase, isSupabaseConfigured } from '../lib/supabase';
-import type { BackendStatus } from '../lib/supabase';
+import { checkPocketBaseHealth, pb, isPocketBaseConfigured } from '../lib/pocketbase';
+import type { BackendStatus } from '../lib/pocketbase';
 import { useFlashcardStore } from '../store/store';
 import { safeLocalStorage } from '../utils/safeStorage';
 
+export interface AuthUser {
+  id: string;
+  email: string;
+  username: string;
+  user_metadata?: {
+    username?: string;
+  };
+}
+
+export interface AuthSession {
+  token: string;
+  user: AuthUser;
+}
+
 interface AuthContextType {
-  user: User | null;
-  session: Session | null;
+  user: AuthUser | null;
+  session: AuthSession | null;
   loading: boolean;
   // username + email + password
-  signUp: (username: string, email: string, password: string) => Promise<{ error: AuthError | { message: string } | null }>;
-  // login ด้วย username หรือ email ก็ได้
-  signIn: (usernameOrEmail: string, password: string) => Promise<{ error: AuthError | { message: string } | null }>;
-  signInWithGoogle: () => Promise<{ error: AuthError | null }>;
+  signUp: (username: string, email: string, password: string) => Promise<{ error: { message: string } | null }>;
+  // login ด้วย username หรือ email
+  signIn: (usernameOrEmail: string, password: string) => Promise<{ error: { message: string } | null }>;
+  signInWithGoogle: () => Promise<{ error: { message: string } | null }>;
   signOut: () => Promise<void>;
   isDemo: boolean;
   setDemoMode: (demo: boolean) => void;
@@ -25,26 +38,47 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function mapRecordToAuthUser(record: Record<string, unknown> | null): AuthUser | null {
+  if (!record || !record.id) return null;
+  const username = (record.username as string) || `user_${(record.id as string).slice(0, 6)}`;
+  return {
+    id: record.id as string,
+    email: (record.email as string) || '',
+    username,
+    user_metadata: {
+      username,
+    },
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    return pb.authStore.record ? mapRecordToAuthUser(pb.authStore.record as Record<string, unknown>) : null;
+  });
+  const [session, setSession] = useState<AuthSession | null>(() => {
+    if (pb.authStore.isValid && pb.authStore.record) {
+      const u = mapRecordToAuthUser(pb.authStore.record as Record<string, unknown>);
+      return u ? { token: pb.authStore.token, user: u } : null;
+    }
+    return null;
+  });
   const [loading, setLoading] = useState(true);
   const [isDemo, setIsDemo] = useState(() => {
     const stored = safeLocalStorage.get('demo-mode');
     return stored !== 'false';
   });
   const [backendStatus, setBackendStatus] = useState<BackendStatus>(() =>
-    isSupabaseConfigured() ? 'checking' : 'unconfigured'
+    isPocketBaseConfigured() ? 'checking' : 'unconfigured'
   );
 
   const retryBackend = useCallback(async () => {
-    if (!isSupabaseConfigured()) {
+    if (!isPocketBaseConfigured()) {
       setBackendStatus('unconfigured');
       return false;
     }
 
     setBackendStatus('checking');
-    const available = await checkSupabaseHealth();
+    const available = await checkPocketBaseHealth();
     setBackendStatus(available ? 'available' : 'unavailable');
     return available;
   }, []);
@@ -53,78 +87,100 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void Promise.resolve().then(retryBackend);
   }, [retryBackend]);
 
+  // Sync auth state with PocketBase authStore
   useEffect(() => {
-    if (!isSupabaseConfigured() || isDemo) {
+    if (!isPocketBaseConfigured() || isDemo) {
       Promise.resolve().then(() => setLoading(false));
       return;
     }
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    }).catch((err) => {
-      console.error('Failed to get session from Supabase:', err);
-      setLoading(false);
+    const initAuth = async () => {
+      try {
+        if (pb.authStore.isValid) {
+          // Verify or refresh token if still valid
+          try {
+            await pb.collection('users').authRefresh();
+          } catch {
+            pb.authStore.clear();
+          }
+        }
+        const currentUser = mapRecordToAuthUser(pb.authStore.record as Record<string, unknown> | null);
+        setUser(currentUser);
+        setSession(currentUser ? { token: pb.authStore.token, user: currentUser } : null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void initAuth();
+
+    // Listen to PocketBase auth changes
+    const unsubscribe = pb.authStore.onChange((token, model) => {
+      const u = mapRecordToAuthUser(model as Record<string, unknown> | null);
+      setUser(u);
+      setSession(u ? { token, user: u } : null);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
+    return () => {
+      unsubscribe();
+    };
   }, [isDemo]);
 
   const signUp = async (username: string, email: string, password: string) => {
-    // สมัครด้วย email + password + username ใน metadata
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { username },
-      },
-    });
+    try {
+      // 1. สร้างบัญชีในคอลเลกชัน users ของ PocketBase
+      await pb.collection('users').create({
+        username: username.trim(),
+        email: email.trim(),
+        password,
+        passwordConfirm: password,
+      });
 
-    if (!error) {
-      // สร้าง profile แยก (fallback กรณี trigger ไม่ทำงาน)
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from('profiles').upsert({ id: user.id, username });
-      }
+      // 2. ล็อกอินอัตโนมัติทันที
+      await pb.collection('users').authWithPassword(username.trim(), password);
+
+      return { error: null };
+    } catch (err: unknown) {
+      const errorObj = err as { message?: string; data?: { message?: string } };
+      return {
+        error: {
+          message: errorObj.data?.message || errorObj.message || 'เกิดข้อผิดพลาดในการลงทะเบียน',
+        },
+      };
     }
-
-    return { error };
   };
 
   const signIn = async (usernameOrEmail: string, password: string) => {
-    let email = usernameOrEmail.trim();
-
-    // ถ้าไม่มี @ = username → lookup email
-    if (!email.includes('@')) {
-      const { data, error: lookupError } = await supabase
-        .rpc('get_email_by_username', { p_username: email });
-
-      if (lookupError || !data) {
-        return { error: { message: 'ไม่พบชื่อผู้ใช้นี้' } };
-      }
-      email = data;
+    try {
+      // PocketBase authWithPassword รองรับทั้ง username และ email ในฟิลด์เดียวกันได้ทันที
+      await pb.collection('users').authWithPassword(usernameOrEmail.trim(), password);
+      return { error: null };
+    } catch (err: unknown) {
+      const errorObj = err as { message?: string; data?: { message?: string } };
+      return {
+        error: {
+          message: errorObj.data?.message || errorObj.message || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง',
+        },
+      };
     }
-
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error };
   };
 
   const signInWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin },
-    });
-    return { error };
+    try {
+      await pb.collection('users').authWithOAuth2({ provider: 'google' });
+      return { error: null };
+    } catch (err: unknown) {
+      const errorObj = err as { message?: string };
+      return {
+        error: {
+          message: errorObj.message || 'ไม่สามารถเข้าสู่ระบบด้วย Google ได้',
+        },
+      };
+    }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    pb.authStore.clear();
     setUser(null);
     setSession(null);
     useFlashcardStore.getState().clearStore();
@@ -136,17 +192,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const checkUsernameAvailable = async (username: string) => {
-    if (!username.trim() || !isSupabaseConfigured() || isDemo) return true;
-    
-    // Check if username exists via RPC
-    const { data } = await supabase
-      .rpc('get_email_by_username', { p_username: username.trim() });
-      
-    // If it returns an email (or any truthy data), the username is TAKEN.
-    if (data) {
+    if (!username.trim() || !isPocketBaseConfigured() || isDemo) return true;
+
+    try {
+      await pb.collection('users').getFirstListItem(`username = "${username.trim()}"`);
+      // ถ้าพบ record แปลว่าชื่อซ้ำ
       return false;
+    } catch {
+      // ไม่พบ แปลว่าชื่อว่าง ใช้ได้
+      return true;
     }
-    return true;
   };
 
   return (
@@ -161,6 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) throw new Error('useAuth must be used within an AuthProvider');

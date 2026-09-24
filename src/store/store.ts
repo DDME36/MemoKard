@@ -159,7 +159,7 @@ export interface FlashcardActions {
   setAuthState: (userId: string | null, isDemo: boolean) => void;
   syncFromSupabase: () => Promise<void>;
   clearStore: () => void;
-  importFullBackupData: (backupData: any) => void;
+  importFullBackupData: (backupData: Record<string, unknown> | null | undefined) => void;
 
   // Deck actions
   addDeck: (name: string, color: string) => Promise<Deck>;
@@ -424,28 +424,31 @@ export const useFlashcardStore = create<FlashcardStore>()(
         });
       },
 
-      importFullBackupData: (backupData: any) => {
+      importFullBackupData: (backupData: Record<string, unknown> | null | undefined) => {
         if (!backupData) return;
-        const validDecks = (Array.isArray(backupData.decks) ? backupData.decks : []).map((d: any) => ({
+        const rawDecks = Array.isArray(backupData.decks) ? (backupData.decks as Record<string, unknown>[]) : [];
+        const validDecks = rawDecks.map((d) => ({
           ...d,
           createdAt: asValidDate(d.createdAt),
-        }));
-        const validCards = (Array.isArray(backupData.cards) ? backupData.cards : []).map((c: any) => ({
+        })) as Deck[];
+
+        const rawCards = Array.isArray(backupData.cards) ? (backupData.cards as Record<string, unknown>[]) : [];
+        const validCards = rawCards.map((c) => ({
           ...c,
           createdAt: asValidDate(c.createdAt),
           nextReviewDate: asValidDate(c.nextReviewDate),
           lastReviewDate: asValidDate(c.lastReviewDate),
           fsrsState: sanitizeFSRSState(c.fsrsState),
-        }));
+        })) as Flashcard[];
 
         set((state) => ({
           decks: validDecks,
           cards: validCards,
           streak: asFiniteNumber(backupData.streak, state.streak),
           lastStudyDate: typeof backupData.lastStudyDate === 'string' ? backupData.lastStudyDate : state.lastStudyDate,
-          reviewHistory: typeof backupData.reviewHistory === 'object' && backupData.reviewHistory !== null ? backupData.reviewHistory : state.reviewHistory,
+          reviewHistory: typeof backupData.reviewHistory === 'object' && backupData.reviewHistory !== null ? (backupData.reviewHistory as Record<string, number>) : state.reviewHistory,
           userProgress: sanitizeProgress(backupData.userProgress, state.userProgress),
-          unlockedAchievements: Array.isArray(backupData.unlockedAchievements) ? backupData.unlockedAchievements : state.unlockedAchievements,
+          unlockedAchievements: Array.isArray(backupData.unlockedAchievements) ? (backupData.unlockedAchievements as string[]) : state.unlockedAchievements,
         }));
       },
 

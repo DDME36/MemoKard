@@ -22,6 +22,7 @@ import { Zap } from 'lucide-react';
 import { getThaiDayColor, DECK_COLOR_MAP } from './utils/thaiDayColors';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 import { safeSessionStorage } from './utils/safeStorage';
+import SyncStatusBadge from './components/SyncStatusBadge';
 
 // Lazy loaded page components to optimize bundle size
 const AuthPage = lazyWithRetry(() => import('./pages/AuthPage'), 'auth');
@@ -38,8 +39,15 @@ type View = 'home' | 'deck' | 'review' | 'explore' | 'public-deck' | 'admin' | '
 
 function AppContent() {
   const { user, loading, isDemo, signOut, setDemoMode } = useAuth();
-  const store = useFlashcardStore();
+  
+  // Zustand Individual Selectors (following zustand-store-ts best practice to avoid re-renders)
+  const decks = useFlashcardStore((state) => state.decks);
+  const deleteDeck = useFlashcardStore((state) => state.deleteDeck);
+  const undoDeleteDeck = useFlashcardStore((state) => state.undoDeleteDeck);
+  const popAchievement = useFlashcardStore((state) => state.popAchievement);
+  const getDeckById = useFlashcardStore((state) => state.getDeckById);
   const setAuthState = useFlashcardStore((state) => state.setAuthState);
+
   const { isDark, toggleTheme } = useTheme();
   const { showUndoToast } = useToast();
   const dayColor = getThaiDayColor();
@@ -75,21 +83,19 @@ function AppContent() {
   useEffect(() => {
     const interval = setInterval(() => {
       if (!currentAchievement) {
-        const achievement = store.popAchievement();
+        const achievement = popAchievement();
         if (achievement) {
           setCurrentAchievement(achievement);
         }
       }
     }, 500);
     return () => clearInterval(interval);
-  }, [currentAchievement, store]);
+  }, [currentAchievement, popAchievement]);
 
   useEffect(() => {
     const userId = user?.id || null;
     setAuthState(userId, isDemo);
   }, [user?.id, isDemo, setAuthState]);
-
-  const { deleteDeck, undoDeleteDeck } = store;
 
   const handleDeleteDeck = async (deck: Deck) => {
     await deleteDeck(deck.id); // Soft delete
@@ -100,31 +106,102 @@ function AppContent() {
   const [isCramMode, setIsCramMode] = useState(false);
   const [skipModeSelector, setSkipModeSelector] = useState(false);
 
-  const openDeck = (deck: Deck) => { setActiveDeck(deck); setView('deck'); };
+  // Hash-based Browser Routing: รองรับปุ่ม Back/Forward และจำหน้าเดิมเมื่อรีเฟรช
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace(/^#\/?/, '');
+      if (!hash || hash === 'home') {
+        setView('home');
+        setActiveDeck(null);
+        setActivePublicDeckId(null);
+      } else if (hash.startsWith('deck/')) {
+        const deckId = hash.replace('deck/', '');
+        const target = decks.find((d) => d.id === deckId);
+        if (target) {
+          setActiveDeck(target);
+          setView('deck');
+        }
+      } else if (hash === 'explore') {
+        setView('explore');
+        setActiveDeck(null);
+      } else if (hash === 'achievements') {
+        setView('achievements');
+        setActiveDeck(null);
+      } else if (hash === 'statistics') {
+        setView('statistics');
+        setActiveDeck(null);
+      } else if (hash === 'admin') {
+        setView('admin');
+        setActiveDeck(null);
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    if (window.location.hash) {
+      handleHashChange();
+    }
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [decks]);
+
+  const openDeck = (deck: Deck) => { 
+    setActiveDeck(deck); 
+    setView('deck'); 
+    window.location.hash = `deck/${deck.id}`;
+  };
   const startReview = (deck?: Deck, cramMode?: boolean, skipMode?: boolean) => { 
     setActiveDeck(deck ?? null); 
     setIsCramMode(cramMode ?? false);
     setSkipModeSelector(skipMode ?? false);
     setView('review'); 
+    window.location.hash = 'review';
   };
   const goHome = () => { 
     setView('home'); 
     setActiveDeck(null); 
     setActivePublicDeckId(null);
-    setSkipModeSelector(false); // Reset skip mode selector
+    setSkipModeSelector(false);
+    window.location.hash = '';
   };
-  const goExplore = () => { setView('explore'); setActiveDeck(null); setActivePublicDeckId(null); };
-  const goAdmin = () => { setView('admin'); setActiveDeck(null); setActivePublicDeckId(null); };
-  const goAchievements = () => { setView('achievements'); setActiveDeck(null); setActivePublicDeckId(null); };
-  const goStatistics = () => { setView('statistics'); setActiveDeck(null); setActivePublicDeckId(null); };
-  const openPublicDeck = (publicDeckId: string) => { setActivePublicDeckId(publicDeckId); setView('public-deck'); };
-  const closePublicDeck = () => { setView('explore'); setActivePublicDeckId(null); };
+  const goExplore = () => { 
+    setView('explore'); 
+    setActiveDeck(null); 
+    setActivePublicDeckId(null); 
+    window.location.hash = 'explore';
+  };
+  const goAdmin = () => { 
+    setView('admin'); 
+    setActiveDeck(null); 
+    setActivePublicDeckId(null); 
+    window.location.hash = 'admin';
+  };
+  const goAchievements = () => { 
+    setView('achievements'); 
+    setActiveDeck(null); 
+    setActivePublicDeckId(null); 
+    window.location.hash = 'achievements';
+  };
+  const goStatistics = () => { 
+    setView('statistics'); 
+    setActiveDeck(null); 
+    setActivePublicDeckId(null); 
+    window.location.hash = 'statistics';
+  };
+  const openPublicDeck = (publicDeckId: string) => { 
+    setActivePublicDeckId(publicDeckId); 
+    setView('public-deck'); 
+    window.location.hash = `public-deck/${publicDeckId}`;
+  };
+  const closePublicDeck = () => { 
+    setView('explore'); 
+    setActivePublicDeckId(null); 
+    window.location.hash = 'explore';
+  };
 
   const ADMIN_USER_ID = import.meta.env.VITE_ADMIN_USER_ID;
   const isAdmin = user?.id === ADMIN_USER_ID && !!ADMIN_USER_ID;
 
   // deckColor = สีของ deck ที่กำลัง review (ถ้ามี)
-  const liveActiveDeck = activeDeck ? store.decks.find(d => d.id === activeDeck.id) || activeDeck : null;
+  const liveActiveDeck = activeDeck ? decks.find(d => d.id === activeDeck.id) || activeDeck : null;
   const deckColor = liveActiveDeck 
     ? (DECK_COLOR_MAP[liveActiveDeck.color] ?? getDeckColorStyles(liveActiveDeck.color))
     : undefined;
@@ -304,6 +381,9 @@ function AppContent() {
                     </svg>
                   </button>
                 )}
+
+                {/* Cloud & Local Sync Status Badge */}
+                <SyncStatusBadge />
               </div>
 
               {/* New Deck Button - Hide text on mobile */}
@@ -470,7 +550,7 @@ function AppContent() {
                     publicDeckId={activePublicDeckId}
                     onClose={closePublicDeck}
                     onImported={(deckId) => {
-                      const deck = store.getDeckById(deckId);
+                      const deck = getDeckById(deckId);
                       if (deck) {
                         closePublicDeck();
                         openDeck(deck);
@@ -520,7 +600,7 @@ function AppContent() {
 
       {/* ── Modals ── */}
       <AnimatePresence>
-        {showAddDeck && <AddDeck onClose={() => setShowAddDeck(false)} onCreated={(id) => { const d = store.getDeckById(id); if (d) openDeck(d); }} dayColor={dayColor} />}
+        {showAddDeck && <AddDeck onClose={() => setShowAddDeck(false)} onCreated={(id) => { const d = getDeckById(id); if (d) openDeck(d); }} dayColor={dayColor} />}
         {showAddCard && activeDeck && <AddCard deckId={activeDeck.id} onClose={() => setShowAddCard(false)} />}
         {editingCard && <EditCard card={editingCard} onClose={() => setEditingCard(null)} />}
       </AnimatePresence>

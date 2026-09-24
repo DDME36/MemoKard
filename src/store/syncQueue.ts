@@ -106,7 +106,7 @@ export class SyncQueueManager {
     if (this.isSyncing || !navigator.onLine) return;
     
     const { useFlashcardStore } = await import('./store');
-    const { supabaseStore } = await import('./supabaseStore');
+    const { pocketbaseStore } = await import('./pocketbaseStore');
     const store = useFlashcardStore.getState();
     const userId = store.userId;
     if (!userId || store.isDemo) return;
@@ -121,33 +121,34 @@ export class SyncQueueManager {
       try {
         switch (action.type) {
           case 'CREATE_DECK':
-            await supabaseStore.createDeck(userId, action.payload.name || '', action.payload.color || 'violet', action.payload.id);
+            await pocketbaseStore.createDeck(userId, action.payload.name || '', action.payload.color || 'violet', action.payload.id);
             break;
           case 'UPDATE_DECK':
             if (action.payload.id) {
-              await supabaseStore.updateDeck(action.payload.id, { name: action.payload.name, color: action.payload.color });
+              await pocketbaseStore.updateDeck(action.payload.id, { name: action.payload.name, color: action.payload.color });
             }
             break;
           case 'DELETE_DECK':
             if (action.payload.id) {
-              await supabaseStore.deleteDeck(action.payload.id);
+              await pocketbaseStore.deleteDeck(action.payload.id);
             }
             break;
           case 'CREATE_CARD':
             if (action.payload.deckId) {
-              await supabaseStore.createCard(
+              await pocketbaseStore.createCard(
                 userId, 
                 action.payload.deckId, 
                 action.payload.question || '', 
                 action.payload.answer || '', 
                 { interval: 0, repetition: 0, easeFactor: 2.5 },
-                action.payload.id
+                action.payload.id,
+                action.payload.fsrsState
               );
             }
             break;
           case 'UPDATE_CARD':
             if (action.payload.id) {
-              await supabaseStore.updateCard(action.payload.id, {
+              await pocketbaseStore.updateCard(action.payload.id, {
                 question: action.payload.question,
                 answer: action.payload.answer
               });
@@ -155,12 +156,12 @@ export class SyncQueueManager {
             break;
           case 'DELETE_CARD':
             if (action.payload.id) {
-              await supabaseStore.deleteCard(action.payload.id);
+              await pocketbaseStore.deleteCard(action.payload.id);
             }
             break;
           case 'REVIEW_CARD':
             if (action.payload.id) {
-              await supabaseStore.updateCard(action.payload.id, {
+              await pocketbaseStore.updateCard(action.payload.id, {
                 interval: action.payload.interval,
                 repetition: action.payload.repetition,
                 easeFactor: action.payload.easeFactor,

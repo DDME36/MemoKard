@@ -3,7 +3,8 @@
  * Allows users to share flashcard decks as JSON files
  */
 
-import type { Deck, FlashcardStore } from '../store/store';
+import type { Deck, Flashcard, FlashcardStore } from '../store/store';
+import type { UserProgress } from './achievements';
 
 export interface ExportedDeck {
   version: string;
@@ -23,13 +24,14 @@ export interface FullBackupData {
   type: 'memokard_full_backup';
   version: string;
   exportedAt: string;
-  decks: any[];
-  cards: any[];
+  decks: Deck[];
+  cards: Flashcard[];
   streak: number;
   lastStudyDate: string | null;
   reviewHistory: Record<string, number>;
-  userProgress: any;
+  userProgress: UserProgress | null;
   unlockedAchievements: string[];
+  [key: string]: unknown;
 }
 
 /**
