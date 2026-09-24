@@ -6,7 +6,8 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // pb_data/.pocketbase = ข้อมูลและไฟล์ที่ PocketBase สร้างเองบนเครื่อง dev
+  globalIgnores(['dist', 'dev-dist', 'pb_data', '.pocketbase', '.superpowers']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
