@@ -97,6 +97,25 @@ function AppContent() {
     setAuthState(userId, isDemo);
   }, [user?.id, isDemo, setAuthState]);
 
+  // ข้อมูลโหมดทดลองที่รอถามว่าจะนำขึ้นบัญชีไหม
+  const pendingAdoption = useFlashcardStore((state) => state.pendingAdoption);
+  const adoptLocalData = useFlashcardStore((state) => state.adoptLocalData);
+  const declineAdoption = useFlashcardStore((state) => state.declineAdoption);
+
+  // ดึงข้อมูลจากเซิร์ฟเวอร์อัตโนมัติ (กลับมาออนไลน์ / สลับกลับมาที่แท็บ / ทุก 5 นาที)
+  useEffect(() => {
+    if (!user || isDemo) return;
+    let stop: (() => void) | undefined;
+    let cancelled = false;
+    void import('./store/syncEngine').then(({ startAutoPull }) => {
+      if (!cancelled) stop = startAutoPull();
+    });
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, [user, isDemo]);
+
   const handleDeleteDeck = async (deck: Deck) => {
     await deleteDeck(deck.id); // Soft delete
     goHome();
@@ -197,8 +216,7 @@ function AppContent() {
     window.location.hash = 'explore';
   };
 
-  const ADMIN_USER_ID = import.meta.env.VITE_ADMIN_USER_ID;
-  const isAdmin = user?.id === ADMIN_USER_ID && !!ADMIN_USER_ID;
+  const isAdmin = user?.role === 'admin';
 
   // deckColor = สีของ deck ที่กำลัง review (ถ้ามี)
   const liveActiveDeck = activeDeck ? decks.find(d => d.id === activeDeck.id) || activeDeck : null;
@@ -612,6 +630,15 @@ function AppContent() {
         confirmText="ออกจากระบบ" cancelText="ยกเลิก" type="warning"
         onConfirm={() => { setDemoMode(false); window.location.reload(); }}
         onCancel={() => setShowLogoutConfirm(false)}
+      />
+
+      <ConfirmModal
+        isOpen={pendingAdoption}
+        title="นำข้อมูลในเครื่องขึ้นบัญชีไหม?"
+        message="เครื่องนี้มีชุดการ์ดที่ทำไว้ตอนยังไม่ได้เข้าสู่ระบบ ต้องการเก็บไว้ในบัญชีนี้ด้วยไหม? ถ้าเลือกไม่ ข้อมูลในเครื่องจะถูกแทนด้วยข้อมูลของบัญชี"
+        confirmText="นำขึ้นบัญชี" cancelText="ไม่ ใช้ข้อมูลบัญชี" type="info"
+        onConfirm={() => void adoptLocalData()}
+        onCancel={() => void declineAdoption()}
       />
 
       {/* ── Footer — outside AnimatePresence, always instant ── */}

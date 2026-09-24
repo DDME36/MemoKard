@@ -110,13 +110,12 @@ describe('processQueue', () => {
   });
 
   it('does not lose an enqueue that happens while sending', async () => {
-    let q: ReturnType<typeof createSyncQueue>;
     const { deps } = memoryDeps({
       send: async (a) => {
         if (a.entityId === 'd1') await q.enqueue('UPSERT_CARD', 'c9', 'u1');
       },
     });
-    q = createSyncQueue(deps);
+    const q = createSyncQueue(deps);
     await q.enqueue('UPSERT_DECK', 'd1', 'u1');
     await q.processQueue();
     await q.processQueue();
@@ -124,7 +123,6 @@ describe('processQueue', () => {
   });
 
   it('resends when the same entity changes while it is being sent', async () => {
-    let q: ReturnType<typeof createSyncQueue>;
     let calls = 0;
     const { deps } = memoryDeps({
       send: async () => {
@@ -132,7 +130,7 @@ describe('processQueue', () => {
         if (calls === 1) await q.enqueue('UPSERT_CARD', 'c1', 'u1'); // แก้การ์ดระหว่างกำลังส่ง
       },
     });
-    q = createSyncQueue(deps);
+    const q = createSyncQueue(deps);
     await q.enqueue('UPSERT_CARD', 'c1', 'u1');
     await q.processQueue();
     expect(calls).toBe(2);

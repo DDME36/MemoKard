@@ -23,8 +23,7 @@ export default function AuthPage() {
   const [username, setUsername] = useState('');
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
   
-  const [email, setEmail] = useState('');
-  const [emailValid, setEmailValid] = useState<boolean | null>(null);
+  const [loginName, setLoginName] = useState('');
   
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -50,7 +49,7 @@ export default function AuthPage() {
     if (mode !== 'register') return;
     
     // Format check first
-    if (username.trim().length < 3 || !/^[a-zA-Z0-9_]+$/.test(username.trim())) {
+    if (username.trim().length < 3 || !/^[A-Za-z0-9_.]+$/.test(username.trim())) {
       Promise.resolve().then(() => setUsernameStatus('idle'));
       return;
     }
@@ -64,40 +63,20 @@ export default function AuthPage() {
     return () => clearTimeout(timer);
   }, [username, mode, checkUsernameAvailable]);
 
-  // Real-time Email Validation
-  useEffect(() => {
-    if (mode !== 'register') return;
-    if (!email) {
-      Promise.resolve().then(() => setEmailValid(null));
-      return;
-    }
-    const timer = setTimeout(() => {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      setEmailValid(emailRegex.test(email));
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [email, mode]);
-
   // Password strength calculation (0 to 4)
   const getPasswordStrength = () => {
     if (!password) return 0;
     let strength = 0;
-    if (password.length >= 6) strength += 1;
     if (password.length >= 8) strength += 1;
+    if (password.length >= 12) strength += 1;
     if (/[A-Z]/.test(password) || /[0-9]/.test(password)) strength += 1;
     if (/[^A-Za-z0-9]/.test(password)) strength += 1;
     return strength;
   };
 
   const isFormValid = () => {
-    if (mode === 'login') return email.trim().length > 0 && password.length > 0;
-    
-    return (
-      usernameStatus === 'available' &&
-      emailValid === true &&
-      password.length >= 6 &&
-      password === confirmPassword
-    );
+    if (mode === 'login') return loginName.trim().length > 0 && password.length > 0;
+    return usernameStatus === 'available' && password.length >= 8 && password === confirmPassword;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -110,14 +89,14 @@ export default function AuthPage() {
 
     try {
       if (mode === 'register') {
-        const { error } = await signUp(username.trim(), email.trim(), password);
+        const { error } = await signUp(username.trim(), password);
         if (error) {
           setError(translateAuthError(error.message));
         } else {
           setError('สมัครสมาชิกสำเร็จ! กำลังเข้าสู่ระบบ...');
         }
       } else {
-        const { error } = await signIn(email.trim(), password);
+        const { error } = await signIn(loginName.trim(), password);
         if (error) setError(translateAuthError(error.message));
       }
     } catch (err) {
@@ -252,7 +231,7 @@ export default function AuthPage() {
                       <div className={`absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                       </div>
-                      <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="ตั้งชื่อผู้ใช้ (Username)" className={inputClasses} required disabled={loading} minLength={3} maxLength={20} />
+                      <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} aria-label="ตั้งชื่อผู้ใช้" placeholder="ตั้งชื่อผู้ใช้ (Username)" className={inputClasses} required disabled={loading} minLength={3} maxLength={30} />
                       
                       {/* Validation Status Icon */}
                       <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
@@ -263,29 +242,21 @@ export default function AuthPage() {
                     </div>
                     {mode === 'register' && (
                       <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className={`text-[11px] mt-2 font-medium px-1 ${usernameStatus === 'taken' ? 'text-rose-500' : isDark ? 'text-slate-500' : 'text-slate-500'}`}>
-                        {usernameStatus === 'taken' ? 'ชื่อผู้ใช้นี้มีคนใช้งานแล้ว โปรดลองชื่ออื่น' : 'ใช้ a-z, 0-9 หรือ _ เท่านั้น (3-20 ตัวอักษร)'}
+                        {usernameStatus === 'taken' ? 'ชื่อผู้ใช้นี้มีคนใช้งานแล้ว โปรดลองชื่ออื่น' : 'ใช้ a-z, 0-9, จุด หรือ _ เท่านั้น (3-30 ตัวอักษร)'}
                       </motion.p>
                     )}
                   </div>
                 )}
 
-                {/* Email / Login Identifier */}
-                <div>
+                {/* Login identifier (username) — แสดงเฉพาะตอนเข้าสู่ระบบ */}
+                {mode === 'login' && (
                   <div className="relative">
                     <div className={`absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                     </div>
-                    <input type={mode === 'register' ? 'email' : 'text'} value={email} onChange={(e) => setEmail(e.target.value)} placeholder={mode === 'register' ? 'อีเมลแอดเดรส' : 'ชื่อผู้ใช้ หรือ อีเมล'} className={inputClasses} required disabled={loading} />
-                    
-                    {/* Validation Status Icon */}
-                    {mode === 'register' && email.length > 0 && (
-                      <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
-                        {emailValid === true && <svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                        {emailValid === false && <svg className="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>}
-                      </div>
-                    )}
+                    <input type="text" name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} aria-label="ชื่อผู้ใช้" value={loginName} onChange={(e) => setLoginName(e.target.value)} placeholder="ชื่อผู้ใช้" className={inputClasses} required disabled={loading} />
                   </div>
-                </div>
+                )}
 
                 {/* Password */}
                 <div>
@@ -293,7 +264,7 @@ export default function AuthPage() {
                     <div className={`absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
                     </div>
-                    <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={mode === 'register' ? 'รหัสผ่าน (อย่างน้อย 6 ตัว)' : 'รหัสผ่าน'} className={inputClasses} required disabled={loading} minLength={6} />
+                    <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={mode === 'register' ? 'รหัสผ่าน (อย่างน้อย 8 ตัว)' : 'รหัสผ่าน'} className={inputClasses} required disabled={loading} minLength={mode === 'register' ? 8 : undefined} />
                   </div>
                   
                   {/* Password Strength Meter */}

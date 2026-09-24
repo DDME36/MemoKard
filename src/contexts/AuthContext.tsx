@@ -9,6 +9,7 @@ export interface AuthUser {
   id: string;
   email: string;
   username: string;
+  role: 'user' | 'admin';
   user_metadata?: {
     username?: string;
   };
@@ -23,11 +24,8 @@ interface AuthContextType {
   user: AuthUser | null;
   session: AuthSession | null;
   loading: boolean;
-  // username + email + password
-  signUp: (username: string, email: string, password: string) => Promise<{ error: { message: string } | null }>;
-  // login ด้วย username หรือ email
-  signIn: (usernameOrEmail: string, password: string) => Promise<{ error: { message: string } | null }>;
-  signInWithGoogle: () => Promise<{ error: { message: string } | null }>;
+  signUp: (username: string, password: string) => Promise<{ error: { message: string } | null }>;
+  signIn: (username: string, password: string) => Promise<{ error: { message: string } | null }>;
   signOut: () => Promise<void>;
   isDemo: boolean;
   setDemoMode: (demo: boolean) => void;
@@ -45,6 +43,7 @@ function mapRecordToAuthUser(record: Record<string, unknown> | null): AuthUser |
     id: record.id as string,
     email: (record.email as string) || '',
     username,
+    role: record.role === 'admin' ? 'admin' : 'user',
     user_metadata: {
       username,
     },
@@ -126,17 +125,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [isDemo]);
 
-  const signUp = async (username: string, email: string, password: string) => {
+  const signUp = async (username: string, password: string) => {
     try {
-      // 1. สร้างบัญชีในคอลเลกชัน users ของ PocketBase
       await pb.collection('users').create({
         username: username.trim(),
-        email: email.trim(),
         password,
         passwordConfirm: password,
       });
-
-      // 2. ล็อกอินอัตโนมัติทันที
       await pb.collection('users').authWithPassword(username.trim(), password);
 
       return { error: null };
@@ -150,30 +145,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signIn = async (usernameOrEmail: string, password: string) => {
+  const signIn = async (username: string, password: string) => {
     try {
-      // PocketBase authWithPassword รองรับทั้ง username และ email ในฟิลด์เดียวกันได้ทันที
-      await pb.collection('users').authWithPassword(usernameOrEmail.trim(), password);
+      await pb.collection('users').authWithPassword(username.trim(), password);
       return { error: null };
     } catch (err: unknown) {
       const errorObj = err as { message?: string; data?: { message?: string } };
       return {
         error: {
           message: errorObj.data?.message || errorObj.message || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง',
-        },
-      };
-    }
-  };
-
-  const signInWithGoogle = async () => {
-    try {
-      await pb.collection('users').authWithOAuth2({ provider: 'google' });
-      return { error: null };
-    } catch (err: unknown) {
-      const errorObj = err as { message?: string };
-      return {
-        error: {
-          message: errorObj.message || 'ไม่สามารถเข้าสู่ระบบด้วย Google ได้',
         },
       };
     }
@@ -195,19 +175,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!username.trim() || !isPocketBaseConfigured() || isDemo) return true;
 
     try {
-      await pb.collection('users').getFirstListItem(`username = "${username.trim()}"`);
-      // ถ้าพบ record แปลว่าชื่อซ้ำ
-      return false;
+      const res = await pb.send<{ available: boolean }>('/api/memokard/username-available', {
+        query: { u: username.trim() },
+      });
+      return res.available;
     } catch {
-      // ไม่พบ แปลว่าชื่อว่าง ใช้ได้
-      return true;
+      return true; // ติดต่อเซิร์ฟเวอร์ไม่ได้ ให้ผู้ใช้ลองสมัครแล้วดู error จริงแทน
     }
   };
 
   return (
     <AuthContext.Provider value={{
       user, session, loading,
-      signUp, signIn, signInWithGoogle, signOut,
+      signUp, signIn, signOut,
       isDemo, setDemoMode, checkUsernameAvailable,
       backendStatus, retryBackend,
     }}>
