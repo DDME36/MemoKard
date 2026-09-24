@@ -416,7 +416,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
         Object.entries(reviewHistory).forEach(([day, count]) => {
           for (let i = 0; i < count; i++) {
             const id = newId();
-            queueSync(state, 'LOG_REVIEW', id, { id, cardId: '', rating: 3, reviewedAt: keyToDate(day).toISOString(), device: deviceId });
+            queueSync(state, 'LOG_REVIEW', id, { id, cardId: '', rating: 3, reviewedAt: keyToDate(day).toISOString(), device: deviceId, mode: 'import' });
           }
         });
         queueSync(state, 'UPSERT_PROGRESS', userId);
@@ -709,6 +709,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
           rating: quality,
           reviewedAt: new Date().toISOString(),
           device: state.deviceId,
+          mode: isCramMode ? 'cram' : 'normal',
         });
 
         await get().updateStreak();

@@ -42,7 +42,7 @@ describe('coalesce', () => {
   });
 
   it('never drops review logs', () => {
-    const log = { id: 'l', cardId: 'c1', rating: 3, reviewedAt: '', device: 'd' };
+    const log = { id: 'l', cardId: 'c1', rating: 3, reviewedAt: '', device: 'd', mode: 'normal' as const };
     let q = coalesce([], action('LOG_REVIEW', 'l1', { log }));
     q = coalesce(q, action('LOG_REVIEW', 'l2', { log }));
     expect(q).toHaveLength(2);

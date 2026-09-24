@@ -20,6 +20,8 @@ export interface ReviewLogPayload {
   rating: number;
   reviewedAt: string;
   device: string;
+  /** normal = นับตาม FSRS, cram = ติวเร่ง/สอบ, import = log แทนประวัติเก่า */
+  mode: 'normal' | 'cram' | 'import';
 }
 
 export interface SyncAction {

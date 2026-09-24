@@ -140,6 +140,7 @@ export const pocketbaseStore = {
         rating: log.rating,
         reviewed_at: log.reviewedAt,
         device: log.device,
+        mode: log.mode,
       });
     } catch (err) {
       if (status(err) !== 400) throw err;

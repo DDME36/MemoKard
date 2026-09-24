@@ -44,7 +44,19 @@ describe('store → queue', () => {
     await useFlashcardStore.getState().reviewCard(cardId, 3);
     await flush();
     const logCall = enqueue.mock.calls.find((c) => c[0] === 'LOG_REVIEW')!;
-    expect(logCall[3]).toMatchObject({ cardId, rating: 3, device: useFlashcardStore.getState().deviceId });
+    expect(logCall[3]).toMatchObject({ cardId, rating: 3, device: useFlashcardStore.getState().deviceId, mode: 'normal' });
+  });
+
+  it('marks cram reviews so they never train the scheduler', async () => {
+    useFlashcardStore.getState().resetForAccount('user1');
+    useFlashcardStore.getState().setAuthState('user1', false);
+    const deck = await useFlashcardStore.getState().addDeck('D', 'violet');
+    const cardId = await useFlashcardStore.getState().addCard(deck.id, 'q', 'a');
+    enqueue.mockClear();
+    await useFlashcardStore.getState().reviewCard(cardId, 4, true);
+    await flush();
+    const logCall = enqueue.mock.calls.find((c) => c[0] === 'LOG_REVIEW')!;
+    expect(logCall[3]).toMatchObject({ mode: 'cram' });
   });
 });
 

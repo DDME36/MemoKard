@@ -76,11 +76,18 @@ describe('pocketbaseStore', () => {
   });
 
   it('accepts the same review log twice (lost response retry)', async () => {
-    const log = { id: newId(), cardId: newId(), rating: 3, reviewedAt: new Date().toISOString(), device: 'dev1' };
+    const log = { id: newId(), cardId: newId(), rating: 3, reviewedAt: new Date().toISOString(), device: 'dev1', mode: 'normal' as const };
     await pocketbaseStore.createReviewLog(userId, log);
     await expect(pocketbaseStore.createReviewLog(userId, log)).resolves.toBeUndefined();
     const changes = await pocketbaseStore.fetchChanges(userId, null);
     expect(changes.logs.filter((l) => l.id === log.id)).toHaveLength(1);
+  });
+
+  it('stores the review mode so cram sessions can be excluded from optimisation', async () => {
+    const log = { id: newId(), cardId: newId(), rating: 4, reviewedAt: new Date().toISOString(), device: 'dev1', mode: 'cram' as const };
+    await pocketbaseStore.createReviewLog(userId, log);
+    const record = await user.collection('review_logs').getOne(log.id);
+    expect(record.mode).toBe('cram');
   });
 
   it('upserts progress keyed by user id', async () => {
