@@ -6,6 +6,11 @@ import { checkAchievements, type UserProgress } from '../utils/achievements';
 import type { Achievement } from '../components/AchievementToast';
 import type { Deck, Flashcard } from './types';
 import { safeLocalStorage } from '../utils/safeStorage';
+import { newId } from '../lib/ids';
+import { addReviewCounts, mergeById, mergeProgress } from './merge';
+import { migrateLegacyIds } from './legacyMigration';
+import type { ServerChanges } from './pocketbaseStore';
+import { syncQueue, type ReviewLogPayload, type SyncActionType } from './syncQueue';
 export { DECK_COLORS, type Deck, type Flashcard, type DeckColor } from './types';
 
 const idbStorage: StateStorage = {
@@ -135,6 +140,14 @@ export interface FlashcardState {
   userId: string | null;
   isDemo: boolean;
 
+  // เจ้าของข้อมูลในเครื่อง (null = โหมดทดลอง), เคอร์เซอร์ pull และ ID เครื่องนี้
+  ownerId: string | null;
+  lastPulledAt: string | null;
+  deviceId: string;
+  pendingAdoption: boolean;
+  // log ที่อยู่พอดีขอบเคอร์เซอร์ pull ครั้งก่อน (กันนับซ้ำ)
+  pullBoundaryLogIds: string[];
+
   // Achievement tracking
   userProgress: UserProgress;
   unlockedAchievements: string[];
@@ -157,18 +170,25 @@ export interface FlashcardState {
 export interface FlashcardActions {
   recalibrateFSRS: () => Promise<void>;
   setAuthState: (userId: string | null, isDemo: boolean) => void;
-  syncFromSupabase: () => Promise<void>;
+  syncFromServer: () => Promise<void>;
+  applyServerChanges: (changes: ServerChanges, pendingIds: ReadonlySet<string>) => void;
+  resetForAccount: (userId: string) => void;
+  adoptLocalData: () => Promise<void>;
+  declineAdoption: () => Promise<void>;
   clearStore: () => void;
   importFullBackupData: (backupData: Record<string, unknown> | null | undefined) => void;
 
   // Deck actions
-  addDeck: (name: string, color: string) => Promise<Deck>;
+  addDeck: (name: string, color: string, opts?: { linkedPublicDeckId?: string }) => Promise<Deck>;
   editDeck: (id: string, name: string, color: string) => Promise<void>;
   deleteDeck: (id: string, immediate?: boolean) => Promise<void>;
   undoDeleteDeck: (id: string) => void;
 
   // Card actions
-  addCard: (deckId: string, question: string, answer: string, questionImage?: string, answerImage?: string, skipAchievementCheck?: boolean) => Promise<void>;
+  addCard: (
+    deckId: string, question: string, answer: string, questionImage?: string, answerImage?: string,
+    opts?: { skipAchievementCheck?: boolean; sourceCardId?: string },
+  ) => Promise<string>;
   editCard: (id: string, question: string, answer: string, questionImage?: string, answerImage?: string) => Promise<void>;
   deleteCard: (id: string, immediate?: boolean) => Promise<void>;
   undoDeleteCard: (id: string) => void;
@@ -283,6 +303,12 @@ const mergePersistedState = (persistedState: unknown, currentState: FlashcardSto
       : currentState.fsrsWeights,
     userId: typeof raw.userId === 'string' ? raw.userId : null,
     isDemo: typeof raw.isDemo === 'boolean' ? raw.isDemo : true,
+    ownerId: typeof raw.ownerId === 'string' ? raw.ownerId : null,
+    lastPulledAt: typeof raw.lastPulledAt === 'string' ? raw.lastPulledAt : null,
+    deviceId: typeof raw.deviceId === 'string' ? raw.deviceId : currentState.deviceId,
+    pullBoundaryLogIds: Array.isArray(raw.pullBoundaryLogIds)
+      ? raw.pullBoundaryLogIds.filter((id): id is string => typeof id === 'string')
+      : [],
     userProgress: sanitizeProgress(raw.userProgress, currentState.userProgress),
     unlockedAchievements: Array.isArray(raw.unlockedAchievements)
       ? raw.unlockedAchievements.filter((id): id is string => typeof id === 'string')
@@ -296,6 +322,19 @@ const mergePersistedState = (persistedState: unknown, currentState: FlashcardSto
       : sanitizeProgress(raw.previousProgress, currentState.userProgress),
   };
 };
+
+/** ส่งเข้าคิวเฉพาะเมื่อข้อมูลในเครื่องเป็นของผู้ใช้ที่ล็อกอินอยู่ */
+function queueSync(
+  state: Pick<FlashcardState, 'userId' | 'isDemo' | 'ownerId'>,
+  type: SyncActionType,
+  entityId: string,
+  log?: ReviewLogPayload,
+): void {
+  const { userId, isDemo, ownerId } = state;
+  if (isDemo || !userId || ownerId !== userId) return;
+  // import แบบ static เพื่อให้ลำดับ enqueue ตรงกับลำดับการกระทำเสมอ (ชุดก่อนการ์ด)
+  void syncQueue.enqueue(type, entityId, userId, log);
+}
 
 export const useFlashcardStore = create<FlashcardStore>()(
   subscribeWithSelector(
@@ -312,6 +351,11 @@ export const useFlashcardStore = create<FlashcardStore>()(
       ],
       userId: null,
       isDemo: true,
+      ownerId: null,
+      lastPulledAt: null,
+      deviceId: newId(),
+      pendingAdoption: false,
+      pullBoundaryLogIds: [],
       userProgress: {
         cardsCreated: 0,
         decksCreated: 0,
@@ -335,65 +379,88 @@ export const useFlashcardStore = create<FlashcardStore>()(
       // ── Auth State Management ──
       setAuthState: (userId, isDemo) => {
         set({ userId, isDemo });
-        if (userId && !isDemo) {
-          get().syncFromSupabase();
+        if (!userId || isDemo) return;
+        const { ownerId, decks, cards } = get();
+        if (ownerId === userId) {
+          void get().syncFromServer();
+          return;
         }
+        if (ownerId === null && (decks.length > 0 || cards.length > 0)) {
+          set({ pendingAdoption: true });
+          return;
+        }
+        get().resetForAccount(userId);
+        void get().syncFromServer();
       },
 
-      syncFromSupabase: async () => {
-        const { userId, isDemo } = get();
-        if (isDemo || !userId) return;
-
-        // Lazy import to break circular dependency
-        const { supabaseStore } = await import('./supabaseStore');
-
+      syncFromServer: async () => {
+        const { userId, isDemo, ownerId } = get();
+        if (isDemo || !userId || ownerId !== userId) return;
         try {
-          const [decks, cards, stats, achievements, reviewDates] = await Promise.all([
-            supabaseStore.fetchDecks(userId),
-            supabaseStore.fetchCards(userId),
-            supabaseStore.fetchUserStats(userId),
-            supabaseStore.fetchUserAchievements(userId),
-            supabaseStore.fetchReviewDates(userId),
-          ]);
-
-          // Reconstruct reviewHistory from actual review logs
-          const reconstructedHistory: Record<string, number> = {};
-          (reviewDates || []).forEach((dateStr) => {
-            reconstructedHistory[dateStr] = (reconstructedHistory[dateStr] || 0) + 1;
-          });
-
-          // Compute dynamic streak metrics to guarantee resilience
-          const { currentStreak: dynStreak, maxStreak: dynMaxStreak } = calculateDynamicStreak(reconstructedHistory);
-
-          // Ensure every card has fsrsState (migrate old cards that don't have it)
-          const migratedCards = cards.map((c) => ({
-            ...c,
-            fsrsState: (c as Partial<Flashcard>).fsrsState ?? createInitialFSRSState(),
-          }));
-
-          set({
-            decks,
-            cards: migratedCards,
-            reviewHistory: reconstructedHistory,
-            streak: dynStreak,
-            lastStudyDate: stats.lastStudyDate,
-            maxStreak: dynMaxStreak,
-            unlockedAchievements: achievements.unlockedAchievements,
-            perfectReviewStreak: achievements.perfectReviews,
-            totalStudyTime: achievements.totalStudyTime,
-            userProgress: {
-              ...get().userProgress,
-              perfectReviews: achievements.perfectReviews,
-              totalStudyTime: achievements.totalStudyTime,
-              decksShared: achievements.decksShared,
-              decksImported: achievements.decksImported,
-              currentStreak: dynStreak,
-              maxStreak: dynMaxStreak,
-            },
-          });
+          const { pullChanges } = await import('./syncEngine');
+          await pullChanges();
         } catch (error) {
-          console.error('Error syncing from Supabase:', error);
+          console.warn('[store] pull failed, keeping local data:', error);
         }
+        void syncQueue.processQueue();
+      },
+
+      applyServerChanges: (changes, pendingIds) => {
+        set((state) => {
+          const decks = mergeById(state.decks, changes.decks, pendingIds);
+          const deckIds = new Set(decks.map((d) => d.id));
+          const cards = mergeById(state.cards, changes.cards, pendingIds).filter((c) => deckIds.has(c.deckId));
+          const seen = new Set(state.pullBoundaryLogIds);
+          const reviewHistory = addReviewCounts(
+            state.reviewHistory, changes.logs.filter((l) => !seen.has(l.id)), state.deviceId);
+          const merged = changes.progress
+            ? mergeProgress({ counters: state.userProgress, unlockedAchievements: state.unlockedAchievements }, changes.progress)
+            : { counters: state.userProgress, unlockedAchievements: state.unlockedAchievements };
+          const { currentStreak, maxStreak } = calculateDynamicStreak(reviewHistory);
+          return {
+            decks,
+            cards,
+            reviewHistory,
+            streak: currentStreak,
+            maxStreak,
+            unlockedAchievements: merged.unlockedAchievements,
+            userProgress: { ...merged.counters, currentStreak, maxStreak },
+            lastPulledAt: changes.maxUpdated ?? state.lastPulledAt,
+            pullBoundaryLogIds: changes.maxUpdated === state.lastPulledAt
+              ? [...new Set([...state.pullBoundaryLogIds, ...changes.boundaryLogIds])]
+              : changes.boundaryLogIds,
+          };
+        });
+      },
+
+      resetForAccount: (userId) => {
+        get().clearStore();
+        set({ ownerId: userId, userId, isDemo: false, pendingAdoption: false });
+      },
+
+      adoptLocalData: async () => {
+        const { userId, decks, cards, reviewHistory, deviceId } = get();
+        if (!userId) return;
+        set({ ownerId: userId, pendingAdoption: false, lastPulledAt: null });
+        const state = get();
+        decks.forEach((d) => queueSync(state, 'UPSERT_DECK', d.id));
+        cards.forEach((c) => queueSync(state, 'UPSERT_CARD', c.id));
+        // ประวัติรายวันมีแค่จำนวน จึงสร้าง log แทนวันละ n รายการ (เวลาเที่ยงวัน UTC)
+        Object.entries(reviewHistory).forEach(([day, count]) => {
+          for (let i = 0; i < count; i++) {
+            const id = newId();
+            queueSync(state, 'LOG_REVIEW', id, { id, cardId: '', rating: 3, reviewedAt: `${day}T12:00:00.000Z`, device: deviceId });
+          }
+        });
+        queueSync(state, 'UPSERT_PROGRESS', userId);
+        await get().syncFromServer();
+      },
+
+      declineAdoption: async () => {
+        const { userId } = get();
+        if (!userId) return;
+        get().resetForAccount(userId);
+        await get().syncFromServer();
       },
 
       clearStore: () => {
@@ -405,6 +472,10 @@ export const useFlashcardStore = create<FlashcardStore>()(
           reviewHistory: {},
           userId: null,
           isDemo: true,
+          ownerId: null,
+          lastPulledAt: null,
+          pendingAdoption: false,
+          pullBoundaryLogIds: [],
           userProgress: {
             cardsCreated: 0,
             decksCreated: 0,
@@ -481,129 +552,66 @@ export const useFlashcardStore = create<FlashcardStore>()(
       },
 
       // ── Deck Actions ──
-      addDeck: async (name, color) => {
-        const { userId, isDemo } = get();
-
+      addDeck: async (name, color, opts) => {
         const newDeck: Deck = {
-          id: crypto.randomUUID(),
+          id: newId(),
           name,
           color,
           createdAt: new Date(),
+          linkedPublicDeckId: opts?.linkedPublicDeckId ?? null,
         };
-
-        set((state) => ({ 
+        set((state) => ({
           decks: [...state.decks, newDeck],
-          userProgress: {
-            ...state.userProgress,
-            decksCreated: state.userProgress.decksCreated + 1,
-          }
+          userProgress: { ...state.userProgress, decksCreated: state.userProgress.decksCreated + 1 },
         }));
-
-        // Check for achievements
         get().checkAndUnlockAchievements();
-
-        if (!isDemo && userId) {
-          try {
-            const { supabaseStore } = await import('./supabaseStore');
-            const supabaseDeck = await supabaseStore.createDeck(userId, name, color, newDeck.id);
-            if (supabaseDeck) {
-              set((state) => ({
-                decks: state.decks.map((d) => d.id === newDeck.id ? supabaseDeck : d),
-              }));
-              return supabaseDeck;
-            }
-          } catch (err) {
-            console.warn('[store] Failed to create deck on Supabase, queuing action:', err);
-            const { syncQueue } = await import('./syncQueue');
-            await syncQueue.enqueue('CREATE_DECK', {
-              id: newDeck.id,
-              name: newDeck.name,
-              color: newDeck.color,
-            });
-          }
-        }
-
+        queueSync(get(), 'UPSERT_DECK', newDeck.id);
+        queueSync(get(), 'UPSERT_PROGRESS', get().userId ?? '');
         return newDeck;
       },
 
       editDeck: async (id, name, color) => {
-        const { userId, isDemo } = get();
-
         set((state) => ({
           decks: state.decks.map((d) =>
             d.id === id ? { ...d, name, color } : d
           ),
         }));
-
-        if (!isDemo && userId) {
-          try {
-            const { supabaseStore } = await import('./supabaseStore');
-            await supabaseStore.updateDeck(id, { name, color });
-          } catch (err) {
-            console.warn('[store] Failed to update deck on Supabase, queuing action:', err);
-            const { syncQueue } = await import('./syncQueue');
-            await syncQueue.enqueue('UPDATE_DECK', { id, name, color });
-          }
-        }
+        queueSync(get(), 'UPSERT_DECK', id);
       },
 
       deleteDeck: async (id, immediate = false) => {
-        const { userId, isDemo } = get();
         const deck = get().decks.find((d) => d.id === id);
+        if (!deck) return;
         const deckCards = get().cards.filter((c) => c.deckId === id);
 
-        if (!deck) return;
+        const commitDelete = () => {
+          const state = get();
+          queueSync(state, 'DELETE_DECK', id);
+          deckCards.forEach((c) => queueSync(state, 'DELETE_CARD', c.id));
+        };
+
+        set((state) => ({
+          decks: state.decks.filter((d) => d.id !== id),
+          cards: state.cards.filter((c) => c.deckId !== id),
+          pendingDeleteDecks: immediate
+            ? state.pendingDeleteDecks
+            : new Map(state.pendingDeleteDecks).set(id, { deck, cards: deckCards }),
+        }));
 
         if (immediate) {
-          // Immediate delete (no undo)
-          set((state) => ({
-            decks: state.decks.filter((d) => d.id !== id),
-            cards: state.cards.filter((c) => c.deckId !== id),
-          }));
-
-          if (!isDemo && userId) {
-            try {
-              const { supabaseStore } = await import('./supabaseStore');
-              await supabaseStore.deleteDeck(id);
-            } catch (err) {
-              console.warn('[store] Failed to delete deck on Supabase, queuing action:', err);
-              const { syncQueue } = await import('./syncQueue');
-              await syncQueue.enqueue('DELETE_DECK', { id });
-            }
-          }
-        } else {
-          // Soft delete (can undo)
-          set((state) => ({
-            decks: state.decks.filter((d) => d.id !== id),
-            cards: state.cards.filter((c) => c.deckId !== id),
-            pendingDeleteDecks: new Map(state.pendingDeleteDecks).set(id, { deck, cards: deckCards }),
-          }));
-
-          // Schedule permanent delete after 5 seconds
-          setTimeout(async () => {
-            const stillPending = get().pendingDeleteDecks.has(id);
-            if (stillPending && !isDemo && userId) {
-              try {
-                const { supabaseStore } = await import('./supabaseStore');
-                await supabaseStore.deleteDeck(id);
-                set((state) => {
-                  const newPending = new Map(state.pendingDeleteDecks);
-                  newPending.delete(id);
-                  return { pendingDeleteDecks: newPending };
-                });
-              } catch (err) {
-                console.warn('[store] Failed to delete deck on Supabase, queuing action:', err);
-                const { syncQueue } = await import('./syncQueue');
-                await syncQueue.enqueue('DELETE_DECK', { id });
-                set((state) => {
-                  const newPending = new Map(state.pendingDeleteDecks);
-                  newPending.delete(id);
-                  return { pendingDeleteDecks: newPending };
-                });
-              }
-            }
-          }, 5000);
+          commitDelete();
+          return;
         }
+
+        setTimeout(() => {
+          if (!get().pendingDeleteDecks.has(id)) return; // ผู้ใช้กดเลิกทำแล้ว
+          set((state) => {
+            const pending = new Map(state.pendingDeleteDecks);
+            pending.delete(id);
+            return { pendingDeleteDecks: pending };
+          });
+          commitDelete();
+        }, 5000);
       },
 
       undoDeleteDeck: (id) => {
@@ -618,22 +626,23 @@ export const useFlashcardStore = create<FlashcardStore>()(
               pendingDeleteDecks: newPending,
             };
           });
+          queueSync(get(), 'UPSERT_DECK', id);
+          pending.cards.forEach((c) => queueSync(get(), 'UPSERT_CARD', c.id));
         }
       },
 
       // ── Card Actions ──
-      addCard: async (deckId, question, answer, questionImage, answerImage, skipAchievementCheck = false) => {
-        const { userId, isDemo } = get();
+      addCard: async (deckId, question, answer, questionImage, answerImage, opts) => {
         const fsrsState = createInitialFSRSState();
         const now = new Date();
-
         const newCard: Flashcard = {
-          id: crypto.randomUUID(),
+          id: newId(),
           deckId,
           question,
           answer,
           questionImage,
           answerImage,
+          sourceCardId: opts?.sourceCardId,
           interval: 0,
           repetition: 0,
           easeFactor: 2.5,
@@ -642,126 +651,45 @@ export const useFlashcardStore = create<FlashcardStore>()(
           lastReviewDate: now,
           fsrsState,
         };
-
-        set((state) => ({ 
+        set((state) => ({
           cards: [...state.cards, newCard],
-          userProgress: {
-            ...state.userProgress,
-            cardsCreated: state.userProgress.cardsCreated + 1,
-          }
+          userProgress: { ...state.userProgress, cardsCreated: state.userProgress.cardsCreated + 1 },
         }));
-
-        // Check for achievements (skip if requested to prevent spam)
-        if (!skipAchievementCheck) {
-          get().checkAndUnlockAchievements();
-        }
-
-        if (!isDemo && userId) {
-          try {
-            const { supabaseStore } = await import('./supabaseStore');
-            const supabaseCard = await supabaseStore.createCard(
-              userId,
-              deckId,
-              question,
-              answer,
-              { interval: 0, repetition: 0, easeFactor: 2.5 },
-              newCard.id
-            );
-            if (supabaseCard) {
-              set((state) => ({
-                cards: state.cards.map((c) =>
-                  c.id === newCard.id ? { ...supabaseCard, fsrsState } : c
-                ),
-              }));
-            }
-          } catch (err) {
-            console.warn('[store] Failed to create card on Supabase, queuing action:', err);
-            const { syncQueue } = await import('./syncQueue');
-            await syncQueue.enqueue('CREATE_CARD', {
-              id: newCard.id,
-              deckId: newCard.deckId,
-              question: newCard.question,
-              answer: newCard.answer,
-            });
-          }
-        }
+        if (!opts?.skipAchievementCheck) get().checkAndUnlockAchievements();
+        queueSync(get(), 'UPSERT_CARD', newCard.id);
+        queueSync(get(), 'UPSERT_PROGRESS', get().userId ?? '');
+        return newCard.id;
       },
 
       editCard: async (id, question, answer, questionImage, answerImage) => {
-        const { userId, isDemo } = get();
-
         set((state) => ({
           cards: state.cards.map((c) =>
             c.id === id ? { ...c, question, answer, questionImage, answerImage } : c
           ),
         }));
-
-        if (!isDemo && userId) {
-          try {
-            const { supabaseStore } = await import('./supabaseStore');
-            await supabaseStore.updateCard(id, { question, answer });
-          } catch (err) {
-            console.warn('[store] Failed to update card on Supabase, queuing action:', err);
-            const { syncQueue } = await import('./syncQueue');
-            await syncQueue.enqueue('UPDATE_CARD', { id, question, answer });
-          }
-        }
+        queueSync(get(), 'UPSERT_CARD', id);
       },
 
       deleteCard: async (id, immediate = false) => {
-        const { userId, isDemo } = get();
         const card = get().cards.find((c) => c.id === id);
-
         if (!card) return;
-
+        set((state) => ({
+          cards: state.cards.filter((c) => c.id !== id),
+          pendingDeleteCards: immediate ? state.pendingDeleteCards : new Map(state.pendingDeleteCards).set(id, card),
+        }));
         if (immediate) {
-          // Immediate delete (no undo)
-          set((state) => ({
-            cards: state.cards.filter((c) => c.id !== id),
-          }));
-
-          if (!isDemo && userId) {
-            try {
-              const { supabaseStore } = await import('./supabaseStore');
-              await supabaseStore.deleteCard(id);
-            } catch (err) {
-              console.warn('[store] Failed to delete card on Supabase, queuing action:', err);
-              const { syncQueue } = await import('./syncQueue');
-              await syncQueue.enqueue('DELETE_CARD', { id });
-            }
-          }
-        } else {
-          // Soft delete (can undo)
-          set((state) => ({
-            cards: state.cards.filter((c) => c.id !== id),
-            pendingDeleteCards: new Map(state.pendingDeleteCards).set(id, card),
-          }));
-
-          // Schedule permanent delete after 5 seconds
-          setTimeout(async () => {
-            const stillPending = get().pendingDeleteCards.has(id);
-            if (stillPending && !isDemo && userId) {
-              try {
-                const { supabaseStore } = await import('./supabaseStore');
-                await supabaseStore.deleteCard(id);
-                set((state) => {
-                  const newPending = new Map(state.pendingDeleteCards);
-                  newPending.delete(id);
-                  return { pendingDeleteCards: newPending };
-                });
-              } catch (err) {
-                console.warn('[store] Failed to delete card on Supabase, queuing action:', err);
-                const { syncQueue } = await import('./syncQueue');
-                await syncQueue.enqueue('DELETE_CARD', { id });
-                set((state) => {
-                  const newPending = new Map(state.pendingDeleteCards);
-                  newPending.delete(id);
-                  return { pendingDeleteCards: newPending };
-                });
-              }
-            }
-          }, 5000);
+          queueSync(get(), 'DELETE_CARD', id);
+          return;
         }
+        setTimeout(() => {
+          if (!get().pendingDeleteCards.has(id)) return;
+          set((state) => {
+            const pending = new Map(state.pendingDeleteCards);
+            pending.delete(id);
+            return { pendingDeleteCards: pending };
+          });
+          queueSync(get(), 'DELETE_CARD', id);
+        }, 5000);
       },
 
       undoDeleteCard: (id) => {
@@ -775,12 +703,11 @@ export const useFlashcardStore = create<FlashcardStore>()(
               pendingDeleteCards: newPending,
             };
           });
+          queueSync(get(), 'UPSERT_CARD', id);
         }
       },
 
       reviewCard: async (id, quality, isCramMode) => {
-        const { userId, isDemo } = get();
-
         set((state) => {
           const card = state.cards.find((c) => c.id === id);
           if (!card) return state;
@@ -831,66 +758,16 @@ export const useFlashcardStore = create<FlashcardStore>()(
         // Check for achievements (fire-and-forget is fine here)
         get().checkAndUnlockAchievements();
 
-        // Sync to Supabase — use syncQueue for offline resilience
-        if (!isDemo && userId) {
-          const updatedCard = get().cards.find((c) => c.id === id);
-          const { perfectReviewStreak, userProgress } = get();
-
-          try {
-            const { supabaseStore } = await import('./supabaseStore');
-            const promises: Promise<unknown>[] = [];
-
-            if (!isCramMode && updatedCard) {
-              promises.push(
-                supabaseStore.updateCard(id, {
-                  interval: updatedCard.interval,
-                  repetition: updatedCard.repetition,
-                  easeFactor: updatedCard.easeFactor,
-                  nextReviewDate: updatedCard.nextReviewDate,
-                  fsrsState: updatedCard.fsrsState,
-                }),
-                supabaseStore.logReview(userId, id, quality)
-              );
-            }
-
-            // Update peak perfect streak in achievements
-            if (quality === 4) {
-              promises.push(
-                supabaseStore.updateUserAchievements(userId, {
-                  perfectReviews: userProgress.perfectReviews,
-                })
-              );
-            } else if (perfectReviewStreak === 0 && quality !== 4) {
-              // streak was reset — update so DB reflects reset
-              promises.push(
-                supabaseStore.updateUserAchievements(userId, {
-                  perfectReviews: userProgress.perfectReviews,
-                })
-              );
-            }
-
-            promises.push(supabaseStore.updateMaxStreak(userId, userProgress.currentStreak));
-
-            await Promise.all(promises);
-          } catch (err) {
-            // Network error: queue for later retry
-            console.warn('[store] Supabase sync failed, queuing for retry:', err);
-            if (!isCramMode && !isDemo) {
-              const updatedCard2 = get().cards.find((c) => c.id === id);
-              if (updatedCard2) {
-                const { syncQueue } = await import('./syncQueue');
-                await syncQueue.enqueue('REVIEW_CARD', {
-                  id,
-                  interval: updatedCard2.interval,
-                  repetition: updatedCard2.repetition,
-                  easeFactor: updatedCard2.easeFactor,
-                  nextReviewDate: updatedCard2.nextReviewDate,
-                  fsrsState: updatedCard2.fsrsState,
-                });
-              }
-            }
-          }
-        }
+        const state = get();
+        if (!isCramMode) queueSync(state, 'UPSERT_CARD', id);
+        const logId = newId();
+        queueSync(state, 'LOG_REVIEW', logId, {
+          id: logId,
+          cardId: id,
+          rating: quality,
+          reviewedAt: new Date().toISOString(),
+          device: state.deviceId,
+        });
 
         await get().updateStreak();
         await get().recalibrateFSRS();
@@ -921,7 +798,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
 
       // ── Streak ──
       updateStreak: async () => {
-        const { userId, isDemo, reviewHistory } = get();
+        const { reviewHistory } = get();
         const today = new Date().toISOString().slice(0, 10);
 
         // Derive active and maximum streaks dynamically from the source-of-truth reviewHistory log
@@ -941,22 +818,12 @@ export const useFlashcardStore = create<FlashcardStore>()(
         // Check for achievements
         get().checkAndUnlockAchievements();
 
-        if (!isDemo && userId) {
-          try {
-            const { supabaseStore } = await import('./supabaseStore');
-            await Promise.all([
-              supabaseStore.updateUserStats(userId, newStreak, today),
-              supabaseStore.updateUserAchievements(userId, { maxStreak: newMaxStreak }),
-            ]);
-          } catch (err) {
-            console.warn('[store] Failed to update streak on Supabase:', err);
-          }
-        }
+        queueSync(get(), 'UPSERT_PROGRESS', get().userId ?? '');
       },
 
       // ── Achievement Actions ──
       checkAndUnlockAchievements: async () => {
-        const { userProgress, unlockedAchievements, perfectReviewStreak, userId, isDemo, previousProgress } = get();
+        const { userProgress, unlockedAchievements, perfectReviewStreak, previousProgress } = get();
         
         // Create current progress snapshot
         const currentProgress: UserProgress = {
@@ -989,14 +856,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
               achievementQueue: [...state.achievementQueue, ...newUnlocked],
             }));
 
-            // Sync to Supabase
-            if (!isDemo && userId) {
-              const { supabaseStore } = await import('./supabaseStore');
-              const updatedUnlocked = [...unlockedAchievements, ...unlockedIds];
-              await supabaseStore.updateUserAchievements(userId, {
-                unlockedAchievements: updatedUnlocked,
-              });
-            }
+            queueSync(get(), 'UPSERT_PROGRESS', get().userId ?? '');
           }
         }
         
@@ -1014,8 +874,6 @@ export const useFlashcardStore = create<FlashcardStore>()(
       },
 
       trackStudyTime: async (minutes) => {
-        const { userId, isDemo } = get();
-        
         set((state) => ({
           userProgress: {
             ...state.userProgress,
@@ -1026,15 +884,22 @@ export const useFlashcardStore = create<FlashcardStore>()(
         
         get().checkAndUnlockAchievements();
 
-        // Sync to Supabase
-        if (!isDemo && userId) {
-          const { supabaseStore } = await import('./supabaseStore');
-          await supabaseStore.addStudyTime(userId, minutes);
-        }
+        queueSync(get(), 'UPSERT_PROGRESS', get().userId ?? '');
       },
     }),
     {
       name: 'daily-memory-storage',
+      version: 1,
+      migrate: (persisted, version) => {
+        const raw = asRecord(persisted);
+        if (!raw || version >= 1) return persisted as FlashcardStore;
+        const { decks, cards } = migrateLegacyIds({
+          decks: Array.isArray(raw.decks) ? (raw.decks as Deck[]) : [],
+          cards: Array.isArray(raw.cards) ? (raw.cards as Flashcard[]) : [],
+        });
+        // ข้อมูลเดิมไม่เคยขึ้น PocketBase จริง จึงถือเป็นข้อมูลโหมดทดลองแล้วให้ผู้ใช้เลือกย้ายขึ้นบัญชี
+        return { ...raw, decks, cards, ownerId: null, lastPulledAt: null } as unknown as FlashcardStore;
+      },
       storage: createJSONStorage(() => idbStorage),
       merge: mergePersistedState,
       partialize: (state) => ({
@@ -1054,6 +919,10 @@ export const useFlashcardStore = create<FlashcardStore>()(
         fsrsWeights: state.fsrsWeights,
         userId: state.userId,
         isDemo: state.isDemo,
+        ownerId: state.ownerId,
+        lastPulledAt: state.lastPulledAt,
+        deviceId: state.deviceId,
+        pullBoundaryLogIds: state.pullBoundaryLogIds,
         userProgress: state.userProgress,
         unlockedAchievements: state.unlockedAchievements,
         achievementQueue: state.achievementQueue,
@@ -1095,3 +964,6 @@ export const useFlashcardStore = create<FlashcardStore>()(
     }
   ))
 );
+
+// ให้ syncQueue อ่าน userId ได้โดยไม่ import store (ตัด circular import)
+(globalThis as { __memokardStore?: typeof useFlashcardStore }).__memokardStore = useFlashcardStore;

@@ -28,6 +28,8 @@ export interface PublicDeckCard {
   publicDeckId: string;
   question: string;
   answer: string;
+  questionImage?: string;
+  answerImage?: string;
   createdAt: Date;
 }
 

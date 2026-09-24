@@ -154,7 +154,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
       
       // Add cards in batch WITHOUT triggering achievements each time
       const cardPromises = parsedData.cards.map(card => 
-        addCard(deck.id, card.question, card.answer, undefined, undefined, true)
+        addCard(deck.id, card.question, card.answer, undefined, undefined, { skipAchievementCheck: true })
       );
       await Promise.all(cardPromises);
       
@@ -194,7 +194,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
       
       // Add cards in batch WITHOUT triggering achievements each time
       const cardPromises = parsedData.cards.map(card => 
-        addCard(deck.id, card.question, card.answer, undefined, undefined, true)
+        addCard(deck.id, card.question, card.answer, undefined, undefined, { skipAchievementCheck: true })
       );
       await Promise.all(cardPromises);
       
