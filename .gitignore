@@ -31,10 +31,10 @@ dev-dist
 *.sln
 *.sw?
 
-# Supabase SQL files (local use only)
-supabase-*.sql
-SUPABASE_DATABASE_GUIDE.md
 
 # PocketBase local binary and data
 .pocketbase/
 pb_data/
+
+# Local agent workspace
+.superpowers/

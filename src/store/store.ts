@@ -476,6 +476,9 @@ export const useFlashcardStore = create<FlashcardStore>()(
           lastPulledAt: null,
           pendingAdoption: false,
           pullBoundaryLogIds: [],
+          // ล้างข้อมูลในเครื่องแล้ว = ยังไม่มี log ไหนถูกนับ จึงต้องเปลี่ยน ID เครื่องใหม่
+          // ไม่งั้นตอน pull จะข้าม log ที่เครื่องนี้เคยทำไว้ และประวัติ/heatmap จะหาย
+          deviceId: newId(),
           userProgress: {
             cardsCreated: 0,
             decksCreated: 0,

@@ -6,7 +6,7 @@
  * แต่ต้องการ fields เพิ่มเติมใน card: stability, difficulty, state, lapses
  *
  * Strategy: เก็บ FSRS state ใน IndexedDB ผ่าน Zustand พร้อม localStorage fallback
- * โดยไม่แตะ Supabase schema (backward compatible)
+ * โดยไม่กระทบข้อมูลเดิม (backward compatible)
  */
 
 import { fsrs, createEmptyCard, Rating, State, type Card as FSRSCard, type RecordLog } from 'ts-fsrs';

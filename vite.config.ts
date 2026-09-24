@@ -65,7 +65,7 @@ export default defineConfig({
         clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api\//],
+        navigateFallbackDenylist: [/^\/api\//, /^\/_\//],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -110,28 +110,14 @@ export default defineConfig({
             }
           },
           {
-            urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/v1\/object\/public\/.*/i,
+            // รูปการ์ดจาก PocketBase — เก็บไว้ดูออฟไลน์ได้ (ข้อมูล API อื่นไม่ cache เพราะมี IndexedDB แล้ว)
+            urlPattern: ({ url }) => url.pathname.startsWith('/api/files/'),
             handler: 'CacheFirst',
             options: {
-              cacheName: 'supabase-storage-cache',
+              cacheName: 'card-images',
               expiration: {
-                maxEntries: 120,
-                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          },
-          {
-            urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/v1\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'supabase-db-cache',
-              networkTimeoutSeconds: 3,
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 // 24 hours
+                maxEntries: 500,
+                maxAgeSeconds: 60 * 60 * 24 * 60
               },
               cacheableResponse: {
                 statuses: [0, 200]
@@ -152,12 +138,12 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes('node_modules')) return;
 
-          if (id.includes('@supabase') || id.includes('@realtime') || id.includes('websocket')) {
-            return 'vendor-supabase';
+          if (/node_modules[\\/]pocketbase[\\/]/.test(id)) {
+            return 'vendor-pocketbase';
           }
 
           if (
-            /node_modules[\\/](react|react-dom|scheduler|framer-motion|lucide-react|zustand|idb-keyval|uuid|ts-fsrs|canvas-confetti)[\\/]/.test(id)
+            /node_modules[\\/](react|react-dom|scheduler|framer-motion|lucide-react|zustand|idb-keyval|ts-fsrs|canvas-confetti)[\\/]/.test(id)
           ) {
             return 'vendor-app';
           }

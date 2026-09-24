@@ -124,16 +124,18 @@
 
 ---
 
-## 📦 ขั้นตอนที่ 6: นำเข้า Collection Schema สู่ PocketBase
+## 📦 ขั้นตอนที่ 6: ติดตั้งตาราง กฎ และ hooks ของ MemoKard
 
-1. เปิดเบราว์เซอร์ไปที่:
+1. คัดลอกโฟลเดอร์ `deploy/pocketbase/pb_migrations` และ `deploy/pocketbase/pb_hooks` ไปไว้ที่ `/opt/pocketbase/`:
+   ```bash
+   scp -r deploy/pocketbase/pb_migrations deploy/pocketbase/pb_hooks ubuntu@<YOUR_ORACLE_IP>:/tmp/
+   # บนเซิร์ฟเวอร์
+   sudo cp -r /tmp/pb_migrations /tmp/pb_hooks /opt/pocketbase/
+   sudo systemctl restart pocketbase
    ```
-   https://yourdomain.com/_/
-   ```
-2. สร้างบัญชี **Admin Account** (ตั้งอีเมลและรหัสผ่านของผู้ดูแลระบบ)
-3. ไปที่เมนู **Settings** (รูปฟันเฟืองด้านล่างซ้าย) > **Import collections**
-4. เปิดไฟล์ [`deploy/pocketbase/pb_schema.json`](pb_schema.json) คัดลอกข้อความ JSON ทั้งหมดมาวาง แล้วกด **Review** และกดยืนยัน **Import**
-5. ตาราง `decks`, `cards`, `user_stats`, `review_logs`, `user_achievements` จะถูกสร้างให้ทันที พร้อมกฎความปลอดภัย (API Rules) ที่รัดกุม!
+   PocketBase จะสร้างตาราง กฎความปลอดภัย และตั้งค่า rate limit ให้อัตโนมัติตอนเริ่มทำงาน
+2. เปิด `https://yourdomain.com/_/` แล้วสร้างบัญชีผู้ดูแลระบบ (superuser)
+3. ตั้งแอดมินในแอป: สมัครบัญชีในแอปก่อน แล้วในหน้า `/_/` เปิดตาราง `users` เลือกบัญชีของคุณ ตั้ง `role` เป็น `admin`
 
 ---
 

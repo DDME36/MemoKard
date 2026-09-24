@@ -39,7 +39,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y nginx unzip curl certbot pytho
 # 4. ดาวน์โหลด PocketBase (ตรวจจับ CPU architecture อัตโนมัติ)
 echo "📥 [3/6] กำลังดาวน์โหลด PocketBase..."
 ARCH=$(uname -m)
-PB_VERSION="0.25.9" # หรือเวอร์ชันล่าสุด
+PB_VERSION="0.40.4" # ต้องตรงกับ deploy/pocketbase/VERSION
 
 if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
   PB_FILE="pocketbase_${PB_VERSION}_linux_arm64.zip"
@@ -105,5 +105,5 @@ echo "3. เปิดขอ SSL ฟรีด้วยคำสั่ง:"
 echo "   sudo certbot --nginx -d YOUR_DOMAIN.COM"
 echo "4. เข้าสร้างบัญชี Admin ของ PocketBase ครั้งแรกที่:"
 echo "   https://YOUR_DOMAIN.COM/_/"
-echo "   แล้วไปที่ Settings > Import collections และอัปโหลดไฟล์ 'pb_schema.json'"
+echo "5. คัดลอก deploy/pocketbase/pb_migrations และ pb_hooks ไปที่ /opt/pocketbase/ แล้ว sudo systemctl restart pocketbase"
 echo "=========================================================="

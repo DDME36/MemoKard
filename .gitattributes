@@ -1,0 +1,4 @@
+# สคริปต์และ config ที่รันบน Linux ต้องเป็น LF เสมอ (CRLF ทำให้ bash พัง)
+*.sh text eol=lf
+*.conf text eol=lf
+deploy/pocketbase/** text eol=lf

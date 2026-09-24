@@ -90,6 +90,21 @@ describe('applyServerChanges', () => {
     expect(useFlashcardStore.getState().lastPulledAt).toBe('2026-09-24 00:00:00.000Z');
   });
 
+  it('counts reviews made earlier on this browser after signing out and back in', () => {
+    useFlashcardStore.getState().resetForAccount('user1');
+    useFlashcardStore.getState().setAuthState('user1', false);
+    const oldDevice = useFlashcardStore.getState().deviceId;
+    useFlashcardStore.getState().clearStore(); // ออกจากระบบ ล้างข้อมูลในเครื่อง
+    useFlashcardStore.getState().resetForAccount('user1');
+    useFlashcardStore.getState().setAuthState('user1', false);
+    const log = { id: 'log000000000009', reviewedAt: '2026-09-21T10:00:00.000Z', device: oldDevice };
+    useFlashcardStore.getState().applyServerChanges(
+      { decks: [], cards: [], logs: [log], progress: null, maxUpdated: '2026-09-24 00:00:00.000Z', boundaryLogIds: [] },
+      new Set(),
+    );
+    expect(useFlashcardStore.getState().reviewHistory['2026-09-21']).toBe(1);
+  });
+
   it('counts a boundary review log only once across two pulls', () => {
     useFlashcardStore.getState().resetForAccount('user1');
     useFlashcardStore.getState().setAuthState('user1', false);

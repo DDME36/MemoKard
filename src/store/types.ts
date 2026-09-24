@@ -23,7 +23,7 @@ export interface Flashcard {
   answerImage?: string;
   // ID ของการ์ดในชุดสาธารณะ (เฉพาะชุดที่ติดตาม) ใช้จับคู่ตอนอัปเดตจากชุดต้นทาง
   sourceCardId?: string;
-  // Keep these for Supabase compatibility (mapped from FSRS values)
+  // ค่าแบบ SM-2 เดิม (คำนวณจาก FSRS) ใช้แสดงผลเท่านั้น ไม่ได้ส่งขึ้นเซิร์ฟเวอร์
   interval: number;
   repetition: number;
   easeFactor: number;

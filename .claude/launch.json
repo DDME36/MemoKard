@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "memokard-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5173", "--strictPort"],
+      "port": 5173
+    },
+    {
+      "name": "pocketbase",
+      "runtimeExecutable": ".pocketbase/pocketbase.exe",
+      "runtimeArgs": ["serve", "--http", "127.0.0.1:8090", "--dir", "pb_data", "--migrationsDir", "deploy/pocketbase/pb_migrations", "--hooksDir", "deploy/pocketbase/pb_hooks"],
+      "port": 8090
+    }
+  ]
+}

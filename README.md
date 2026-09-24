@@ -1,78 +1,66 @@
-# MemoKard
+# MemoKard · เมมโมการ์ด
 
-เว็บแอปแฟลชการ์ดภาษาไทยแบบ offline-first ใช้ Active Recall, FSRS, PWA และเลือกซิงก์ข้อมูลผ่าน Supabase ได้
+แอปแฟลชการ์ดภาษาไทยบนเว็บ ทบทวนด้วย Active Recall และตารางทบทวนอัจฉริยะ (FSRS) ใช้งานออฟไลน์ได้ ติดตั้งเป็นแอปบนมือถือได้ (PWA) และซิงก์ข้ามเครื่องผ่านเซิร์ฟเวอร์ของเราเอง
+
+สร้างโดย **Zentyr**
 
 ## จุดเด่น
 
-- ใช้งานแบบ local ได้แม้ไม่มี backend หรืออินเทอร์เน็ต
-- เก็บข้อมูลหลักใน IndexedDB ผ่าน Zustand persistence
-- ซิงก์งานที่ค้างเมื่อ Supabase กลับมาออนไลน์
-- รองรับ PWA, dark mode, สถิติ, achievement และ community decks
+- **ใช้ได้แม้ไม่มีเน็ต** — ทุกอย่างบันทึกในเครื่องก่อน (IndexedDB) แล้วค่อยซิงก์ขึ้นเซิร์ฟเวอร์ผ่านคิว
+- **ซิงก์ข้ามเครื่อง** — ดึงเฉพาะส่วนที่เปลี่ยน, แก้สองเครื่องใช้ฉบับล่าสุด, ประวัติการทบทวนไม่หาย
+- **FSRS** — จัดตารางทบทวนตามความจำจริงของผู้ใช้
+- **ชุมชน** — แชร์ชุดการ์ด ค้นหา ติดตาม (อัปเดตตามต้นทาง) ให้ดาว และรายงาน
+- **ลองใช้ได้ทันทีโดยไม่ต้องสมัคร** — สมัครทีหลังแล้วนำข้อมูลในเครื่องขึ้นบัญชีได้
+- **โฮสต์เองทั้งหมด** — PocketBase ตัวเดียว ไม่พึ่งบริการภายนอก
 
-## เริ่มใช้งาน
+## เริ่มพัฒนา
 
 ต้องมี Node.js 20 ขึ้นไป
 
-```powershell
-npm.cmd ci
-npm.cmd run dev
+```bash
+npm ci
+npm run pb:fetch        # ดาวน์โหลด PocketBase (ตรวจ checksum) ลง .pocketbase/
+cp .env.example .env    # แล้วตั้ง VITE_POCKETBASE_URL=http://127.0.0.1:8090
 ```
 
-ถ้า npm บน Windows มีปัญหา execution policy ให้ใช้ `npm.cmd` แทน `npm` เสมอ
+รันเซิร์ฟเวอร์และหน้าเว็บ (สองหน้าต่าง):
 
-ตรวจคุณภาพก่อน deploy:
-
-```powershell
-npm.cmd run build
-npm.cmd run lint
+```bash
+.pocketbase/pocketbase serve --migrationsDir deploy/pocketbase/pb_migrations --hooksDir deploy/pocketbase/pb_hooks
+npm run dev
 ```
 
-## ใช้งานโดยไม่มี backend
+> Windows PowerShell: ใช้ `npm.cmd` แทน `npm` ถ้าติด execution policy และ `.pocketbase\pocketbase.exe` แทน `.pocketbase/pocketbase`
 
-ไม่ต้องสร้าง `.env` หรือปล่อยค่า Supabase ว่าง หน้าแรกจะแสดงปุ่มทดลองใช้งานและข้อมูลจะอยู่ในอุปกรณ์นั้นผ่าน IndexedDB ผู้ใช้ควร export deck สำรองเป็นระยะ เพราะการล้าง site data ของ browser จะลบข้อมูล local
+## ทดสอบ
 
-## สร้างหรือกู้ Supabase
-
-1. สร้าง Supabase project ใหม่
-2. ใช้ SQL Editor รัน [migration เริ่มต้น](supabase/migrations/202608020001_initial_schema.sql)
-3. คัดลอก `.env.example` เป็น `.env`
-4. ใส่ Project URL และ anon key (ห้ามใช้ service-role key ใน Vite)
-5. ตั้ง Authentication URL/Redirect URL ให้ตรงกับโดเมน deploy
-6. ถ้าใช้ Google login ให้เปิด provider และตั้ง OAuth credentials ใน Supabase
-7. ทดสอบสมัคร, login, สร้าง deck/card, review, refresh และ offline/online
-
-ตัวอย่าง `.env`:
-
-```dotenv
-VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-VITE_SUPABASE_ANON_KEY=YOUR_ANON_KEY
-VITE_ADMIN_USER_ID=OPTIONAL_ADMIN_USER_ID
+```bash
+npm test                  # unit tests
+npm run test:integration  # รัน PocketBase จริงชั่วคราว (ต้อง npm run pb:fetch ก่อน)
+npm run lint
+npm run build
 ```
 
-### Discord report notification
+ตั้ง `PB_DEBUG=1` เพื่อดู log ของเซิร์ฟเวอร์ระหว่างเทสต์ integration
 
-Webhook ต้องอยู่ใน Supabase secret เท่านั้น:
+## ติดตั้งบนเซิร์ฟเวอร์
 
-```powershell
-supabase secrets set DISCORD_WEBHOOK_URL=YOUR_NEW_WEBHOOK_URL
-supabase functions deploy discord-report-notification
-```
+ดูคู่มือ [deploy/DEPLOY_GUIDE_TH.md](deploy/DEPLOY_GUIDE_TH.md) (Oracle Cloud Ubuntu + Nginx + HTTPS)
 
-จากนั้นสร้าง Database Webhook ให้ event `INSERT` ของ `public.deck_reports` เรียก Edge Function นี้
-
-> สำคัญ: webhook เดิมเคยถูกฝังใน source/client bundle ให้ revoke และสร้าง URL ใหม่ก่อน deploy
-
-## Deploy
-
-กำหนด build command เป็น `npm run build` และ output directory เป็น `dist` ได้กับ Vercel, Netlify หรือ Cloudflare Pages ต้องตั้ง environment variables ในผู้ให้บริการ deploy ด้วย
+ตั้งแอดมิน: สมัครบัญชีในแอป แล้วเปิด `/_/` → ตาราง `users` → ตั้ง `role` เป็น `admin`
 
 ## โครงสร้างหลัก
 
-- `src/store/store.ts` — local source of truth, FSRS และ Zustand persistence
-- `src/store/supabaseStore.ts` — mapping ระหว่าง model กับ Supabase
-- `src/store/syncQueue.ts` — offline mutation queue
-- `src/store/communityStore.ts` — community decks, rating และ report
-- `src/contexts/AuthContext.tsx` — session, local mode และ backend health
-- `supabase/migrations/` — schema และ RLS ที่สร้างซ้ำได้จาก source control
+| ส่วน | หน้าที่ |
+|---|---|
+| `src/store/store.ts` | ข้อมูลในเครื่อง, FSRS, Zustand persistence |
+| `src/store/syncQueue.ts` | คิวส่งข้อมูลขึ้นเซิร์ฟเวอร์ (ออฟไลน์ได้, ลองใหม่อัตโนมัติ) |
+| `src/store/syncEngine.ts` | ดึงข้อมูลที่เปลี่ยนแล้วรวมเข้าเครื่อง, อัปเดตชุดที่ติดตาม |
+| `src/store/pocketbaseStore.ts` | แปลงข้อมูลกับ PocketBase |
+| `src/store/communityStore.ts` | ชุดการ์ดสาธารณะ, ดาว, รายงาน |
+| `src/store/adminStore.ts` | จัดการรายงานและรีเซ็ตรหัสผ่าน |
+| `deploy/pocketbase/` | migrations, hooks และเวอร์ชันเซิร์ฟเวอร์ที่ปักไว้ |
 
-อ่านผล audit และ roadmap ต่อได้ที่ [PROJECT_AUDIT_TH.md](PROJECT_AUDIT_TH.md)
+## เครดิต
+
+ออกแบบและพัฒนาโดย **Zentyr**
