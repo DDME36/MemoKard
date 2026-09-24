@@ -10,13 +10,14 @@ export const DAY_ROLLOVER_HOUR = 4;
 export const LEARN_AHEAD_MS = 20 * 60 * 1000;
 
 const pad = (n: number) => String(n).padStart(2, '0');
-const keyOf = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+/** วันที่ตามปฏิทินท้องถิ่นของ Date นั้น (ไม่ตัดรอบ 04:00) */
+export const calendarKey = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
 /** วันเรียนของเวลานั้นในรูป 'YYYY-MM-DD' (เวลาท้องถิ่น ตัดรอบ 04:00) */
 export function studyDayKey(date: Date = new Date()): string {
   const shifted = new Date(date);
   shifted.setHours(shifted.getHours() - DAY_ROLLOVER_HOUR);
-  return keyOf(shifted);
+  return calendarKey(shifted);
 }
 
 /** แปลง key เป็น Date เที่ยงวันท้องถิ่นของวันนั้น (ปลอดภัยต่อการเปลี่ยนเวลา DST) */
@@ -28,7 +29,7 @@ export function keyToDate(key: string): Date {
 export function addDays(key: string, days: number): string {
   const date = keyToDate(key);
   date.setDate(date.getDate() + days);
-  return keyOf(date);
+  return calendarKey(date);
 }
 
 export function daysBetween(fromKey: string, toKey: string): number {

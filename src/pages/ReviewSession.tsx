@@ -10,6 +10,7 @@ import ZenModePanel from '../components/ZenModePanel';
 import { Headphones } from 'lucide-react';
 import { haptics, sounds } from '../utils/haptics';
 import { safeLocalStorage } from '../utils/safeStorage';
+import { isCardDue } from '../utils/studyDay';
 
 interface ReviewSessionProps {
   activeDeck: Deck | null;
@@ -90,7 +91,7 @@ const ReviewSession = memo(function ReviewSession({
       if (isCramMode) {
         return allCards;
       }
-      return allCards.filter(card => new Date(card.nextReviewDate) <= new Date());
+      return allCards.filter(card => isCardDue(card));
     }
     return getDueCards();
   }, [activeDeck, isCramMode, getCardsByDeck, getDueCards]);

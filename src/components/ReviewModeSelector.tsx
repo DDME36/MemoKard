@@ -3,6 +3,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useState } from 'react';
 import { useFlashcardStore } from '../store/store';
 import { haptics } from '../utils/haptics';
+import { isCardDue } from '../utils/studyDay';
 
 export type ReviewMode = 'normal' | 'focus' | 'quick' | 'exam' | 'weak' | 'preview' | 'new_cards' | 'time_attack';
 export type AnswerMode = 'flip' | 'type';
@@ -135,7 +136,7 @@ export default function ReviewModeSelector({
     // Filter cards by deck if deckId is provided
     const allCards = deckId ? getCardsByDeck(deckId) : cards;
     const dueCards = deckId 
-      ? allCards.filter(card => new Date(card.nextReviewDate) <= new Date())
+      ? allCards.filter(card => isCardDue(card))
       : getDueCards();
 
     switch (mode) {

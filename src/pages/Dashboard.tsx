@@ -10,6 +10,7 @@ import { getDailyQuote } from '../utils/quotes';
 import { getDeckColorStyles } from '../utils/colorUtils';
 import { exportFullBackup, importFullBackup } from '../utils/deckIO';
 import { haptics } from '../utils/haptics';
+import { isCardDue } from '../utils/studyDay';
 
 interface DashboardProps {
   onOpenDeck: (deck: Deck) => void;
@@ -57,7 +58,7 @@ const Dashboard = memo(function Dashboard({ onOpenDeck, onStartReview, onShowAdd
   // ✅ Fix: read store.cards directly instead of getDueCards (unstable reference)
   const allDueCards = useMemo(() => {
     const now = new Date();
-    return store.cards.filter(c => new Date(c.nextReviewDate) <= now);
+    return store.cards.filter(c => isCardDue(c, now));
   }, [store.cards]);
   const totalDue = allDueCards.length;
   const totalCards = store.cards.length;

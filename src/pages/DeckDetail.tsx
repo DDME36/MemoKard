@@ -15,6 +15,7 @@ import { getDeckColorStyles } from '../utils/colorUtils';
 import { haptics } from '../utils/haptics';
 import { VirtualizedCardList } from '../components/VirtualizedCardList';
 import { RefreshCw } from 'lucide-react';
+import { isCardDue } from '../utils/studyDay';
 
 interface DeckDetailProps {
   deck: Deck;
@@ -395,7 +396,7 @@ export default function DeckDetail({ deck: initialDeck, onStartReview, onShowAdd
             itemHeight={98}
             containerHeight={480}
             renderItem={(card) => {
-              const isDue = new Date(card.nextReviewDate) <= new Date();
+              const isDue = isCardDue(card);
               return (
                 <div className="pb-3 pr-1 h-full">
                   <motion.div 

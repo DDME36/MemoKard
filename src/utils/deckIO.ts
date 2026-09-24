@@ -5,6 +5,7 @@
 
 import type { Deck, Flashcard, FlashcardStore } from '../store/store';
 import type { UserProgress } from './achievements';
+import { calendarKey } from './studyDay';
 
 export interface ExportedDeck {
   version: string;
@@ -57,7 +58,7 @@ export const exportFullBackup = (store: FlashcardStore) => {
   
   const link = document.createElement('a');
   link.href = url;
-  const dateStr = new Date().toISOString().slice(0, 10);
+  const dateStr = calendarKey(new Date());
   link.download = `MemoKard_Backup_${dateStr}.json`;
   document.body.appendChild(link);
   link.click();

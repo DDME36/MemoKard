@@ -32,3 +32,27 @@ describe('FSRS parameters in the store', () => {
     expect('recalibrateFSRS' in useFlashcardStore.getState()).toBe(false);
   });
 });
+
+describe('getDueCards', () => {
+  it('includes review cards that fall due later today, excludes learning cards not yet due', async () => {
+    const { useFlashcardStore } = await import('./store');
+    const store = useFlashcardStore.getState();
+    store.clearStore();
+    const deck = await store.addDeck('D', 'violet');
+    const reviewId = await store.addCard(deck.id, 'review', 'a');
+    const learningId = await store.addCard(deck.id, 'learning', 'a');
+    const inTwoHours = new Date(Date.now() + 2 * 3600 * 1000);
+    const endOfDay = (await import('../utils/studyDay')).endOfStudyDay();
+    const reviewDue = inTwoHours < endOfDay ? inTwoHours : new Date(endOfDay.getTime() - 60_000);
+    useFlashcardStore.setState((s) => ({
+      cards: s.cards.map((c) => {
+        if (c.id === reviewId) return { ...c, nextReviewDate: reviewDue, fsrsState: { ...c.fsrsState, state: 2 } };
+        if (c.id === learningId) return { ...c, nextReviewDate: new Date(Date.now() + 3600 * 1000), fsrsState: { ...c.fsrsState, state: 1 } };
+        return c;
+      }),
+    }));
+    const due = useFlashcardStore.getState().getDueCards(deck.id).map((c) => c.question);
+    expect(due).toContain('review');
+    expect(due).not.toContain('learning');
+  });
+});

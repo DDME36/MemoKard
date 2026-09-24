@@ -2,6 +2,7 @@ import { useMemo, memo } from 'react';
 import { motion } from 'framer-motion';
 import { useFlashcardStore } from '../store/store';
 import { useTheme } from '../contexts/ThemeContext';
+import { daysBetween, isCardDue, studyDayKey } from '../utils/studyDay';
 
 interface ReviewForecastProps {
   dayColor: { gradient: string; shadow: string };
@@ -14,15 +15,11 @@ const ReviewForecast = memo(function ReviewForecast({ dayColor }: ReviewForecast
   const forecastData = useMemo(() => {
     const data = Array(7).fill(0);
     const now = new Date();
-    now.setHours(0, 0, 0, 0);
+    const today = studyDayKey(now);
 
     cards.forEach(card => {
-      const dueDate = new Date(card.nextReviewDate);
-      dueDate.setHours(0, 0, 0, 0);
-      
-      const diffTime = dueDate.getTime() - now.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      
+      // การ์ดที่เลยกำหนดมาแล้วนับรวมในวันนี้
+      const diffDays = isCardDue(card, now) ? 0 : daysBetween(today, studyDayKey(new Date(card.nextReviewDate)));
       if (diffDays >= 0 && diffDays < 7) {
         data[diffDays]++;
       }

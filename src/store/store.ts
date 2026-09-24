@@ -7,7 +7,7 @@ import type { Achievement } from '../components/AchievementToast';
 import type { Deck, Flashcard } from './types';
 import { safeLocalStorage } from '../utils/safeStorage';
 import { newId } from '../lib/ids';
-import { addDays, daysBetween, keyToDate, studyDayKey } from '../utils/studyDay';
+import { addDays, daysBetween, isCardDue, keyToDate, studyDayKey } from '../utils/studyDay';
 import { addReviewCounts, mergeById, mergeProgress } from './merge';
 import { migrateLegacyIds } from './legacyMigration';
 import type { ServerChanges } from './pocketbaseStore';
@@ -717,10 +717,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
       // ── Getters ──
       getDueCards: (deckId) => {
         const now = new Date();
-        const cards = get().cards.filter((c) => {
-          const due = new Date(c.nextReviewDate) <= now;
-          return deckId ? due && c.deckId === deckId : due;
-        });
+        const cards = get().cards.filter((c) => (!deckId || c.deckId === deckId) && isCardDue(c, now));
         return cards.sort(
           (a, b) => new Date(a.nextReviewDate).getTime() - new Date(b.nextReviewDate).getTime()
         );

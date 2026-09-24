@@ -1,19 +1,18 @@
 import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../contexts/ThemeContext';
+import { calendarKey, keyToDate, studyDayKey } from '../utils/studyDay';
 
 interface ActivityHeatmapProps {
   reviewHistory: Record<string, number>;
   dayColor: { gradient: string; shadow: string };
 }
 
-function toKey(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
+const toKey = calendarKey;
 
 function generateGrid(weeks = 13) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // วันนี้ตามวันเรียน (ก่อนตี 4 ยังนับเป็นเมื่อวาน)
+  const today = keyToDate(studyDayKey());
   
   const days: Date[] = [];
   
@@ -99,7 +98,7 @@ export default function ActivityHeatmap({ reviewHistory, dayColor }: ActivityHea
     }
   });
 
-  const today = toKey(new Date());
+  const today = studyDayKey();
 
   return (
     <div className={`rounded-2xl p-5 border ${

@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 import ActivityHeatmap from '../components/ActivityHeatmap';
 import { Brain } from 'lucide-react';
 import { haptics } from '../utils/haptics';
+import { addDays, daysBetween, isCardDue, keyToDate, studyDayKey } from '../utils/studyDay';
 
 interface StatisticsPageProps {
   dayColor: { gradient: string; shadow: string };
@@ -51,7 +52,7 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
   const stats = useMemo(() => {
     const totalCards = cards.length;
     const now = new Date();
-    const dueCards = cards.filter(c => new Date(c.nextReviewDate) <= now).length;
+    const dueCards = cards.filter(c => isCardDue(c, now)).length;
     const newCards = cards.filter(c => c.repetition === 0).length;
     const learningCards = cards.filter(c => c.repetition > 0 && c.repetition < 3).length;
     const matureCards = cards.filter(c => c.repetition >= 3).length;
@@ -62,27 +63,23 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
       : '2.50';
 
     const totalReviews = Object.values(reviewHistory).reduce((sum, count) => sum + count, 0);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = studyDayKey(now);
     const reviewsToday = reviewHistory[today] || 0;
 
-    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const reviewsThisWeek = Object.entries(reviewHistory)
-      .filter(([date]) => new Date(date) >= weekAgo)
+      .filter(([day]) => daysBetween(day, today) < 7)
       .reduce((sum, [, count]) => sum + count, 0);
 
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const recentReviews = Object.entries(reviewHistory)
-      .filter(([date]) => new Date(date) >= thirtyDaysAgo);
+      .filter(([day]) => daysBetween(day, today) < 30);
     const avgReviewsPerDay = recentReviews.length > 0
       ? Math.round(recentReviews.reduce((sum, [, count]) => sum + count, 0) / 30)
       : 0;
 
     const forecast = Array.from({ length: 7 }, (_, i) => {
-      const date = new Date(now.getTime() + (i + 1) * 24 * 60 * 60 * 1000);
-      const dueCount = cards.filter(c => {
-        const cardDate = new Date(c.nextReviewDate);
-        return cardDate.toDateString() === date.toDateString();
-      }).length;
+      const day = addDays(today, i + 1);
+      const date = keyToDate(day);
+      const dueCount = cards.filter(c => studyDayKey(new Date(c.nextReviewDate)) === day).length;
       return { date: date.toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric' }), count: dueCount };
     });
 
