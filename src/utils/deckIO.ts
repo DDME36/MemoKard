@@ -162,60 +162,103 @@ export const importDeck = (file: File): Promise<ExportedDeck> => {
   });
 };
 
+/** ดึงเฉพาะก้อน JSON จากคำตอบของ AI (ตัด ```json และข้อความเกริ่นนำ/สรุปออก) */
+function extractJsonCandidate(text: string): string {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)(?:```|$)/);
+  if (fenced && /^\s*\{\s*"/.test(fenced[1])) return fenced[1].trim();
+  const start = text.search(/\{\s*"/);
+  if (start === -1) return text;
+  const end = text.lastIndexOf('}');
+  // ถ้าไม่มีวงเล็บปิด (AI ตอบไม่จบ) ก็ส่งไปทั้งก้อน ให้ parser แจ้งว่าไม่สมบูรณ์
+  return (end > start ? text.slice(start, end + 1) : text.slice(start)).trim();
+}
+
+/**
+ * AI มักลืม escape backslash ใน LaTeX เช่น "$\frac{a}{b}$"
+ * ซึ่ง \f \t \n \b \r เป็น escape ที่ถูกต้องใน JSON จึงเพี้ยนเงียบ ๆ
+ * แก้เฉพาะในช่วงสูตร $...$ / $$...$$ เท่านั้น เพื่อไม่ให้ \n (ขึ้นบรรทัด) นอกสูตรพัง
+ */
+function escapeMathBackslashes(json: string): string {
+  return json.replace(/\$\$[\s\S]*?\$\$|\$[^$\n]*?\$/g, (span) => span.replace(/(?<!\\)\\(?!\\)/g, '\\\\'));
+}
+
+/** backslash นอกสูตรที่ไม่ใช่ escape ของ JSON (เช่น \s \d) — แปลงเป็นตัวอักษร backslash */
+function repairInvalidEscapes(json: string): string {
+  return json.replace(/(?<!\\)\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})/g, '\\\\');
+}
+
+/** AI บางตัวขึ้นบรรทัดจริงภายใน string ซึ่ง JSON ไม่ยอมรับ — แปลงเป็น \n เฉพาะที่อยู่ใน string */
+function escapeRawControlChars(json: string): string {
+  let out = '';
+  let inString = false;
+  let escaped = false;
+  for (const ch of json) {
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === '\\') {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      } else if (ch === '\n') {
+        out += '\\n';
+        continue;
+      } else if (ch === '\r') {
+        continue;
+      } else if (ch === '\t') {
+        out += '\\t';
+        continue;
+      }
+    } else if (ch === '"') {
+      inString = true;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+function parseAiJson(json: string): Partial<ExportedDeck> | null {
+  const mathSafe = escapeMathBackslashes(escapeRawControlChars(json));
+  for (const attempt of [mathSafe, repairInvalidEscapes(mathSafe)]) {
+    try {
+      return JSON.parse(attempt);
+    } catch {
+      // ลองแบบถัดไป
+    }
+  }
+  return null;
+}
+
 /**
  * Import a deck from raw text (JSON, CSV, TSV)
  */
 export const importDeckFromText = (text: string, defaultName = 'Imported Deck', defaultColor = 'violet'): ExportedDeck => {
-  let t = text.trim();
-  
-  // 1. Try parsing as JSON first (Handle markdown code blocks)
-  try {
-    // Strip markdown code blocks if present
-    if (t.includes('```json')) {
-      const match = t.match(/```json\s*([\s\S]*?)\s*```/);
-      if (match && match[1]) {
-        t = match[1].trim();
-      }
-    } else if (t.includes('```')) {
-      const match = t.match(/```\s*([\s\S]*?)\s*```/);
-      if (match && match[1]) {
-        t = match[1].trim();
-      }
-    } else if (!t.startsWith('{') && t.includes('{') && t.includes('}')) {
-      // Try to extract JSON object if there's text around it
-      const firstBrace = t.indexOf('{');
-      const lastBrace = t.lastIndexOf('}');
-      if (firstBrace !== -1 && lastBrace > firstBrace) {
-        t = t.substring(firstBrace, lastBrace + 1).trim();
-      }
-    }
+  const t = extractJsonCandidate(text.trim());
 
-    if (t.startsWith('{')) {
-      try {
-        // Fix single backslashes (e.g. \frac, \sum) from LLM output before parsing
-        // Negative lookbehind (?<!\\) ensures we don't match already escaped backslashes.
-        // Negative lookahead (?!["\\/]) ensures we don't touch valid quote/slash escapes.
-        const fixedJson = t.replace(/(?<!\\)\\(?!["\\/])/g, '\\\\');
-        const data = JSON.parse(fixedJson);
-        if (validateDeckData(data)) {
-          return data;
-        } else if (data && data.deck && Array.isArray(data.cards)) {
-          // Lenient validation: as long as it has deck and cards array
-          return {
-            ...data,
-            deck: {
-              name: data.deck.name || defaultName,
-              color: data.deck.color || defaultColor,
-              description: data.deck.description
-            }
-          };
-        }
-      } catch {
-        // Ignore JSON error, fallback to text parsing
-      }
+  // 1. JSON จาก AI
+  if (t.startsWith('{')) {
+    const data = parseAiJson(t);
+    if (data && data.deck && Array.isArray(data.cards)) {
+      if (validateDeckData(data)) return data;
+      return {
+        version: data.version ?? '1.0.0',
+        exportedAt: data.exportedAt ?? new Date().toISOString(),
+        deck: {
+          name: data.deck.name || defaultName,
+          color: data.deck.color || defaultColor,
+          description: data.deck.description,
+        },
+        // AI บางครั้งส่งการ์ดที่ขาดฟิลด์หรือเป็นค่าว่าง — ข้ามใบนั้นแทนที่จะล้มทั้งชุด
+        cards: data.cards
+          .filter((c): c is { question: string; answer: string } =>
+            !!c && typeof c.question === 'string' && typeof c.answer === 'string' && c.question.trim() !== '')
+          .map((c) => ({ question: c.question, answer: c.answer })),
+      };
     }
-  } catch {
-    // Ignore JSON error, fallback to text parsing
+    // หน้าตาเป็น JSON แต่อ่านไม่ได้ — ส่วนใหญ่คือ AI ตอบไม่จบ อย่าเดาเป็นตารางแล้วได้การ์ดขยะ
+    throw new Error(
+      'ข้อมูลจาก AI ไม่สมบูรณ์หรือรูปแบบ JSON ผิด ถ้า AI ยังตอบไม่จบ ให้พิมพ์บอก AI ว่า "ต่อ" แล้วคัดลอกคำตอบทั้งหมดมาวางใหม่',
+    );
   }
 
   // 2. Parse as Text (TSV, CSV, Pipe)
