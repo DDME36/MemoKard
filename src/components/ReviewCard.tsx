@@ -7,6 +7,7 @@ import { haptics, sounds } from '../utils/haptics';
 import Scratchpad from './Scratchpad';
 import { Edit2 } from 'lucide-react';
 import type { AnswerMode } from './ReviewModeSelector';
+import { checkTypedAnswer } from '../utils/answerCheck';
 
 interface ReviewCardProps {
   card: Flashcard;
@@ -74,55 +75,6 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
     rotateX.set(0);
     rotateY.set(0);
   }, [rotateX, rotateY]);
-
-  // Offline AI similarity calculation using Dice's Coefficient (Bigram-based string overlap)
-  const calculateSimilarity = useCallback((s1: string, s2: string): number => {
-    const clean = (str: string) => 
-      str.toLowerCase()
-         .replace(/\{\{(.*?)\}\}/g, '$1') // remove cloze
-         .replace(/[*_#`\-+]/g, '') // remove markdown
-         .replace(/[.,/#!$%^&*;:{}=\-_`~()?'"“”]/g, '') // remove punctuation
-         .replace(/\s+/g, '') // remove spaces
-         .trim();
-
-    const a = clean(s1);
-    const b = clean(s2);
-
-    if (!a || !b) return 0;
-    if (a === b) return 1;
-
-    const getBigrams = (str: string) => {
-      const bigrams = new Set<string>();
-      for (let i = 0; i < str.length - 1; i++) {
-        bigrams.add(str.substring(i, i + 2));
-      }
-      return bigrams;
-    };
-
-    const bigramsA = getBigrams(a);
-    const bigramsB = getBigrams(b);
-    
-    if (bigramsA.size === 0 || bigramsB.size === 0) {
-      let intersection = 0;
-      const charsA = a.split('');
-      const charsB = b.split('');
-      charsA.forEach(c => {
-        const idx = charsB.indexOf(c);
-        if (idx !== -1) {
-          intersection++;
-          charsB.splice(idx, 1);
-        }
-      });
-      return (2 * intersection) / (a.length + b.length);
-    }
-
-    let intersection = 0;
-    bigramsA.forEach(b => {
-      if (bigramsB.has(b)) intersection++;
-    });
-
-    return (2 * intersection) / (bigramsA.size + bigramsB.size);
-  }, []);
 
   // Cloze Deletion: แปลง {{text}} เป็น [...] สำหรับหน้าคำถาม
   const renderClozeText = (text: string, showAnswer: boolean) => {
@@ -644,41 +596,33 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
                     <div className="text-xl md:text-2xl font-bold text-center leading-relaxed relative z-10 w-full flex flex-col items-center max-h-full overflow-y-auto overflow-x-hidden no-scrollbar pt-4 pb-4">
                       {/* Condensed Offline AI Feedback & Typed Answer Comparison */}
                       {typedAnswer.trim() && (() => {
-                        const similarity = calculateSimilarity(typedAnswer, card.answer);
-                        const matchPercent = Math.round(similarity * 100);
-                        
-                        let suggestionText = '';
-                        let suggestionColor = '';
-                        if (matchPercent >= 85) {
-                          suggestionText = 'ยอดเยี่ยม (แนะนำ: ง่าย)';
-                          suggestionColor = 'text-green-300';
-                        } else if (matchPercent >= 60) {
-                          suggestionText = 'ถูกต้องส่วนใหญ่ (แนะนำ: พอได้)';
-                          suggestionColor = 'text-sky-200';
-                        } else if (matchPercent >= 30) {
-                          suggestionText = 'ถูกบางส่วน (แนะนำ: ยาก)';
-                          suggestionColor = 'text-amber-200';
-                        } else {
-                          suggestionText = 'ลองใหม่อีกครั้ง (แนะนำ: ทำใหม่)';
-                          suggestionColor = 'text-rose-200';
-                        }
-                        
+                        const { percent, suggestion } = checkTypedAnswer(typedAnswer, card.answer);
+                        const SUGGESTIONS = {
+                          3: { text: 'ถูกต้อง (แนะนำ: พอได้)', color: 'text-green-300' },
+                          2: { text: 'ใกล้เคียง (แนะนำ: ยาก)', color: 'text-amber-200' },
+                          1: { text: 'ยังไม่ถูก (แนะนำ: ทำใหม่)', color: 'text-rose-200' },
+                        } as const;
+                        const hint = suggestion ? SUGGESTIONS[suggestion] : null;
+
                         return (
                           <div className="mb-4 w-full text-left bg-white/10 rounded-2xl p-4 border border-white/10 text-white select-text cursor-default" onClick={e => e.stopPropagation()}>
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-[10px] font-bold text-white/70 uppercase tracking-widest">การตรวจสอบคำตอบออฟไลน์</span>
-                              <span className={`text-xs font-black ${suggestionColor}`}>{suggestionText}</span>
+                            <div className="flex items-center justify-between mb-2 gap-2">
+                              <span className="text-[10px] font-bold text-white/70 uppercase tracking-widest">คำตอบที่คุณพิมพ์</span>
+                              {hint
+                                ? <span className={`text-xs font-black ${hint.color}`}>{hint.text}</span>
+                                : <span className="text-xs font-bold text-white/70">เทียบกับเฉลยแล้วให้คะแนนเอง</span>}
                             </div>
-                            <div className="text-xs opacity-80 mb-1">คำตอบที่คุณพิมพ์:</div>
-                            <div className="p-2.5 bg-black/20 rounded-xl font-mono text-xs text-white/95 break-words whitespace-pre-wrap select-text mb-3 border border-white/5">
+                            <div className={`p-2.5 bg-black/20 rounded-xl font-mono text-xs text-white/95 break-words whitespace-pre-wrap select-text border border-white/5 ${percent !== null ? 'mb-3' : ''}`}>
                               {typedAnswer}
                             </div>
-                            <div className="flex items-center gap-3">
-                              <div className="flex-1 bg-white/20 h-2 rounded-full overflow-hidden">
-                                <div className="bg-white h-full transition-all duration-500" style={{ width: `${matchPercent}%` }} />
+                            {percent !== null && (
+                              <div className="flex items-center gap-3">
+                                <div className="flex-1 bg-white/20 h-2 rounded-full overflow-hidden" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100} aria-label="ความตรงกับเฉลย">
+                                  <div className="bg-white h-full transition-all duration-500" style={{ width: `${percent}%` }} />
+                                </div>
+                                <span className="text-xs font-black text-white">ตรง {percent}%</span>
                               </div>
-                              <span className="text-xs font-black text-white">{matchPercent}% Match</span>
-                            </div>
+                            )}
                           </div>
                         );
                       })()}
