@@ -76,6 +76,14 @@ function AppContent() {
   const [showAddDeck, setShowAddDeck] = useState(false);
   const [editingCard, setEditingCard] = useState<Flashcard | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+  const [unsyncedCount, setUnsyncedCount] = useState(0);
+
+  const openSignOutConfirm = async () => {
+    const { syncQueue } = await import('./store/syncQueue');
+    setUnsyncedCount((await syncQueue.getQueue()).length);
+    setShowSignOutConfirm(true);
+  };
   const [currentAchievement, setCurrentAchievement] = useState<Achievement | null>(null);
   const [hasHandledLaunchShortcut, setHasHandledLaunchShortcut] = useState(false);
 
@@ -400,7 +408,7 @@ function AppContent() {
                 {/* Logout */}
                 {(user || isDemo) && (
                   <button
-                    onClick={isDemo ? () => setShowLogoutConfirm(true) : signOut}
+                    onClick={isDemo ? () => setShowLogoutConfirm(true) : () => void openSignOutConfirm()}
                     className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg transition-colors ${
                       isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'
                     }`}
@@ -642,6 +650,17 @@ function AppContent() {
         confirmText="ออกจากระบบ" cancelText="ยกเลิก" type="warning"
         onConfirm={() => { setDemoMode(false); window.location.reload(); }}
         onCancel={() => setShowLogoutConfirm(false)}
+      />
+
+      <ConfirmModal
+        isOpen={showSignOutConfirm}
+        title="ออกจากระบบ?"
+        message={unsyncedCount > 0
+          ? `ยังมี ${unsyncedCount} รายการที่ยังไม่ได้ซิงก์ขึ้นเซิร์ฟเวอร์ ถ้าออกจากระบบตอนนี้ รายการเหล่านี้จะหายไป แนะนำให้เชื่อมต่ออินเทอร์เน็ตแล้วรอให้ซิงก์เสร็จก่อน`
+          : 'ข้อมูลทั้งหมดซิงก์ขึ้นเซิร์ฟเวอร์แล้ว เข้าสู่ระบบอีกครั้งเมื่อไหร่ก็กลับมาใช้ต่อได้ทันที'}
+        confirmText="ออกจากระบบ" cancelText="ยกเลิก" type={unsyncedCount > 0 ? 'danger' : 'warning'}
+        onConfirm={() => { setShowSignOutConfirm(false); void signOut(); }}
+        onCancel={() => setShowSignOutConfirm(false)}
       />
 
       <ConfirmModal
