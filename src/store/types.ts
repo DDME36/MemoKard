@@ -2,7 +2,7 @@
 // Shared Types for Store
 // ============================================
 // This file breaks circular dependencies between
-// store.ts, supabaseStore.ts, and syncQueue.ts
+// store.ts, pocketbaseStore.ts, and syncQueue.ts
 
 import type { FSRSState } from '../utils/fsrs';
 
@@ -21,6 +21,8 @@ export interface Flashcard {
   answer: string;
   questionImage?: string;
   answerImage?: string;
+  // ID ของการ์ดในชุดสาธารณะ (เฉพาะชุดที่ติดตาม) ใช้จับคู่ตอนอัปเดตจากชุดต้นทาง
+  sourceCardId?: string;
   // Keep these for Supabase compatibility (mapped from FSRS values)
   interval: number;
   repetition: number;

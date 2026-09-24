@@ -5,9 +5,9 @@ const pocketbaseUrl = import.meta.env.VITE_POCKETBASE_URL || '';
 export type BackendStatus = 'unconfigured' | 'checking' | 'available' | 'unavailable';
 
 // ตรวจสอบว่ามีการตั้งค่า PocketBase URL หรือไม่
-export const isPocketBaseConfigured = () => {
-  return Boolean(pocketbaseUrl && pocketbaseUrl.trim() !== '');
-};
+let configuredOverride = false;
+export const isPocketBaseConfigured = () =>
+  configuredOverride || Boolean(pocketbaseUrl && pocketbaseUrl.trim() !== '');
 
 /**
  * ตรวจสอบความพร้อมของ PocketBase service
@@ -36,7 +36,14 @@ export async function checkPocketBaseHealth(timeoutMs = 5000): Promise<boolean> 
 }
 
 // สร้าง PocketBase client instance
-export const pb = new PocketBase(pocketbaseUrl || 'http://127.0.0.1:8090');
+export let pb = new PocketBase(pocketbaseUrl || 'http://127.0.0.1:8090');
 
 // ปิด auto-cancellation ของ request ซ้ำใน PocketBase เพื่อให้ sync และ mutation ทำงานราบรื่น
 pb.autoCancellation(false);
+
+/** ใช้ในเทสต์ integration เท่านั้น */
+export function setPocketBaseClient(client: PocketBase): void {
+  pb = client;
+  pb.autoCancellation(false);
+  configuredOverride = true;
+}

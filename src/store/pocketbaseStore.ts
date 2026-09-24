@@ -1,372 +1,177 @@
-import { pb, isPocketBaseConfigured } from '../lib/pocketbase';
+import type { RecordModel } from 'pocketbase';
+import { pb } from '../lib/pocketbase';
+import { createInitialFSRSState } from '../utils/fsrs';
+import type { UserProgress } from '../utils/achievements';
+import type { RemoteChange, RemoteReviewLog, SyncedProgress } from './merge';
+import type { ReviewLogPayload } from './syncQueue';
 import type { Deck, Flashcard } from './types';
-import { createInitialFSRSState, type FSRSState } from '../utils/fsrs';
 
-// ============================================
-// PocketBase Cloud Storage Operations
-// ============================================
+export interface ServerChanges {
+  decks: RemoteChange<Deck>[];
+  cards: RemoteChange<Flashcard>[];
+  logs: RemoteReviewLog[];
+  progress: SyncedProgress | null;
+  maxUpdated: string | null;
+  boundaryLogIds: string[];
+}
 
-export const pocketbaseStore = {
-  // ── Decks ──
-  async fetchDecks(userId: string): Promise<Deck[]> {
-    if (!isPocketBaseConfigured()) return [];
+const status = (err: unknown) => (err as { status?: number })?.status;
 
-    try {
-      const records = await pb.collection('decks').getFullList({
-        filter: `user = "${userId}"`,
-        sort: '-created',
-      });
+/** แปลงรูป (data URL หรือ URL ไฟล์) เป็น Blob สำหรับอัปโหลด; ไม่มีรูปคืน null */
+export async function imageToBlob(value: string | undefined): Promise<Blob | null> {
+  if (!value) return null;
+  const res = await fetch(value);
+  if (!res.ok) throw new Error(`Cannot read image (${res.status})`);
+  return res.blob();
+}
 
-      return records.map((d) => ({
-        id: d.id,
-        name: d.name,
-        color: d.color,
-        createdAt: new Date(d.created),
-        linkedPublicDeckId: d.linked_public_deck_id || null,
-      }));
-    } catch (error) {
-      console.error('Error fetching decks from PocketBase:', error);
-      throw error;
-    }
+/**
+ * ตัดสินว่าจะส่งรูปอย่างไร
+ * - ไม่มีรูป → null (ลบรูปบนเซิร์ฟเวอร์)
+ * - URL ไฟล์ของ record นี้เอง → 'unchanged'
+ * - data URL หรือ URL จากที่อื่น (เช่นชุดสาธารณะ) → Blob
+ */
+async function resolveImage(value: string | undefined, recordId: string): Promise<Blob | null | 'unchanged'> {
+  if (!value) return null;
+  if (/^https?:/.test(value) && value.includes(`/${recordId}/`)) return 'unchanged';
+  return imageToBlob(value);
+}
+
+async function upsert(collection: string, id: string, body: Record<string, unknown> | FormData): Promise<void> {
+  try {
+    await pb.collection(collection).update(id, body);
+  } catch (err) {
+    if (status(err) !== 404) throw err;
+    if (body instanceof FormData) body.set('id', id);
+    else body = { ...body, id };
+    await pb.collection(collection).create(body);
+  }
+}
+
+async function softDelete(collection: string, id: string): Promise<void> {
+  try {
+    await pb.collection(collection).update(id, { deleted: true });
+  } catch (err) {
+    if (status(err) !== 404) throw err; // ไม่เคยขึ้นเซิร์ฟเวอร์ = ถือว่าลบแล้ว
+  }
+}
+
+const fileUrl = (record: RecordModel, field: string): string | undefined =>
+  record[field] ? pb.files.getURL(record, record[field]) : undefined;
+
+const toDeck = (r: RecordModel): RemoteChange<Deck> => ({
+  deleted: Boolean(r.deleted),
+  record: {
+    id: r.id,
+    name: r.name,
+    color: r.color || 'violet',
+    createdAt: new Date(r.created.replace(' ', 'T')),
+    linkedPublicDeckId: r.linked_public_deck || null,
   },
+});
 
-  async createDeck(userId: string, name: string, color: string, customId?: string): Promise<Deck | null> {
-    if (!isPocketBaseConfigured()) return null;
-
-    const body: Record<string, unknown> = {
-      user: userId,
-      name,
-      color,
-    };
-    if (customId) {
-      body.id = customId;
-    }
-
-    try {
-      const record = await pb.collection('decks').create(body);
-      return {
-        id: record.id,
-        name: record.name,
-        color: record.color,
-        createdAt: new Date(record.created),
-      };
-    } catch (error) {
-      console.error('Error creating deck in PocketBase:', error);
-      throw error;
-    }
-  },
-
-  async updateDeck(deckId: string, updates: { name?: string; color?: string }): Promise<boolean> {
-    if (!isPocketBaseConfigured()) return false;
-
-    try {
-      await pb.collection('decks').update(deckId, updates);
-      return true;
-    } catch (error) {
-      console.error('Error updating deck in PocketBase:', error);
-      throw error;
-    }
-  },
-
-  async deleteDeck(deckId: string): Promise<boolean> {
-    if (!isPocketBaseConfigured()) return false;
-
-    try {
-      await pb.collection('decks').delete(deckId);
-      return true;
-    } catch (error) {
-      console.error('Error deleting deck from PocketBase:', error);
-      throw error;
-    }
-  },
-
-  // ── Cards ──
-  async fetchCards(userId: string, deckId?: string): Promise<Flashcard[]> {
-    if (!isPocketBaseConfigured()) return [];
-
-    let filter = `user = "${userId}"`;
-    if (deckId) {
-      filter += ` && deck = "${deckId}"`;
-    }
-
-    try {
-      const records = await pb.collection('cards').getFullList({
-        filter,
-        sort: '-created',
-      });
-
-      return records.map((c) => ({
-        id: c.id,
-        deckId: c.deck || c.deck_id,
-        question: c.question,
-        answer: c.answer,
-        interval: c.interval,
-        repetition: c.repetition,
-        easeFactor: c.ease_factor,
-        nextReviewDate: new Date(c.next_review),
-        createdAt: new Date(c.created),
-        lastReviewDate: new Date(c.updated),
-        fsrsState: c.fsrs_state ?? createInitialFSRSState(),
-      }));
-    } catch (error) {
-      console.error('Error fetching cards from PocketBase:', error);
-      throw error;
-    }
-  },
-
-  async createCard(
-    userId: string,
-    deckId: string,
-    question: string,
-    answer: string,
-    sm2Data: { interval: number; repetition: number; easeFactor: number },
-    customId?: string,
-    fsrsState?: FSRSState
-  ): Promise<Flashcard | null> {
-    if (!isPocketBaseConfigured()) return null;
-
-    const body: Record<string, unknown> = {
-      user: userId,
-      deck: deckId,
-      deck_id: deckId,
-      question,
-      answer,
-      interval: sm2Data.interval,
-      repetition: sm2Data.repetition,
-      ease_factor: sm2Data.easeFactor,
-      next_review: new Date().toISOString(),
-      fsrs_state: fsrsState ?? createInitialFSRSState(),
-    };
-    if (customId) {
-      body.id = customId;
-    }
-
-    try {
-      const record = await pb.collection('cards').create(body);
-      return {
-        id: record.id,
-        deckId: record.deck || record.deck_id,
-        question: record.question,
-        answer: record.answer,
-        interval: record.interval,
-        repetition: record.repetition,
-        easeFactor: record.ease_factor,
-        nextReviewDate: new Date(record.next_review),
-        createdAt: new Date(record.created),
-        lastReviewDate: new Date(record.updated),
-        fsrsState: record.fsrs_state ?? createInitialFSRSState(),
-      };
-    } catch (error) {
-      console.error('Error creating card in PocketBase:', error);
-      throw error;
-    }
-  },
-
-  async updateCard(
-    cardId: string,
-    updates: {
-      question?: string;
-      answer?: string;
-      interval?: number;
-      repetition?: number;
-      easeFactor?: number;
-      nextReviewDate?: Date;
-      fsrsState?: FSRSState;
-    }
-  ): Promise<boolean> {
-    if (!isPocketBaseConfigured()) return false;
-
-    const dbUpdates: Record<string, unknown> = {};
-    if (updates.question !== undefined) dbUpdates.question = updates.question;
-    if (updates.answer !== undefined) dbUpdates.answer = updates.answer;
-    if (updates.interval !== undefined) dbUpdates.interval = updates.interval;
-    if (updates.repetition !== undefined) dbUpdates.repetition = updates.repetition;
-    if (updates.easeFactor !== undefined) dbUpdates.ease_factor = updates.easeFactor;
-    if (updates.nextReviewDate !== undefined) {
-      dbUpdates.next_review = updates.nextReviewDate instanceof Date 
-        ? updates.nextReviewDate.toISOString() 
-        : new Date(updates.nextReviewDate).toISOString();
-    }
-    if (updates.fsrsState !== undefined) dbUpdates.fsrs_state = updates.fsrsState;
-
-    try {
-      await pb.collection('cards').update(cardId, dbUpdates);
-      return true;
-    } catch (error) {
-      console.error('Error updating card in PocketBase:', error);
-      throw error;
-    }
-  },
-
-  async deleteCard(cardId: string): Promise<boolean> {
-    if (!isPocketBaseConfigured()) return false;
-
-    try {
-      await pb.collection('cards').delete(cardId);
-      return true;
-    } catch (error) {
-      console.error('Error deleting card from PocketBase:', error);
-      throw error;
-    }
-  },
-
-  // ── User Stats ──
-  async fetchUserStats(userId: string): Promise<{ streak: number; lastStudyDate: string | null }> {
-    if (!isPocketBaseConfigured()) return { streak: 0, lastStudyDate: null };
-
-    try {
-      const record = await pb.collection('user_stats').getFirstListItem(`user = "${userId}"`);
-      return {
-        streak: record.streak || 0,
-        lastStudyDate: record.last_review_date || null,
-      };
-    } catch {
-      return { streak: 0, lastStudyDate: null };
-    }
-  },
-
-  async updateUserStats(userId: string, streak: number, lastStudyDate: string): Promise<boolean> {
-    if (!isPocketBaseConfigured()) return false;
-
-    try {
-      // Find existing stat or create new
-      let existingId: string | null = null;
-      try {
-        const record = await pb.collection('user_stats').getFirstListItem(`user = "${userId}"`);
-        existingId = record.id;
-      } catch {
-        // Not found
-      }
-
-      if (existingId) {
-        await pb.collection('user_stats').update(existingId, {
-          streak,
-          last_review_date: lastStudyDate,
-        });
-      } else {
-        await pb.collection('user_stats').create({
-          user: userId,
-          streak,
-          last_review_date: lastStudyDate,
-        });
-      }
-      return true;
-    } catch (error) {
-      console.error('Error updating user stats in PocketBase:', error);
-      return false;
-    }
-  },
-
-  // ── Review Logs ──
-  async logReview(userId: string, cardId: string, quality: number): Promise<boolean> {
-    if (!isPocketBaseConfigured()) return false;
-
-    try {
-      await pb.collection('review_logs').create({
-        user: userId,
-        card_id: cardId,
-        quality,
-      });
-      return true;
-    } catch (error) {
-      console.error('Error logging review in PocketBase:', error);
-      return false;
-    }
-  },
-
-  // ── User Achievements ──
-  async fetchUserAchievements(userId: string): Promise<{
-    unlockedAchievements: string[];
-    perfectReviews: number;
-    totalStudyTime: number;
-    decksShared: number;
-    decksImported: number;
-    maxStreak: number;
-  }> {
-    const defaultData = {
-      unlockedAchievements: [],
-      perfectReviews: 0,
-      totalStudyTime: 0,
-      decksShared: 0,
-      decksImported: 0,
-      maxStreak: 0,
-    };
-
-    if (!isPocketBaseConfigured()) return defaultData;
-
-    try {
-      const record = await pb.collection('user_achievements').getFirstListItem(`user = "${userId}"`);
-      return {
-        unlockedAchievements: record.unlocked_achievements || [],
-        perfectReviews: record.perfect_reviews || 0,
-        totalStudyTime: record.total_study_time || 0,
-        decksShared: record.decks_shared || 0,
-        decksImported: record.decks_imported || 0,
-        maxStreak: record.max_streak || 0,
-      };
-    } catch {
-      return defaultData;
-    }
-  },
-
-  async updateUserAchievements(
-    userId: string,
-    updates: {
-      unlockedAchievements?: string[];
-      perfectReviews?: number;
-      totalStudyTime?: number;
-      decksShared?: number;
-      decksImported?: number;
-      maxStreak?: number;
-    }
-  ): Promise<boolean> {
-    if (!isPocketBaseConfigured()) return false;
-
-    try {
-      let existingId: string | null = null;
-      try {
-        const record = await pb.collection('user_achievements').getFirstListItem(`user = "${userId}"`);
-        existingId = record.id;
-      } catch {
-        // Not found
-      }
-
-      const payload: Record<string, unknown> = {};
-      if (updates.unlockedAchievements !== undefined) payload.unlocked_achievements = updates.unlockedAchievements;
-      if (updates.perfectReviews !== undefined) payload.perfect_reviews = updates.perfectReviews;
-      if (updates.totalStudyTime !== undefined) payload.total_study_time = updates.totalStudyTime;
-      if (updates.decksShared !== undefined) payload.decks_shared = updates.decksShared;
-      if (updates.decksImported !== undefined) payload.decks_imported = updates.decksImported;
-      if (updates.maxStreak !== undefined) payload.max_streak = updates.maxStreak;
-
-      if (existingId) {
-        await pb.collection('user_achievements').update(existingId, payload);
-      } else {
-        await pb.collection('user_achievements').create({
-          user: userId,
-          ...payload,
-        });
-      }
-      return true;
-    } catch (error) {
-      console.error('Error updating achievements in PocketBase:', error);
-      return false;
-    }
-  },
-
-  async incrementStudyTime(userId: string, minutes: number): Promise<boolean> {
-    if (!isPocketBaseConfigured()) return false;
-
-    try {
-      const current = await this.fetchUserAchievements(userId);
-      return await this.updateUserAchievements(userId, {
-        totalStudyTime: current.totalStudyTime + Math.max(minutes, 0),
-      });
-    } catch {
-      return false;
-    }
-  },
+const toCard = (r: RecordModel): RemoteChange<Flashcard> => {
+  const fsrsState = r.fsrs_state ?? createInitialFSRSState();
+  const nextReview = new Date((r.next_review || fsrsState.due).replace(' ', 'T'));
+  return {
+    deleted: Boolean(r.deleted),
+    record: {
+      id: r.id,
+      deckId: r.deck,
+      question: r.question,
+      answer: r.answer,
+      questionImage: fileUrl(r, 'question_image'),
+      answerImage: fileUrl(r, 'answer_image'),
+      sourceCardId: r.source_card || undefined,
+      interval: fsrsState.scheduled_days ?? 0,
+      repetition: fsrsState.reps ?? 0,
+      easeFactor: 2.5,
+      nextReviewDate: nextReview,
+      createdAt: new Date(r.created.replace(' ', 'T')),
+      lastReviewDate: new Date((fsrsState.last_review ?? r.updated).replace(' ', 'T')),
+      fsrsState,
+    },
+  };
 };
 
-// Aliases for compatibility during transition
-export const supabaseStore = pocketbaseStore;
+const maxOf = (current: string | null, records: RecordModel[]): string | null =>
+  records.reduce<string | null>((max, r) => (!max || r.updated > max ? r.updated : max), current);
+
+export const pocketbaseStore = {
+  async upsertDeck(userId: string, deck: Deck): Promise<void> {
+    await upsert('decks', deck.id, {
+      user: userId,
+      name: deck.name,
+      color: deck.color,
+      linked_public_deck: deck.linkedPublicDeckId || '',
+      deleted: false,
+    });
+  },
+
+  softDeleteDeck: (id: string) => softDelete('decks', id),
+
+  async upsertCard(userId: string, card: Flashcard): Promise<void> {
+    const form = new FormData();
+    form.set('user', userId);
+    form.set('deck', card.deckId);
+    form.set('question', card.question);
+    form.set('answer', card.answer);
+    form.set('fsrs_state', JSON.stringify(card.fsrsState));
+    form.set('next_review', new Date(card.nextReviewDate).toISOString());
+    form.set('source_card', card.sourceCardId ?? '');
+    form.set('deleted', 'false');
+    for (const [field, value] of [['question_image', card.questionImage], ['answer_image', card.answerImage]] as const) {
+      const image = await resolveImage(value, card.id);
+      if (image === 'unchanged') continue;
+      if (image) form.set(field, image, `${field}.${image.type.split('/')[1] || 'png'}`);
+      else form.set(field, '');
+    }
+    await upsert('cards', card.id, form);
+  },
+
+  softDeleteCard: (id: string) => softDelete('cards', id),
+
+  async createReviewLog(userId: string, log: ReviewLogPayload): Promise<void> {
+    try {
+      await pb.collection('review_logs').create({
+        id: log.id,
+        user: userId,
+        card_id: log.cardId,
+        rating: log.rating,
+        reviewed_at: log.reviewedAt,
+        device: log.device,
+      });
+    } catch (err) {
+      if (status(err) !== 400) throw err;
+      // สร้างสำเร็จไปแล้วรอบก่อนแต่คำตอบหาย → ถือว่าสำเร็จ
+      await pb.collection('review_logs').getOne(log.id);
+    }
+  },
+
+  async upsertProgress(userId: string, progress: SyncedProgress): Promise<void> {
+    await upsert('user_progress', userId, { user: userId, progress });
+  },
+
+  async fetchChanges(userId: string, since: string | null): Promise<ServerChanges> {
+    const filter = since
+      ? pb.filter('user = {:uid} && updated >= {:since}', { uid: userId, since })
+      : pb.filter('user = {:uid}', { uid: userId });
+    const options = { filter, sort: 'updated' };
+    const [decks, cards, logs, progress] = await Promise.all([
+      pb.collection('decks').getFullList(options),
+      pb.collection('cards').getFullList(options),
+      pb.collection('review_logs').getFullList(options),
+      pb.collection('user_progress').getFullList(options),
+    ]);
+    const p = progress[0]?.progress as { counters?: UserProgress; unlockedAchievements?: string[] } | undefined;
+    const maxUpdated = maxOf(maxOf(maxOf(maxOf(since, decks), cards), logs), progress);
+    return {
+      decks: decks.map(toDeck),
+      cards: cards.map(toCard),
+      logs: logs.map((r) => ({ id: r.id, reviewedAt: r.reviewed_at, device: r.device })),
+      progress: p?.counters ? { counters: p.counters, unlockedAchievements: p.unlockedAchievements ?? [] } : null,
+      maxUpdated,
+      boundaryLogIds: logs.filter((r) => r.updated === maxUpdated).map((r) => r.id),
+    };
+  },
+};
