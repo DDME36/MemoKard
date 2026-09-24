@@ -1,3 +1,6 @@
+import { forgetting_curve } from 'ts-fsrs';
+import { averageRecall, cardBuckets } from '../utils/memoryStats';
+import { scheduler } from '../utils/fsrs';
 import { motion } from 'framer-motion';
 import { useFlashcardStore } from '../store/store';
 import { useTheme } from '../contexts/ThemeContext';
@@ -53,14 +56,14 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
     const totalCards = cards.length;
     const now = new Date();
     const dueCards = cards.filter(c => isCardDue(c, now)).length;
-    const newCards = cards.filter(c => c.repetition === 0).length;
-    const learningCards = cards.filter(c => c.repetition > 0 && c.repetition < 3).length;
-    const matureCards = cards.filter(c => c.repetition >= 3).length;
+    // แบ่งกลุ่มตามสถานะ FSRS (ไม่ใช้จำนวนครั้งแบบ SM-2)
+    const buckets = cardBuckets(cards);
+    const newCards = buckets.newCards;
+    const learningCards = buckets.learning + buckets.young;
+    const matureCards = buckets.mature;
+    const recallNow = averageRecall(cards, now);
 
-    const reviewedCards = cards.filter(c => c.repetition > 0);
-    const avgEaseFactor = reviewedCards.length > 0
-      ? (reviewedCards.reduce((sum, c) => sum + c.easeFactor, 0) / reviewedCards.length).toFixed(2)
-      : '2.50';
+    const reviewedCards = cards.filter(c => (c.fsrsState?.state ?? 0) !== 0);
 
     const totalReviews = Object.values(reviewHistory).reduce((sum, count) => sum + count, 0);
     const today = studyDayKey(now);
@@ -114,12 +117,10 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
     const fsrsStateReview   = cards.filter(c => (c.fsrsState?.state ?? 0) === 2).length;
     const fsrsStateRelearn  = cards.filter(c => (c.fsrsState?.state ?? 0) === 3).length;
 
-    // ✅ Real FSRS Forgetting Curve — R(t,S) = (1 + FACTOR*t/S)^DECAY
-    const FSRS_FACTOR = 19 / 81;
-    const FSRS_DECAY = -0.5;
-    const fsrsR = (t: number, s: number) => Math.pow(1 + FSRS_FACTOR * t / s, FSRS_DECAY);
-    // time when retention drops to 90%: t = S * (0.9^(1/DECAY) - 1) / FACTOR
-    const reviewAt = (s: number) => s * (Math.pow(0.9, 1 / FSRS_DECAY) - 1) / FSRS_FACTOR;
+    // เส้นการลืมของ FSRS-6 (พารามิเตอร์ชุดเดียวกับที่ใช้จัดตาราง)
+    const fsrsR = (t: number, s: number) => forgetting_curve(scheduler.parameters.w, t, s);
+    // โดยนิยามของ FSRS ความจำลดเหลือ 90% เมื่อผ่านไปเท่ากับ stability (วัน)
+    const reviewAt = (s: number) => s;
     // Use avgStability for real curves; fallback to 1 if no data
     const curveS2 = Math.max(parseFloat(avgStability) || 1, 1);
     const curveS1 = 1.0;              // initial stability (first encounter)
@@ -154,7 +155,7 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
 
     return {
       totalCards, dueCards, newCards, learningCards, matureCards,
-      retentionRate, avgEaseFactor, totalReviews, reviewsToday,
+      retentionRate, recallNow, totalReviews, reviewsToday,
       reviewsThisWeek, avgReviewsPerDay, forecast,
       // FSRS metrics
       avgStability, avgDifficulty, avgInterval,
@@ -261,7 +262,7 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
               กำลังเรียน
             </div>
             <div className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-              ทบทวน 1-2 ครั้ง
+              ระยะทบทวนต่ำกว่า 21 วัน
             </div>
           </div>
           <div className="text-center">
@@ -269,21 +270,21 @@ export default function StatisticsPage({ dayColor }: StatisticsPageProps) {
               {stats.matureCards}
             </div>
             <div className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-              จำได้แล้ว
+              จำได้แม่น
             </div>
             <div className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-              ทบทวน 3+ ครั้ง
+              ระยะทบทวน 21 วันขึ้นไป
             </div>
           </div>
           <div className="text-center">
             <div className={`text-3xl font-bold mb-1 display-font bg-gradient-to-r ${dayColor.gradient} bg-clip-text text-transparent`}>
-              {stats.avgEaseFactor}
+              {stats.recallNow === null ? '–' : `${stats.recallNow}%`}
             </div>
             <div className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-              Ease Factor
+              โอกาสจำได้ตอนนี้
             </div>
             <div className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-              ค่าเฉลี่ยความง่าย
+              เฉลี่ยจากการ์ดที่เคยทบทวน (FSRS)
             </div>
           </div>
         </div>
