@@ -104,7 +104,7 @@ export default function ReportModal({ isOpen, deckName, onClose, onSubmit }: Rep
                   <textarea
                     value={details}
                     onChange={(e) => setDetails(e.target.value)}
-                    placeholder="อธิบายปัญหาที่พบ..."
+                    placeholder="อธิบายปัญหาที่พบ…"
                     rows={4}
                     className={`w-full px-4 py-3 rounded-xl border transition-colors resize-none ${
                       isDark
@@ -143,9 +143,9 @@ export default function ReportModal({ isOpen, deckName, onClose, onSubmit }: Rep
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="flex-1 px-6 py-3 bg-gradient-to-r from-rose-500 to-pink-600 text-white rounded-xl font-bold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-rose-500 to-pink-600 text-white rounded-xl font-bold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isSubmitting ? 'กำลังส่ง...' : 'ส่งรายงาน'}
+                    {isSubmitting ? 'กำลังส่ง…' : 'ส่งรายงาน'}
                   </button>
                 </div>
               </form>

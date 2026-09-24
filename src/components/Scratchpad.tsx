@@ -105,7 +105,7 @@ export default function Scratchpad({ onClose, isDark }: ScratchpadProps) {
         <button
           type="button"
           onClick={() => setTool('pen')}
-          className={`p-2 rounded-xl transition-all ${tool === 'pen' ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:text-white'}`}
+          className={`p-2 rounded-xl transition ${tool === 'pen' ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:text-white'}`}
           title="ดินสอเขียน"
         >
           <Edit2 className="w-4 h-4" />
@@ -113,7 +113,7 @@ export default function Scratchpad({ onClose, isDark }: ScratchpadProps) {
         <button
           type="button"
           onClick={() => setTool('eraser')}
-          className={`p-2 rounded-xl transition-all ${tool === 'eraser' ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:text-white'}`}
+          className={`p-2 rounded-xl transition ${tool === 'eraser' ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:text-white'}`}
           title="ยางลบ"
         >
           <Eraser className="w-4 h-4" />
@@ -121,7 +121,7 @@ export default function Scratchpad({ onClose, isDark }: ScratchpadProps) {
         <button
           type="button"
           onClick={clearCanvas}
-          className="p-2 rounded-xl text-slate-400 hover:text-rose-400 transition-all"
+          className="p-2 rounded-xl text-slate-400 hover:text-rose-400 transition"
           title="ล้างหน้าจอ"
         >
           <Trash2 className="w-4 h-4" />
@@ -142,7 +142,7 @@ export default function Scratchpad({ onClose, isDark }: ScratchpadProps) {
                 setColor(c);
                 setTool('pen');
               }}
-              className="w-4 h-4 rounded-full border border-white/20 transition-all hover:scale-125 focus:outline-none"
+              className="w-4 h-4 rounded-full border border-white/20 transition hover:scale-125 focus:outline-none"
               style={{ 
                 backgroundColor: c, 
                 boxShadow: color === c ? '0 0 0 2px rgba(255, 255, 255, 0.8)' : 'none' 
@@ -155,7 +155,7 @@ export default function Scratchpad({ onClose, isDark }: ScratchpadProps) {
         <button
           type="button"
           onClick={onClose}
-          className="p-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white transition-all"
+          className="p-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white transition"
           title="เสร็จสิ้น"
         >
           <Check className="w-4 h-4" />

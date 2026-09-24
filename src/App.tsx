@@ -281,7 +281,7 @@ function AppContent() {
           }}>
             {/* Logo - Responsive */}
             <button onClick={goHome} className="flex items-center gap-2 sm:gap-3 group flex-shrink-0">
-              <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-br ${dayColor.gradient} flex items-center justify-center group-hover:scale-105 transition-all ${
+              <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-br ${dayColor.gradient} flex items-center justify-center group-hover:scale-105 transition ${
                 isDark ? '' : `shadow-lg ${dayColor.shadow}`
               }`}>
                 <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -430,7 +430,7 @@ function AppContent() {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => { haptics.medium(); setShowAddDeck(true); }}
-                  className={`hidden sm:flex items-center gap-2 px-3 py-2 bg-gradient-to-r ${dayColor.gradient} text-white rounded-lg font-semibold text-sm transition-all ${
+                  className={`hidden sm:flex items-center gap-2 px-3 py-2 bg-gradient-to-r ${dayColor.gradient} text-white rounded-lg font-semibold text-sm transition ${
                     isDark ? '' : 'shadow-md hover:shadow-lg'
                   }`}
                 >
@@ -482,7 +482,7 @@ function AppContent() {
                   haptics.success();
                   setDemoMode(true);
                 }}
-                className={`w-full py-3.5 px-5 rounded-2xl text-xs font-bold shadow-md transition-all ${
+                className={`w-full py-3.5 px-5 rounded-2xl text-xs font-bold shadow-md transition ${
                   isDark
                     ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
                     : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm'
@@ -679,7 +679,7 @@ function AppContent() {
         }`} style={{
           paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))'
         }}>
-          MemoKard · เมมโมการ์ด
+          MemoKard · เมมโมการ์ด · สร้างโดย{' '}<span className="font-semibold">Zentyr</span>
         </footer>
       )}
 

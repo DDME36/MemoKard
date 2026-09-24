@@ -93,7 +93,7 @@ export default function AuthPage() {
         if (error) {
           setError(translateAuthError(error.message));
         } else {
-          setError('สมัครสมาชิกสำเร็จ! กำลังเข้าสู่ระบบ...');
+          setError('สมัครสมาชิกสำเร็จ! กำลังเข้าสู่ระบบ…');
         }
       } else {
         const { error } = await signIn(loginName.trim(), password);
@@ -111,7 +111,7 @@ export default function AuthPage() {
     setDemoMode(true);
   };
 
-  const inputClasses = `w-full pl-11 pr-4 py-3.5 border-2 rounded-2xl focus:outline-none focus:ring-4 transition-all font-medium ${
+  const inputClasses = `w-full pl-11 pr-4 py-3.5 border-2 rounded-2xl focus:outline-none focus:ring-4 transition font-medium ${
     isDark 
       ? 'bg-slate-800/80 border-slate-700/50 text-slate-100 placeholder-slate-500 focus:border-teal-500/80 focus:ring-teal-500/20' 
       : 'bg-white/90 border-slate-200/60 text-slate-800 placeholder-slate-400 focus:border-teal-400 focus:ring-teal-400/20 shadow-sm'
@@ -272,7 +272,7 @@ export default function AuthPage() {
                     <div className="mt-3 px-1">
                       <div className="flex gap-1.5 h-1.5 mb-1.5">
                         {[1, 2, 3, 4].map((level) => (
-                          <div key={level} className={`flex-1 rounded-full transition-all duration-300 ${strength >= level ? strengthColors[Math.min(strength - 1, 3)] : isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+                          <div key={level} className={`flex-1 rounded-full transition duration-300 ${strength >= level ? strengthColors[Math.min(strength - 1, 3)] : isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
                         ))}
                       </div>
                       <p className={`text-[10px] font-medium ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>
@@ -315,11 +315,11 @@ export default function AuthPage() {
                 </AnimatePresence>
 
                 {/* Submit Button */}
-                <motion.button type="submit" whileHover={isFormValid() ? { scale: 1.02 } : {}} whileTap={isFormValid() ? { scale: 0.98 } : {}} disabled={loading || !isFormValid()} className={`w-full py-4 mt-2 bg-gradient-to-r ${dayColor.gradient} hover:opacity-95 text-white font-bold rounded-2xl transition-all disabled:opacity-50 disabled:grayscale-[0.5] disabled:cursor-not-allowed ${isDark ? '' : `shadow-lg ${dayColor.shadow}`}`}>
+                <motion.button type="submit" aria-label={mode === 'login' ? 'เข้าสู่ระบบ' : 'สมัครสมาชิก'} whileHover={isFormValid() ? { scale: 1.02 } : {}} whileTap={isFormValid() ? { scale: 0.98 } : {}} disabled={loading || !isFormValid()} className={`w-full py-4 mt-2 bg-gradient-to-r ${dayColor.gradient} hover:opacity-95 text-white font-bold rounded-2xl transition disabled:opacity-50 disabled:grayscale-[0.5] disabled:cursor-not-allowed ${isDark ? '' : `shadow-lg ${dayColor.shadow}`}`}>
                   {loading ? (
                     <span className="flex items-center justify-center gap-2">
                       <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
-                      กำลังดำเนินการ...
+                      กำลังดำเนินการ…
                     </span>
                   ) : (
                     <AnimatePresence mode="wait" initial={false}>
@@ -337,7 +337,7 @@ export default function AuthPage() {
         {/* Demo Mode Button — เฉพาะหน้า login */}
         {mode === 'login' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }} className="mt-8 text-center">
-            <motion.button onClick={handleDemoMode} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className={`inline-flex items-center gap-2 px-6 py-3.5 backdrop-blur-md border font-semibold rounded-2xl transition-all ${isDark ? 'bg-slate-800/40 hover:bg-slate-800/60 border-slate-700/50 text-slate-300' : `bg-white/40 hover:bg-white/60 border-white/50 text-slate-700 shadow-sm hover:shadow-md`}`}>
+            <motion.button onClick={handleDemoMode} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className={`inline-flex items-center gap-2 px-6 py-3.5 backdrop-blur-md border font-semibold rounded-2xl transition ${isDark ? 'bg-slate-800/40 hover:bg-slate-800/60 border-slate-700/50 text-slate-300' : `bg-white/40 hover:bg-white/60 border-white/50 text-slate-700 shadow-sm hover:shadow-md`}`}>
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
               ทดลองใช้งานโดยไม่ล็อกอิน
             </motion.button>

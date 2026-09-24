@@ -420,7 +420,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
             <button
               type="button"
               onClick={() => setMode('create')}
-              className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
+              className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${
                 mode === 'create' 
                   ? 'bg-white dark:bg-slate-700 shadow text-slate-800 dark:text-white' 
                   : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
@@ -431,7 +431,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
             <button
               type="button"
               onClick={() => setMode('import')}
-              className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
+              className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${
                 mode === 'import' 
                   ? 'bg-white dark:bg-slate-700 shadow text-slate-800 dark:text-white' 
                   : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
@@ -448,8 +448,8 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="เช่น ภาษาอังกฤษ, คณิตศาสตร์..."
-                  className={`w-full px-4 py-4 border-2 rounded-2xl placeholder-slate-400 focus:outline-none transition-all text-sm font-medium ${
+                  placeholder="เช่น ภาษาอังกฤษ, คณิตศาสตร์…"
+                  className={`w-full px-4 py-4 border-2 rounded-2xl placeholder-slate-400 focus:outline-none transition text-sm font-medium ${
                     isDark
                       ? 'bg-slate-800 border-slate-700 text-slate-200'
                       : 'bg-slate-50 border-slate-200 text-slate-800'
@@ -476,7 +476,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => setColor(c)}
-                      className={`w-full aspect-square rounded-xl ${COLOR_MAP[c].bg} transition-all shadow-md flex items-center justify-center ${color === c ? `ring-4 ring-offset-2 ${COLOR_MAP[c].ring} ${isDark ? 'ring-offset-slate-900' : ''} scale-110` : 'opacity-70 hover:opacity-100'}`}
+                      className={`w-full aspect-square rounded-xl ${COLOR_MAP[c].bg} transition shadow-md flex items-center justify-center ${color === c ? `ring-4 ring-offset-2 ${COLOR_MAP[c].ring} ${isDark ? 'ring-offset-slate-900' : ''} scale-110` : 'opacity-70 hover:opacity-100'}`}
                       title={COLOR_MAP[c].label}
                     />
                   ))}
@@ -500,7 +500,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
                   type="submit" 
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className={`flex-1 py-3.5 bg-gradient-to-r ${dayColor.gradient} hover:opacity-90 text-white rounded-xl font-bold text-sm shadow-lg transition-all ${
+                  className={`flex-1 py-3.5 bg-gradient-to-r ${dayColor.gradient} hover:opacity-90 text-white rounded-xl font-bold text-sm shadow-lg transition ${
                     isDark ? 'shadow-purple-900/50' : dayColor.shadow
                   }`}>
                   สร้างชุดการ์ด
@@ -525,8 +525,8 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
                     <input
                       value={promptTopic}
                       onChange={(e) => setPromptTopic(e.target.value)}
-                      placeholder="เช่น คำศัพท์ภาษาอังกฤษพื้นฐาน, สูตรฟิสิกส์..."
-                      className={`w-full pl-4 pr-12 py-3 border-2 rounded-2xl placeholder-slate-400 focus:outline-none transition-all text-xs font-semibold ${
+                      placeholder="เช่น คำศัพท์ภาษาอังกฤษพื้นฐาน, สูตรฟิสิกส์…"
+                      className={`w-full pl-4 pr-12 py-3 border-2 rounded-2xl placeholder-slate-400 focus:outline-none transition text-xs font-semibold ${
                         isDark
                           ? 'bg-slate-800 border-slate-700 text-slate-200'
                           : 'bg-slate-50 border-slate-200 text-slate-800'
@@ -544,7 +544,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
                       type="button"
                       onClick={handleRandomTopic}
                       title="สุ่มหัวข้อน่าสนใจ"
-                      className={`absolute right-2.5 w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
+                      className={`absolute right-2.5 w-8 h-8 rounded-xl flex items-center justify-center transition ${
                         isDark 
                           ? 'bg-slate-700 hover:bg-slate-600 text-slate-200' 
                           : 'bg-white hover:bg-slate-100 shadow border border-slate-200 text-slate-600'
@@ -574,7 +574,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
                           key={item.value}
                           type="button"
                           onClick={() => handleSelectCountType(item.value)}
-                          className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
+                          className={`py-1.5 text-xs font-bold rounded-lg transition ${
                             isSelected
                               ? `bg-gradient-to-r ${dayColor.gradient} text-white shadow`
                               : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
@@ -599,7 +599,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
                         value={promptCount}
                         onChange={(e) => setPromptCount(e.target.value)}
                         placeholder="ระบุจำนวนการ์ด (เช่น 15)"
-                        className={`w-full px-4 py-2 border rounded-xl text-xs font-semibold focus:outline-none transition-all ${
+                        className={`w-full px-4 py-2 border rounded-xl text-xs font-semibold focus:outline-none transition ${
                           isDark
                             ? 'bg-slate-800 border-slate-700 text-slate-200'
                             : 'bg-slate-50 border-slate-200 text-slate-800'
@@ -624,7 +624,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
                       haptics.light();
                       setIsAdvancedOpen(!isAdvancedOpen);
                     }}
-                    className={`flex items-center justify-between w-full py-2.5 px-3 border border-dashed rounded-xl text-xs font-bold transition-all ${
+                    className={`flex items-center justify-between w-full py-2.5 px-3 border border-dashed rounded-xl text-xs font-bold transition ${
                       isDark 
                         ? 'border-slate-700 hover:bg-slate-800 text-slate-300' 
                         : 'border-slate-200 hover:bg-slate-50 text-slate-600'
@@ -739,7 +739,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
               </div>
 
               {/* Enhanced Copy & Launcher Experience */}
-              <div className={`p-4 rounded-2xl border transition-all ${
+              <div className={`p-4 rounded-2xl border transition ${
                 isDark 
                   ? 'bg-slate-800/40 border-slate-800' 
                   : 'bg-slate-50 border-slate-200/80 shadow-sm'
@@ -774,7 +774,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
                     onClick={handleCopyPrompt}
                     whileHover={{ scale: 1.01 }}
                     whileTap={{ scale: 0.99 }}
-                    className={`w-full py-3.5 rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2.5 transition-all ${
+                    className={`w-full py-3.5 rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2.5 transition ${
                       isCopied
                         ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/20'
                         : `bg-gradient-to-r ${dayColor.gradient} hover:opacity-95 text-white ${isDark ? 'shadow-purple-900/40' : dayColor.shadow}`
@@ -808,7 +808,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={() => haptics.light()}
-                        className={`py-2.5 px-1 rounded-xl border flex items-center justify-center text-[11px] font-bold transition-all text-center ${
+                        className={`py-2.5 px-1 rounded-xl border flex items-center justify-center text-[11px] font-bold transition text-center ${
                           isDark 
                             ? 'border-slate-700 bg-slate-800/30 hover:bg-slate-800 hover:text-white text-slate-300' 
                             : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-600 hover:text-slate-800 shadow-sm'
@@ -821,7 +821,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={() => haptics.light()}
-                        className={`py-2.5 px-1 rounded-xl border flex items-center justify-center text-[11px] font-bold transition-all text-center ${
+                        className={`py-2.5 px-1 rounded-xl border flex items-center justify-center text-[11px] font-bold transition text-center ${
                           isDark 
                             ? 'border-slate-700 bg-slate-800/30 hover:bg-slate-800 hover:text-white text-slate-300' 
                             : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-600 hover:text-slate-800 shadow-sm'
@@ -834,7 +834,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={() => haptics.light()}
-                        className={`py-2.5 px-1 rounded-xl border flex items-center justify-center text-[11px] font-bold transition-all text-center ${
+                        className={`py-2.5 px-1 rounded-xl border flex items-center justify-center text-[11px] font-bold transition text-center ${
                           isDark 
                             ? 'border-slate-700 bg-slate-800/30 hover:bg-slate-800 hover:text-white text-slate-300' 
                             : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-600 hover:text-slate-800 shadow-sm'
@@ -862,10 +862,10 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
                         haptics.light();
                       } catch (err) {
                         console.error('Failed to read clipboard: ', err);
-                        alert('ไม่สามารถดึงข้อมูลจาก Clipboard ได้ โปรดกดวาง (Ctrl+V) ด้วยตนเอง');
+                        setImportError('เบราว์เซอร์ไม่อนุญาตให้อ่านคลิปบอร์ด กดค้างในกล่องด้านล่างแล้วเลือก "วาง" (หรือ Ctrl+V) แทน');
                       }
                     }}
-                    className={`text-[10px] font-bold px-3 py-1.5 rounded-lg border transition-all duration-300 flex items-center gap-1.5 ${
+                    className={`text-[10px] font-bold px-3 py-1.5 rounded-lg border transition duration-300 flex items-center gap-1.5 ${
                       isDark ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-200 text-slate-600 hover:bg-slate-100'
                     }`}
                   >
@@ -880,7 +880,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
                   onChange={(e) => setImportText(e.target.value)}
                   placeholder={`{\n  "deck": { "name": "...", "color": "violet" },\n  "cards": [\n    { "question": "...", "answer": "..." }\n  ]\n}`}
                   rows={4}
-                  className={`w-full px-4 py-3 border-2 rounded-xl placeholder-slate-400 focus:outline-none transition-all text-[11px] font-mono resize-none leading-relaxed ${
+                  className={`w-full px-4 py-3 border-2 rounded-xl placeholder-slate-400 focus:outline-none transition text-[11px] font-mono resize-none leading-relaxed ${
                     isDark
                       ? 'bg-slate-800 border-slate-700 text-slate-200'
                       : 'bg-slate-50 border-slate-200 text-slate-800'
@@ -900,7 +900,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
               <div className="flex items-center justify-between">
                 <span className={`text-[10px] font-medium ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>หรืออัปโหลดเป็นไฟล์ .json</span>
                 <label className={`cursor-pointer text-xs font-bold text-sky-500 hover:text-sky-600 transition-colors`}>
-                  เลือกไฟล์...
+                  เลือกไฟล์…
                   <input type="file" accept=".json,.txt,.csv,.tsv" className="hidden" onChange={handleFileUpload} />
                 </label>
               </div>
@@ -930,10 +930,10 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   disabled={isImporting}
-                  className={`flex-1 py-3.5 bg-gradient-to-r ${dayColor.gradient} hover:opacity-90 text-white rounded-xl font-bold text-sm shadow-lg transition-all ${
+                  className={`flex-1 py-3.5 bg-gradient-to-r ${dayColor.gradient} hover:opacity-90 text-white rounded-xl font-bold text-sm shadow-lg transition ${
                     isDark ? 'shadow-purple-900/50' : dayColor.shadow
                   } ${isImporting ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                  {isImporting ? 'กำลังนำเข้า...' : 'ตรวจสอบและสร้าง'}
+                  {isImporting ? 'กำลังนำเข้า…' : 'ตรวจสอบและสร้าง'}
                 </motion.button>
               </div>
             </form>

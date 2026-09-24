@@ -24,7 +24,7 @@ const StatCard = ({ title, value, subtitle, icon, color, isDark }: StatCardProps
   <motion.div
     whileHover={{ scale: 1.02, y: -2 }}
     onClick={() => haptics.light()}
-    className="premium-card accent-glow p-6 rounded-3xl border flex flex-col items-center justify-center text-center cursor-pointer transition-all"
+    className="premium-card accent-glow p-6 rounded-3xl border flex flex-col items-center justify-center text-center cursor-pointer transition"
   >
     <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${color} flex items-center justify-center mb-3 shadow-lg shadow-purple-500/10`}>
       {icon}

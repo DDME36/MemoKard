@@ -127,7 +127,7 @@ export default function EditDeckModal({ isOpen, deckName, deckColor, onClose, on
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="เช่น คำศัพท์ภาษาอังกฤษ"
-                className={`w-full px-4 py-3 rounded-xl border-2 focus:outline-none transition-all ${
+                className={`w-full px-4 py-3 rounded-xl border-2 focus:outline-none transition ${
                   isDark
                     ? 'bg-slate-700 border-slate-600 text-slate-200 focus:border-purple-500'
                     : 'bg-white border-slate-200 text-slate-800 focus:border-purple-500'
@@ -148,7 +148,7 @@ export default function EditDeckModal({ isOpen, deckName, deckColor, onClose, on
                     key={color.hex}
                     type="button"
                     onClick={() => handleColorSelect(color.hex)}
-                    className={`w-full aspect-square rounded-xl transition-all ${
+                    className={`w-full aspect-square rounded-xl transition ${
                       selectedColor === color.hex
                         ? 'ring-4 ring-offset-2 scale-110'
                         : 'hover:scale-105'
@@ -167,7 +167,7 @@ export default function EditDeckModal({ isOpen, deckName, deckColor, onClose, on
               <div className="flex items-center gap-2">
                 <label
                   htmlFor="custom-color"
-                  className={`flex-1 flex items-center gap-2 px-4 py-3 rounded-xl border-2 cursor-pointer transition-all ${
+                  className={`flex-1 flex items-center gap-2 px-4 py-3 rounded-xl border-2 cursor-pointer transition ${
                     isDark
                       ? 'bg-slate-700 border-slate-600 hover:border-slate-500'
                       : 'bg-slate-50 border-slate-200 hover:border-slate-300'
@@ -207,7 +207,7 @@ export default function EditDeckModal({ isOpen, deckName, deckColor, onClose, on
               <button
                 type="submit"
                 disabled={!hasChanges}
-                className={`flex-1 px-6 py-3 rounded-xl font-bold text-white transition-all ${
+                className={`flex-1 px-6 py-3 rounded-xl font-bold text-white transition ${
                   !hasChanges 
                     ? 'opacity-50 cursor-not-allowed' 
                     : 'hover:scale-105'

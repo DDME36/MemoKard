@@ -118,7 +118,7 @@ export default function Toast({
             {onUndo && (
               <button
                 onClick={onUndo}
-                className={`px-4 py-1.5 rounded-lg font-bold text-sm transition-all ${
+                className={`px-4 py-1.5 rounded-lg font-bold text-sm transition ${
                   isDark
                     ? 'bg-white/20 hover:bg-white/30 text-white'
                     : 'bg-black/10 hover:bg-black/20 text-slate-800'

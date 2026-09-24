@@ -12,11 +12,21 @@ export default function ExplorePage({ onOpenDeck }: ExplorePageProps) {
   const { isDark } = useTheme();
   const [decks, setDecks] = useState<PublicDeck[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<DeckCategory | 'all'>('all');
   const [sortBy, setSortBy] = useState<'import_count' | 'rating' | 'newest'>('import_count');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+
+  // ค้นหาหลังหยุดพิมพ์ 300ms ไม่ยิงเซิร์ฟเวอร์ทุกตัวอักษร
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSearchQuery(searchInput.trim());
+      setPage(1);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
   const [loadError, setLoadError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -52,10 +62,6 @@ export default function ExplorePage({ onOpenDeck }: ExplorePageProps) {
     loadDecks();
   }, [page, sortBy, selectedCategory, searchQuery, reloadKey]);
 
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-    setPage(1);
-  };
 
   const handleCategoryChange = (category: DeckCategory | 'all') => {
     setSelectedCategory(category);
@@ -106,10 +112,14 @@ export default function ExplorePage({ onOpenDeck }: ExplorePageProps) {
             />
           </svg>
           <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => handleSearch(e.target.value)}
-            placeholder="ค้นหาชุดการ์ด..."
+            type="search"
+            name="q"
+            aria-label="ค้นหาชุดการ์ด"
+            autoComplete="off"
+            enterKeyHint="search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="ค้นหาชุดการ์ด…"
             className={`w-full pl-12 pr-4 py-3 rounded-xl border transition-colors ${
               isDark
                 ? 'bg-slate-900 border-slate-800 text-white placeholder-slate-500 focus:border-violet-500'
@@ -261,7 +271,7 @@ function DeckCard({ deck, onClick }: { deck: PublicDeck; onClick: () => void }) 
       whileHover={{ scale: 1.02, y: -2 }}
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      className={`w-full p-5 rounded-2xl border text-left transition-all cursor-pointer ${
+      className={`w-full p-5 rounded-2xl border text-left transition cursor-pointer ${
         isDark
           ? 'bg-slate-900 border-slate-800 hover:border-violet-700'
           : 'bg-white border-slate-200 hover:border-violet-300 hover:shadow-lg'

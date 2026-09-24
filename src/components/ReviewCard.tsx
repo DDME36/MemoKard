@@ -473,7 +473,7 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
 
                     {/* Time Attack Ticking Timer Pill */}
                     {isTimeAttack && (
-                      <span className={`absolute top-5 left-[5.5rem] px-2.5 py-0.5 rounded-full text-[10px] font-black font-mono flex items-center gap-1.5 border shadow-sm transition-all duration-300 z-30 ${
+                      <span className={`absolute top-5 left-[5.5rem] px-2.5 py-0.5 rounded-full text-[10px] font-black font-mono flex items-center gap-1.5 border shadow-sm transition duration-300 z-30 ${
                         timeLeft > 6
                           ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500 dark:text-emerald-400'
                           : timeLeft > 3
@@ -515,7 +515,7 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
                         onKeyDown={e => e.stopPropagation()}
                         placeholder="พิมพ์สิ่งที่จำได้ แล้วแตะการ์ดเพื่อดูเฉลย…"
                         rows={2}
-                        className={`w-full px-4 py-3 rounded-2xl border text-sm font-medium transition-all focus:ring-2 no-scrollbar ${
+                        className={`w-full px-4 py-3 rounded-2xl border text-sm font-medium transition focus:ring-2 no-scrollbar ${
                           isDark 
                             ? 'bg-slate-900 border-slate-700 text-white focus:ring-purple-500 focus:border-purple-500' 
                             : 'bg-white border-purple-200 text-slate-800 focus:ring-purple-400 focus:border-purple-400'
@@ -690,7 +690,7 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => handleReview(0)}
-                      className={`w-full py-5 bg-gradient-to-r ${gradientClass} hover:opacity-90 text-white rounded-2xl font-bold text-base flex items-center justify-center gap-3 transition-all`}
+                      className={`w-full py-5 bg-gradient-to-r ${gradientClass} hover:opacity-90 text-white rounded-2xl font-bold text-base flex items-center justify-center gap-3 transition`}
                       style={gradientStyle}
                     >
                       <span>ถัดไป</span>
@@ -717,7 +717,7 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
                       whileHover={{ scale: 1.03, y: -2 }}
                       whileTap={{ scale: 0.97 }}
                       onClick={() => handleReview(1)}
-                      className={`py-4 px-4 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white rounded-2xl font-bold text-sm flex flex-col items-center justify-center gap-2 transition-all duration-300 relative overflow-hidden ${selectedQuality === 1 ? 'ring-4 ring-rose-400 shadow-[0_0_20px_rgba(244,63,94,0.8)] scale-[1.02]' : ''}`}>
+                      className={`py-4 px-4 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white rounded-2xl font-bold text-sm flex flex-col items-center justify-center gap-2 transition duration-300 relative overflow-hidden ${selectedQuality === 1 ? 'ring-4 ring-rose-400 shadow-[0_0_20px_rgba(244,63,94,0.8)] scale-[1.02]' : ''}`}>
                       <AnimatePresence>
                         {selectedQuality === 1 && (
                           <motion.div initial={{ scale: 0, opacity: 0.5 }} animate={{ scale: 2, opacity: 0 }} transition={{ duration: 0.4, ease: "easeOut" }} className="absolute inset-0 bg-white rounded-full pointer-events-none" />
@@ -736,7 +736,7 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
                       whileHover={{ scale: 1.03, y: -2 }}
                       whileTap={{ scale: 0.97 }}
                       onClick={() => handleReview(2)}
-                      className={`py-4 px-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-2xl font-bold text-sm flex flex-col items-center justify-center gap-2 transition-all duration-300 relative overflow-hidden ${selectedQuality === 2 ? 'ring-4 ring-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.8)] scale-[1.02]' : ''}`}>
+                      className={`py-4 px-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-2xl font-bold text-sm flex flex-col items-center justify-center gap-2 transition duration-300 relative overflow-hidden ${selectedQuality === 2 ? 'ring-4 ring-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.8)] scale-[1.02]' : ''}`}>
                       <AnimatePresence>
                         {selectedQuality === 2 && (
                           <motion.div initial={{ scale: 0, opacity: 0.5 }} animate={{ scale: 2, opacity: 0 }} transition={{ duration: 0.4, ease: "easeOut" }} className="absolute inset-0 bg-white rounded-full pointer-events-none" />
@@ -755,7 +755,7 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
                       whileHover={{ scale: 1.03, y: -2 }}
                       whileTap={{ scale: 0.97 }}
                       onClick={() => handleReview(3)}
-                      className={`py-4 px-4 bg-gradient-to-r from-sky-500 to-blue-500 hover:from-sky-600 hover:to-blue-600 text-white rounded-2xl font-bold text-sm flex flex-col items-center justify-center gap-2 transition-all duration-300 relative overflow-hidden ${selectedQuality === 3 ? 'ring-4 ring-sky-400 shadow-[0_0_20px_rgba(14,165,233,0.8)] scale-[1.02]' : ''}`}>
+                      className={`py-4 px-4 bg-gradient-to-r from-sky-500 to-blue-500 hover:from-sky-600 hover:to-blue-600 text-white rounded-2xl font-bold text-sm flex flex-col items-center justify-center gap-2 transition duration-300 relative overflow-hidden ${selectedQuality === 3 ? 'ring-4 ring-sky-400 shadow-[0_0_20px_rgba(14,165,233,0.8)] scale-[1.02]' : ''}`}>
                       <AnimatePresence>
                         {selectedQuality === 3 && (
                           <motion.div initial={{ scale: 0, opacity: 0.5 }} animate={{ scale: 2, opacity: 0 }} transition={{ duration: 0.4, ease: "easeOut" }} className="absolute inset-0 bg-white rounded-full pointer-events-none" />
@@ -774,7 +774,7 @@ const ReviewCard = memo(function ReviewCard({ card, onReview, onEditCard, dayCol
                       whileHover={{ scale: 1.03, y: -2 }}
                       whileTap={{ scale: 0.97 }}
                       onClick={() => handleReview(4)}
-                      className={`py-4 px-4 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white rounded-2xl font-bold text-sm flex flex-col items-center justify-center gap-2 transition-all duration-300 relative overflow-hidden ${selectedQuality === 4 ? 'ring-4 ring-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.8)] scale-[1.02]' : ''}`}>
+                      className={`py-4 px-4 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white rounded-2xl font-bold text-sm flex flex-col items-center justify-center gap-2 transition duration-300 relative overflow-hidden ${selectedQuality === 4 ? 'ring-4 ring-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.8)] scale-[1.02]' : ''}`}>
                       <AnimatePresence>
                         {selectedQuality === 4 && (
                           <motion.div initial={{ scale: 0, opacity: 0.5 }} animate={{ scale: 2, opacity: 0 }} transition={{ duration: 0.4, ease: "easeOut" }} className="absolute inset-0 bg-white rounded-full pointer-events-none" />

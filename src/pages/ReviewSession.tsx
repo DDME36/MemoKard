@@ -407,7 +407,7 @@ const ReviewSession = memo(function ReviewSession({
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={onGoHome}
-            className={`bg-gradient-to-r ${activeGradientClass} hover:opacity-90 text-white font-bold px-6 py-3 rounded-xl transition-all ${
+            className={`bg-gradient-to-r ${activeGradientClass} hover:opacity-90 text-white font-bold px-6 py-3 rounded-xl transition ${
               isDark ? '' : `shadow-lg ${activeShadowClass}`
             }`}
             style={combinedButtonStyle}
@@ -538,7 +538,7 @@ const ReviewSession = memo(function ReviewSession({
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={onGoHome}
-          className={`bg-gradient-to-r ${activeGradientClass} hover:opacity-90 text-white font-bold px-8 py-4 rounded-xl transition-all ${
+          className={`bg-gradient-to-r ${activeGradientClass} hover:opacity-90 text-white font-bold px-8 py-4 rounded-xl transition ${
             isDark ? '' : `shadow-lg ${activeShadowClass} hover:shadow-xl`
           }`}
           style={combinedButtonStyle}
@@ -634,7 +634,7 @@ const ReviewSession = memo(function ReviewSession({
             </span>
             <button 
               onClick={() => setShowZenMode(true)}
-              className={`px-2 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
+              className={`px-2 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 border ${
                 isDark 
                   ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' 
                   : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm'
@@ -646,7 +646,7 @@ const ReviewSession = memo(function ReviewSession({
               <button
                 type="button"
                 onClick={() => handleAnswerModeChange(answerMode === 'flip' ? 'type' : 'flip')}
-                className={`px-2 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                className={`px-2 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 border ${
                   isDark
                     ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
                     : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm'

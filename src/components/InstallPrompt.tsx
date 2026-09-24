@@ -142,7 +142,7 @@ export default function InstallPrompt({ dayColor }: InstallPromptProps) {
                 </div>
                 <button
                   onClick={handleEnableNotifications}
-                  className={`w-full py-2.5 mt-2 bg-gradient-to-r ${dayColor.gradient} text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all relative z-10`}
+                  className={`w-full py-2.5 mt-2 bg-gradient-to-r ${dayColor.gradient} text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition relative z-10`}
                 >
                   อนุญาตการแจ้งเตือน
                 </button>
@@ -172,7 +172,7 @@ export default function InstallPrompt({ dayColor }: InstallPromptProps) {
                 {!isIOS && deferredPrompt && (
                   <button
                     onClick={handleInstallClick}
-                    className={`w-full py-2.5 mt-2 bg-gradient-to-r ${dayColor.gradient} text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all relative z-10`}
+                    className={`w-full py-2.5 mt-2 bg-gradient-to-r ${dayColor.gradient} text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition relative z-10`}
                   >
                     ติดตั้งแอปพลิเคชัน
                   </button>

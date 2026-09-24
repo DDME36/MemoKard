@@ -314,7 +314,7 @@ export default function ReviewModeSelector({
                 whileHover={available ? { scale: 1.02, y: -1 } : {}}
                 whileTap={available ? { scale: 0.98 } : {}}
                 onClick={() => handleModeClick(mode.id)}
-                className={`w-full p-4 rounded-3xl border-2 transition-all relative overflow-hidden ${
+                className={`w-full p-4 rounded-3xl border-2 transition relative overflow-hidden ${
                   !available
                     ? isDark
                       ? 'bg-slate-900/40 border-slate-800/40 text-slate-600 cursor-not-allowed opacity-40'

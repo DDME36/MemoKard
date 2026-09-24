@@ -191,7 +191,7 @@ export default function PublicDeckDetail({ publicDeckId, onClose, onImported }: 
         <div className={`p-8 rounded-3xl ${isDark ? 'bg-slate-900' : 'bg-white'}`}>
           <div className="animate-spin w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full mx-auto" />
           <p className={`mt-4 font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-            กำลังโหลด...
+            กำลังโหลด…
           </p>
         </div>
       </div>
@@ -369,12 +369,12 @@ export default function PublicDeckDetail({ publicDeckId, onClose, onImported }: 
                   whileTap={{ scale: 0.98 }}
                   onClick={handleSubscribe}
                   disabled={importing || hasImported}
-                  className="flex-1 px-4 py-4 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-xl font-bold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex-1 px-4 py-4 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-xl font-bold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {importing ? (
                     <>
                       <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      กำลังติดตาม...
+                      กำลังติดตาม…
                     </>
                   ) : hasImported ? (
                     <>
@@ -399,7 +399,7 @@ export default function PublicDeckDetail({ publicDeckId, onClose, onImported }: 
                   whileTap={{ scale: 0.98 }}
                   onClick={handleDuplicate}
                   disabled={importing || hasImported}
-                  className={`flex-1 px-4 py-4 rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
+                  className={`flex-1 px-4 py-4 rounded-xl font-bold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
                     isDark 
                       ? 'bg-slate-800 text-white hover:bg-slate-700' 
                       : 'bg-slate-100 text-slate-800 hover:bg-slate-200'
@@ -433,7 +433,7 @@ export default function PublicDeckDetail({ publicDeckId, onClose, onImported }: 
                   whileTap={{ scale: 0.98 }}
                   onClick={() => setShowReportModal(true)}
                   disabled={hasReported}
-                  className={`w-full px-6 py-3 rounded-xl font-medium text-sm transition-all ${
+                  className={`w-full px-6 py-3 rounded-xl font-medium text-sm transition ${
                     hasReported
                       ? isDark
                         ? 'bg-slate-800 text-slate-600 cursor-not-allowed'

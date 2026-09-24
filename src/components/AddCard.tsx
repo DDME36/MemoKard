@@ -100,8 +100,8 @@ export default function AddCard({ deckId, onClose }: AddCardProps) {
                 คำถาม
               </label>
               <textarea id="question" value={question} onChange={(e) => setQuestion(e.target.value)}
-                placeholder="พิมพ์คำถามที่นี่..."
-                className={`w-full px-4 py-4 border-2 rounded-2xl placeholder-slate-400 focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100 transition-all resize-none text-base font-medium select-text ${
+                placeholder="พิมพ์คำถามที่นี่…"
+                className={`w-full px-4 py-4 border-2 rounded-2xl placeholder-slate-400 focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100 transition resize-none text-base font-medium select-text ${
                   isDark 
                     ? 'bg-slate-900 border-slate-700 text-slate-200' 
                     : 'bg-slate-50 border-slate-200 text-slate-800'
@@ -157,8 +157,8 @@ export default function AddCard({ deckId, onClose }: AddCardProps) {
                 คำตอบ
               </label>
               <textarea id="answer" value={answer} onChange={(e) => setAnswer(e.target.value)}
-                placeholder="พิมพ์คำตอบที่นี่..."
-                className={`w-full px-4 py-4 border-2 rounded-2xl focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100 transition-all resize-none text-base font-medium select-text ${
+                placeholder="พิมพ์คำตอบที่นี่…"
+                className={`w-full px-4 py-4 border-2 rounded-2xl focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100 transition resize-none text-base font-medium select-text ${
                   isDark 
                     ? 'bg-purple-900/30 border-purple-800 text-slate-200 placeholder-purple-400/50' 
                     : 'bg-purple-50 border-purple-200 text-slate-800 placeholder-purple-300'
@@ -214,7 +214,7 @@ export default function AddCard({ deckId, onClose }: AddCardProps) {
                 type="submit" 
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className="flex-1 py-3.5 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-purple-200 transition-all">
+                className="flex-1 py-3.5 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-purple-200 transition">
                 เพิ่มการ์ด
               </motion.button>
             </div>

@@ -251,9 +251,9 @@ export default function ShareDeckModal({
                   <button
                     type="submit"
                     disabled={isSubmitting || cardCount === 0}
-                    className="flex-1 px-6 py-3 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-xl font-bold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-xl font-bold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isSubmitting ? 'กำลังแชร์...' : 'แชร์เลย'}
+                    {isSubmitting ? 'กำลังแชร์…' : 'แชร์เลย'}
                   </button>
                 </div>
               </form>

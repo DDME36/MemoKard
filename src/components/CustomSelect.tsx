@@ -25,7 +25,7 @@ export default function CustomSelect({
   value,
   onChange,
   options,
-  placeholder = 'เลือก...',
+  placeholder = 'เลือก…',
   className = '',
   variant = 'outline',
   icon,
@@ -112,7 +112,7 @@ export default function CustomSelect({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full px-3.5 py-2.5 rounded-xl border flex items-center justify-between text-sm font-semibold transition-all duration-200 outline-none ${triggerStyles} ${
+        className={`w-full px-3.5 py-2.5 rounded-xl border flex items-center justify-between text-sm font-semibold transition duration-200 outline-none ${triggerStyles} ${
           isOpen && variant === 'outline'
             ? isDark
               ? `${activeTheme.borderOpen} ring-2 ${activeTheme.ring}`
@@ -165,7 +165,7 @@ export default function CustomSelect({
                       onChange(option.value);
                       setIsOpen(false);
                     }}
-                    className={`w-full px-4 py-2.5 text-left text-xs font-bold transition-all duration-150 flex items-center justify-between ${
+                    className={`w-full px-4 py-2.5 text-left text-xs font-bold transition duration-150 flex items-center justify-between ${
                       isSelected
                         ? dayColor
                           ? `bg-gradient-to-r ${dayColor.gradient} text-white`

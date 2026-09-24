@@ -111,7 +111,7 @@ const Dashboard = memo(function Dashboard({ onOpenDeck, onStartReview, onShowAdd
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           whileHover={{ scale: 1.02, y: -2 }}
-          className="premium-card accent-glow rounded-3xl p-5 border flex flex-col items-center justify-center relative overflow-hidden group cursor-pointer transition-all"
+          className="premium-card accent-glow rounded-3xl p-5 border flex flex-col items-center justify-center relative overflow-hidden group cursor-pointer transition"
           onClick={() => haptics.light()}
         >
           <div className="w-14 h-14 rounded-2xl mb-3 flex items-center justify-center bg-gradient-to-br from-purple-500 to-purple-600 shadow-lg shadow-purple-500/20">
@@ -131,7 +131,7 @@ const Dashboard = memo(function Dashboard({ onOpenDeck, onStartReview, onShowAdd
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
           whileHover={{ scale: 1.02, y: -2 }}
-          className="premium-card accent-glow rounded-3xl p-5 border flex flex-col items-center justify-center relative overflow-hidden group cursor-pointer transition-all"
+          className="premium-card accent-glow rounded-3xl p-5 border flex flex-col items-center justify-center relative overflow-hidden group cursor-pointer transition"
           onClick={() => haptics.light()}
         >
           <div className="w-14 h-14 rounded-2xl mb-3 flex items-center justify-center bg-gradient-to-br from-rose-500 to-rose-600 shadow-lg shadow-rose-500/20">
@@ -151,7 +151,7 @@ const Dashboard = memo(function Dashboard({ onOpenDeck, onStartReview, onShowAdd
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
           whileHover={{ scale: 1.02, y: -2 }}
-          className="premium-card accent-glow rounded-3xl p-5 border flex flex-col items-center justify-center relative overflow-hidden group cursor-pointer transition-all"
+          className="premium-card accent-glow rounded-3xl p-5 border flex flex-col items-center justify-center relative overflow-hidden group cursor-pointer transition"
           onClick={() => haptics.light()}
         >
           {store.streak > 0 && (
@@ -178,7 +178,7 @@ const Dashboard = memo(function Dashboard({ onOpenDeck, onStartReview, onShowAdd
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
           whileHover={{ scale: 1.02, y: -2 }}
-          className="premium-card accent-glow rounded-3xl p-5 border flex flex-col items-center justify-center relative overflow-hidden group cursor-pointer transition-all"
+          className="premium-card accent-glow rounded-3xl p-5 border flex flex-col items-center justify-center relative overflow-hidden group cursor-pointer transition"
           onClick={() => haptics.light()}
         >
           <div className="w-14 h-14 rounded-2xl mb-3 flex items-center justify-center bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg shadow-emerald-500/20">
@@ -204,7 +204,7 @@ const Dashboard = memo(function Dashboard({ onOpenDeck, onStartReview, onShowAdd
             haptics.medium();
             onStartReview();
           }}
-          className={`w-full mb-6 py-5 bg-gradient-to-r ${dayColor.gradient} hover:opacity-90 text-white font-bold text-base rounded-3xl transition-all flex items-center justify-center gap-3 display-font shadow-lg ${
+          className={`w-full mb-6 py-5 bg-gradient-to-r ${dayColor.gradient} hover:opacity-90 text-white font-bold text-base rounded-3xl transition flex items-center justify-center gap-3 display-font shadow-lg ${
             isDark ? 'shadow-purple-950/20' : `${dayColor.shadow} hover:shadow-xl`
           }`}>
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -233,7 +233,7 @@ const Dashboard = memo(function Dashboard({ onOpenDeck, onStartReview, onShowAdd
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }} 
             onClick={onShowAddDeck}
-            className={`inline-flex items-center gap-2 bg-gradient-to-r ${dayColor.gradient} hover:opacity-90 text-white text-sm font-bold px-6 py-3 rounded-xl transition-all`}>
+            className={`inline-flex items-center gap-2 bg-gradient-to-r ${dayColor.gradient} hover:opacity-90 text-white text-sm font-bold px-6 py-3 rounded-xl transition`}>
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
@@ -263,7 +263,7 @@ const Dashboard = memo(function Dashboard({ onOpenDeck, onStartReview, onShowAdd
                 type="button"
                 onClick={handleExportBackup}
                 title="ดาวน์โหลดไฟล์สำรองข้อมูลทั้งหมด"
-                className={`inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-bold transition-all ${
+                className={`inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-bold transition ${
                   isDark
                     ? 'bg-slate-800 text-purple-400 hover:bg-slate-700'
                     : 'bg-white text-purple-600 shadow-sm hover:bg-purple-50 border border-purple-100'
@@ -276,7 +276,7 @@ const Dashboard = memo(function Dashboard({ onOpenDeck, onStartReview, onShowAdd
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 title="นำเข้าไฟล์สำรองข้อมูล (.json)"
-                className={`inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-bold transition-all ${
+                className={`inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-bold transition ${
                   isDark
                     ? 'bg-slate-800 text-teal-400 hover:bg-slate-700'
                     : 'bg-white text-teal-600 shadow-sm hover:bg-teal-50 border border-teal-100'
@@ -368,7 +368,7 @@ const Dashboard = memo(function Dashboard({ onOpenDeck, onStartReview, onShowAdd
                   key={deck.id} 
                   whileHover={{ scale: 1.01, y: -1 }}
                   whileTap={{ scale: 0.99 }}
-                  className="premium-card accent-glow rounded-3xl p-4 flex items-center gap-4 border cursor-pointer transition-all group"
+                  className="premium-card accent-glow rounded-3xl p-4 flex items-center gap-4 border cursor-pointer transition group"
                   onClick={() => {
                     haptics.light();
                     onOpenDeck(deck);
@@ -411,7 +411,7 @@ const Dashboard = memo(function Dashboard({ onOpenDeck, onStartReview, onShowAdd
                     </div>
                   </div>
                   {/* Arrow - Animated */}
-                  <div className={`group-hover:translate-x-1 transition-all pr-2 ${
+                  <div className={`group-hover:translate-x-1 transition pr-2 ${
                     isDark ? 'text-slate-600 group-hover:text-slate-500' : 'text-slate-300 group-hover:text-slate-400'
                   }`}>
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

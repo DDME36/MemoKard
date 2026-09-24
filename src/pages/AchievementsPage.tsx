@@ -154,7 +154,7 @@ export default function AchievementsPage({ dayColor }: { dayColor: { gradient: s
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.04 }}
               onClick={() => haptics.light()}
-              className={`rounded-3xl p-5 border-2 transition-all cursor-pointer relative overflow-hidden ${
+              className={`rounded-3xl p-5 border-2 transition cursor-pointer relative overflow-hidden ${
                 isCompleted
                   ? isLegendary
                     ? `bg-gradient-to-br ${cfg.completedGradient} border-transparent shadow-xl shadow-amber-500/20 ring-2 ring-amber-400/50 ring-offset-2 ring-offset-slate-900`

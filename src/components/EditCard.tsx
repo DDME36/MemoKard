@@ -92,8 +92,8 @@ export default function EditCard({ card, onClose }: EditCardProps) {
               <textarea
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
-                placeholder="พิมพ์คำถามที่นี่..."
-                className={`w-full px-4 py-4 border-2 rounded-2xl placeholder-slate-400 focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100/20 transition-all resize-none text-base font-medium select-text ${
+                placeholder="พิมพ์คำถามที่นี่…"
+                className={`w-full px-4 py-4 border-2 rounded-2xl placeholder-slate-400 focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100/20 transition resize-none text-base font-medium select-text ${
                   isDark
                     ? 'bg-slate-800 border-slate-700 text-slate-200'
                     : 'bg-slate-50 border-slate-200 text-slate-800'
@@ -135,7 +135,7 @@ export default function EditCard({ card, onClose }: EditCardProps) {
               <textarea
                 value={answer}
                 onChange={(e) => setAnswer(e.target.value)}
-                className={`w-full px-4 py-4 border-2 rounded-2xl focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100/20 transition-all resize-none text-base font-medium select-text ${
+                className={`w-full px-4 py-4 border-2 rounded-2xl focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100/20 transition resize-none text-base font-medium select-text ${
                   isDark
                     ? 'bg-purple-900/20 border-purple-800/50 text-slate-200'
                     : 'bg-purple-50 border-purple-200 text-slate-800'
@@ -169,7 +169,7 @@ export default function EditCard({ card, onClose }: EditCardProps) {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={handleDelete}
-                className={`py-3.5 px-5 rounded-xl font-bold text-sm transition-all ${
+                className={`py-3.5 px-5 rounded-xl font-bold text-sm transition ${
                   isDark ? 'bg-rose-900/30 text-rose-400 hover:bg-rose-900/50' : 'bg-rose-50 text-rose-600 hover:bg-rose-100'
                 }`}
               >
@@ -189,7 +189,7 @@ export default function EditCard({ card, onClose }: EditCardProps) {
                 type="submit"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className="flex-1 py-3.5 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white rounded-xl font-bold text-sm transition-all">
+                className="flex-1 py-3.5 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white rounded-xl font-bold text-sm transition">
                 บันทึก
               </motion.button>
             </div>

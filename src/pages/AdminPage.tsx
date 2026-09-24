@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../contexts/ThemeContext';
 import { adminStore, type ReportedDeck } from '../store/adminStore';
 import AdminPasswordReset from '../components/AdminPasswordReset';
+import ConfirmModal from '../components/ConfirmModal';
 import { useToast } from '../contexts/ToastContext';
 
 const REASON_LABEL: Record<string, string> = {
@@ -72,8 +73,9 @@ export default function AdminPage() {
     }
   };
 
+  const [pendingDelete, setPendingDelete] = useState<ReportedDeck | null>(null);
+
   const handleDelete = async (deckId: string) => {
-    if (!confirm('ลบชุดการ์ดนี้ถาวรหรือไม่? ไม่สามารถย้อนกลับได้')) return;
 
     setActionLoading(deckId);
     try {
@@ -158,7 +160,7 @@ export default function AdminPage() {
           <button
             key={tab.key}
             onClick={() => setFilter(tab.key)}
-            className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+            className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2 ${
               filter === tab.key
                 ? isDark
                   ? 'bg-slate-700 text-white'
@@ -307,7 +309,7 @@ export default function AdminPage() {
 
                       {/* Delete */}
                       <button
-                        onClick={() => handleDelete(deck.id)}
+                        onClick={() => setPendingDelete(deck)}
                         disabled={!!actionLoading}
                         className={`p-1.5 rounded-lg transition-colors ${
                           isDark
@@ -379,6 +381,18 @@ export default function AdminPage() {
         </div>
       )}
       <AdminPasswordReset />
+      <ConfirmModal
+        isOpen={pendingDelete !== null}
+        title="ลบชุดการ์ดนี้ถาวร?"
+        message={`"${pendingDelete?.name ?? ''}" จะถูกลบพร้อมการ์ด คะแนน และรายงานทั้งหมด ย้อนกลับไม่ได้ (ถ้าแค่อยากซ่อน ให้กด "ซ่อน" แทน)`}
+        confirmText="ลบถาวร" cancelText="ยกเลิก" type="danger"
+        onConfirm={() => {
+          const target = pendingDelete;
+          setPendingDelete(null);
+          if (target) void handleDelete(target.id);
+        }}
+        onCancel={() => setPendingDelete(null)}
+      />
     </motion.div>
   );
 }

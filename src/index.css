@@ -20,7 +20,7 @@
     height: 100dvh;
     overflow: hidden;
     overscroll-behavior: none;
-    touch-action: pan-y; /* Allow vertical scrolling but prevent pull-to-refresh */
+    touch-action: pan-x pan-y pinch-zoom; /* เลื่อนและซูมด้วยสองนิ้วได้ แต่ไม่ดึงรีเฟรช (overscroll-behavior: none) */
   }
 
   /* 2. Set solid background color matching app bottom */
@@ -362,4 +362,12 @@
   ::-webkit-scrollbar-thumb:hover {
     background: rgba(168, 85, 247, 0.45);
   }
+}
+
+/* ── Focus ที่มองเห็นได้สำหรับคนใช้คีย์บอร์ด ──
+   หลายปุ่มใช้ outline-none/focus:ring ของ Tailwind แบบไม่สม่ำเสมอ จึงบังคับกรอบโฟกัสกลางไว้ที่นี่
+   (:focus-visible ขึ้นเฉพาะตอนใช้คีย์บอร์ด ไม่ขึ้นตอนแตะหรือคลิก) */
+:where(a, button, input, textarea, select, summary, [role="button"], [role="tab"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 3px solid #a855f7 !important;
+  outline-offset: 2px !important;
 }

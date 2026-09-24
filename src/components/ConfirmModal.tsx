@@ -120,7 +120,7 @@ export default function ConfirmModal({
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={onConfirm}
-                className={`flex-1 py-3.5 bg-gradient-to-r ${color.gradient} hover:opacity-90 text-white rounded-xl font-bold text-base transition-all`}
+                className={`flex-1 py-3.5 bg-gradient-to-r ${color.gradient} hover:opacity-90 text-white rounded-xl font-bold text-base transition`}
               >
                 {confirmText}
               </motion.button>
