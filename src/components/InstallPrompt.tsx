@@ -61,10 +61,8 @@ export default function InstallPrompt({ dayColor }: InstallPromptProps) {
       }
     }
 
-    if (isIOS) {
-      // Show iOS instruction after a delay
-      setTimeout(() => setShowPrompt(true), 5000); // Increased to 5 seconds
-    }
+    // iOS ไม่มี beforeinstallprompt จึงแสดงวิธีติดตั้งหลังเปิดแอป 5 วินาที
+    const iosTimer = isIOS ? window.setTimeout(() => setShowPrompt(true), 5000) : undefined;
 
     // Listen for Chrome/Android install prompt
     const handleBeforeInstallPrompt = (e: BeforeInstallPromptEvent) => {
@@ -76,6 +74,7 @@ export default function InstallPrompt({ dayColor }: InstallPromptProps) {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
     return () => {
+      window.clearTimeout(iosTimer);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
   }, [isIOS]);

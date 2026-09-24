@@ -94,7 +94,7 @@ export default function EditDeckModal({ isOpen, deckName, deckColor, onClose, on
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className={`relative w-full max-w-md rounded-3xl p-6 shadow-2xl ${
+          className={`relative w-full max-w-md rounded-3xl p-6 shadow-2xl max-h-[90dvh] overflow-y-auto overscroll-contain ${
             isDark ? 'bg-slate-800 border border-slate-700' : 'bg-white'
           }`}
         >

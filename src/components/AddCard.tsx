@@ -76,7 +76,7 @@ export default function AddCard({ deckId, onClose }: AddCardProps) {
           <div className={`w-10 h-1 rounded-full ${isDark ? 'bg-slate-700' : 'bg-purple-200'}`} />
         </div>
 
-        <div className="p-7 overflow-y-auto no-scrollbar">
+        <div className="p-7 overflow-y-auto overscroll-contain no-scrollbar">
           <div className="flex items-center justify-between mb-6">
             <h2 className={`text-xl font-bold bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text ${
               isDark ? 'text-transparent' : 'text-transparent'

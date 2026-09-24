@@ -277,7 +277,7 @@ export default function ZenModePanel({ isOpen, onClose, dayColor }: ZenModePanel
           {showLofi && (
             <div className="absolute w-0 h-0 overflow-hidden opacity-0 pointer-events-none">
               <iframe 
-                src="https://www.youtube.com/embed/jfKfPfyJRdk?autoplay=1&controls=0" 
+                src="https://www.youtube-nocookie.com/embed/jfKfPfyJRdk?autoplay=1&controls=0" 
                 allow="autoplay" 
                 title="Lofi Radio"
               />

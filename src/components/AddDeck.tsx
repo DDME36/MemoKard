@@ -389,7 +389,7 @@ export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) 
             style={!isDark ? { backgroundColor: colors.light } : undefined}
           />
         </div>
-        <div className="p-7 overflow-y-auto no-scrollbar">
+        <div className="p-7 overflow-y-auto overscroll-contain no-scrollbar">
           <div className="flex items-center justify-between mb-6">
             <h2 className={`text-xl font-bold bg-gradient-to-r ${dayColor.gradient} bg-clip-text text-transparent`}>
               ชุดการ์ดใหม่

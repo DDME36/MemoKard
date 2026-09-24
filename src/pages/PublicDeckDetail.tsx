@@ -217,7 +217,7 @@ export default function PublicDeckDetail({ publicDeckId, onClose, onImported }: 
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className={`w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl ${
+          className={`w-full max-w-3xl max-h-[90dvh] overflow-y-auto overscroll-contain rounded-3xl shadow-2xl ${
             isDark ? 'bg-slate-900 border border-slate-800' : 'bg-white'
           }`}
         >

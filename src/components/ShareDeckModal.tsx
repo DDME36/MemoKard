@@ -85,7 +85,7 @@ export default function ShareDeckModal({
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className={`w-full max-w-lg rounded-3xl shadow-2xl max-h-[90vh] overflow-y-auto ${
+              className={`w-full max-w-lg rounded-3xl shadow-2xl max-h-[90dvh] overflow-y-auto overscroll-contain ${
                 isDark ? 'bg-slate-900 border border-slate-800' : 'bg-white'
               }`}
             >

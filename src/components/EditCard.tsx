@@ -73,7 +73,7 @@ export default function EditCard({ card, onClose }: EditCardProps) {
         <div className="flex justify-center pt-4 pb-1 sm:hidden">
           <div className={`w-10 h-1 rounded-full ${isDark ? 'bg-slate-700' : 'bg-purple-200'}`} />
         </div>
-        <div className="p-7 overflow-y-auto no-scrollbar">
+        <div className="p-7 overflow-y-auto overscroll-contain no-scrollbar">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent">แก้ไขการ์ด</h2>
             <button onClick={onClose} className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
