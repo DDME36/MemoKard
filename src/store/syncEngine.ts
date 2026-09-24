@@ -30,10 +30,15 @@ export async function refreshLinkedDecks(): Promise<void> {
   for (const deck of store.decks.filter((d) => d.linkedPublicDeckId)) {
     let remoteCards;
     try {
+      // ชุดที่ถูกซ่อน (เช่นโดนรายงาน) ยังตอบรายการการ์ดว่างได้ ต้องเช็กตัวชุดก่อน
+      // ไม่งั้นจะเข้าใจผิดว่าเจ้าของลบการ์ดทั้งหมด แล้วลบความคืบหน้าของผู้ติดตามทิ้ง
+      const source = await communityStore.getPublicDeckById(deck.linkedPublicDeckId!);
+      if (!source) continue;
       remoteCards = await communityStore.getPublicDeckCards(deck.linkedPublicDeckId!);
     } catch {
-      continue; // ชุดต้นทางถูกซ่อนหรือลบ — เก็บของเดิมไว้
+      continue; // ติดต่อไม่ได้ — เก็บของเดิมไว้
     }
+    if (remoteCards.length === 0) continue; // ไม่ลบทั้งชุดจากผลลัพธ์ว่าง
     const local = useFlashcardStore.getState().cards.filter((c) => c.deckId === deck.id);
     const bySource = new Map(local.filter((c) => c.sourceCardId).map((c) => [c.sourceCardId!, c]));
     const remoteIds = new Set(remoteCards.map((c) => c.id));

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { checkPocketBaseHealth, pb, isPocketBaseConfigured } from '../lib/pocketbase';
+import { isAuthRejection } from '../lib/authErrors';
 import type { BackendStatus } from '../lib/pocketbase';
 import { useFlashcardStore } from '../store/store';
 import { safeLocalStorage } from '../utils/safeStorage';
@@ -99,8 +100,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Verify or refresh token if still valid
           try {
             await pb.collection('users').authRefresh();
-          } catch {
-            pb.authStore.clear();
+          } catch (err) {
+            // ออฟไลน์หรือเซิร์ฟล่ม: คง session เดิมไว้ ใช้งานต่อแบบออฟไลน์ได้
+            if (isAuthRejection(err)) pb.authStore.clear();
           }
         }
         const currentUser = mapRecordToAuthUser(pb.authStore.record as Record<string, unknown> | null);

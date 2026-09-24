@@ -85,6 +85,12 @@ describe('community', () => {
 });
 
 describe('settings', () => {
+  it('keeps users signed in for 30 days so offline PWA use survives', async () => {
+    const users = await h.admin.collections.getOne('users');
+    expect(users.authToken.duration).toBe(2592000);
+  });
+
+
   it('ships with batch enabled and rate limit rules', async () => {
     const s = await h.admin.settings.getAll();
     expect(s.batch.enabled).toBe(true);
