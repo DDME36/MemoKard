@@ -51,7 +51,11 @@ export async function startPocketBase(): Promise<PbHarness> {
 
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
-  const proc = spawn(BIN, ['serve', '--http', `127.0.0.1:${port}`, ...dirs], { stdio: 'ignore' });
+  // PB_DEBUG=1 แสดง log ของเซิร์ฟเวอร์ (โหมด --dev) ไว้ดูตอนเทสต์พัง
+  const debug = Boolean(process.env.PB_DEBUG);
+  const proc = spawn(BIN, ['serve', '--http', `127.0.0.1:${port}`, ...dirs, ...(debug ? ['--dev'] : [])], {
+    stdio: debug ? 'inherit' : 'ignore',
+  });
   await waitForHealth(url);
 
   const admin = new PocketBase(url);
