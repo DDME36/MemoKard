@@ -1,4 +1,5 @@
 import type { UserProgress } from '../utils/achievements';
+import { studyDayKey } from '../utils/studyDay';
 
 export interface RemoteChange<T> {
   record: T;
@@ -31,7 +32,7 @@ export interface RemoteReviewLog {
   device: string;
 }
 
-/** นับประวัติการทบทวนจากเครื่องอื่นเพิ่มเข้าไป (log ของเครื่องนี้ถูกนับไปแล้วตอนทบทวน) */
+/** นับประวัติการทบทวนจากเครื่องอื่นเพิ่มเข้าไป (log ของเครื่องนี้ถูกนับไปแล้วตอนทบทวน) ตามวันเรียนท้องถิ่น */
 export function addReviewCounts(
   history: Record<string, number>,
   logs: RemoteReviewLog[],
@@ -40,7 +41,7 @@ export function addReviewCounts(
   const next = { ...history };
   for (const log of logs) {
     if (log.device === thisDevice) continue;
-    const day = new Date(log.reviewedAt.replace(' ', 'T')).toISOString().slice(0, 10);
+    const day = studyDayKey(new Date(log.reviewedAt.replace(' ', 'T')));
     next[day] = (next[day] ?? 0) + 1;
   }
   return next;

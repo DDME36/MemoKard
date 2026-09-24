@@ -7,6 +7,7 @@ import type { Achievement } from '../components/AchievementToast';
 import type { Deck, Flashcard } from './types';
 import { safeLocalStorage } from '../utils/safeStorage';
 import { newId } from '../lib/ids';
+import { addDays, daysBetween, keyToDate, studyDayKey } from '../utils/studyDay';
 import { addReviewCounts, mergeById, mergeProgress } from './merge';
 import { migrateLegacyIds } from './legacyMigration';
 import type { ServerChanges } from './pocketbaseStore';
@@ -74,56 +75,32 @@ const idbStorage: StateStorage = {
   },
 };
 
-export function calculateDynamicStreak(reviewHistory: Record<string, number>): { currentStreak: number; maxStreak: number } {
-  const dates = Object.keys(reviewHistory)
-    .filter((dateStr) => reviewHistory[dateStr] > 0)
+export function calculateDynamicStreak(
+  reviewHistory: Record<string, number>,
+  now: Date = new Date(),
+): { currentStreak: number; maxStreak: number } {
+  const days = Object.keys(reviewHistory)
+    .filter((day) => reviewHistory[day] > 0)
     .sort();
-
-  if (dates.length === 0) {
-    return { currentStreak: 0, maxStreak: 0 };
-  }
-
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  if (days.length === 0) return { currentStreak: 0, maxStreak: 0 };
 
   let maxStreak = 0;
-  let tempStreak = 0;
-  let prevDate: Date | null = null;
-
-  for (let i = 0; i < dates.length; i++) {
-    const currentDate = new Date(dates[i]);
-    if (!prevDate) {
-      tempStreak = 1;
-    } else {
-      const diffTime = Math.abs(currentDate.getTime() - prevDate.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-      if (diffDays === 1) {
-        tempStreak += 1;
-      } else if (diffDays > 1) {
-        tempStreak = 1;
-      }
-    }
-    maxStreak = Math.max(maxStreak, tempStreak);
-    prevDate = currentDate;
+  let run = 0;
+  let prev: string | null = null;
+  for (const day of days) {
+    run = prev !== null && daysBetween(prev, day) === 1 ? run + 1 : 1;
+    maxStreak = Math.max(maxStreak, run);
+    prev = day;
   }
 
+  // streak ยังไม่ขาดถ้าทบทวนวันนี้ หรือเมื่อวาน (วันนี้อาจยังไม่ได้เริ่ม)
+  const reviewed = new Set(days);
+  const today = studyDayKey(now);
+  let cursor = reviewed.has(today) ? today : addDays(today, -1);
   let currentStreak = 0;
-  const hasReviewedToday = dates.includes(todayStr);
-  const hasReviewedYesterday = dates.includes(yesterdayStr);
-
-  if (hasReviewedToday || hasReviewedYesterday) {
-    let checkDate = hasReviewedToday ? new Date(todayStr) : new Date(yesterdayStr);
-    currentStreak = 0;
-    while (true) {
-      const checkStr = checkDate.toISOString().slice(0, 10);
-      if (dates.includes(checkStr)) {
-        currentStreak += 1;
-        checkDate = new Date(checkDate.getTime() - 86400000);
-      } else {
-        break;
-      }
-    }
+  while (reviewed.has(cursor)) {
+    currentStreak += 1;
+    cursor = addDays(cursor, -1);
   }
 
   return { currentStreak, maxStreak: Math.max(maxStreak, currentStreak) };
@@ -156,8 +133,6 @@ export interface FlashcardState {
   totalStudyTime: number;
   maxStreak: number; // Track max streak separately
   
-  // Custom dynamic weights for FSRS offline personalized optimizer
-  fsrsWeights: number[];
   
   // Previous progress snapshot for achievement checking
   previousProgress: UserProgress | null;
@@ -168,7 +143,6 @@ export interface FlashcardState {
 }
 
 export interface FlashcardActions {
-  recalibrateFSRS: () => Promise<void>;
   setAuthState: (userId: string | null, isDemo: boolean) => void;
   syncFromServer: () => Promise<void>;
   applyServerChanges: (changes: ServerChanges, pendingIds: ReadonlySet<string>) => void;
@@ -298,9 +272,6 @@ const mergePersistedState = (persistedState: unknown, currentState: FlashcardSto
             .filter(([, count]) => typeof count === 'number' && Number.isFinite(count) && count >= 0),
         ) as Record<string, number>
       : {},
-    fsrsWeights: Array.isArray(raw.fsrsWeights) && raw.fsrsWeights.every(Number.isFinite)
-      ? raw.fsrsWeights as number[]
-      : currentState.fsrsWeights,
     userId: typeof raw.userId === 'string' ? raw.userId : null,
     isDemo: typeof raw.isDemo === 'boolean' ? raw.isDemo : true,
     ownerId: typeof raw.ownerId === 'string' ? raw.ownerId : null,
@@ -345,10 +316,6 @@ export const useFlashcardStore = create<FlashcardStore>()(
       streak: 0,
       lastStudyDate: null,
       reviewHistory: {},
-      fsrsWeights: [
-        0.4025, 0.9304, 2.5026, 7.8229, 4.9372, 0.9411, 0.8295, 0.0867, 1.4886, 
-        0.1348, 1.0118, 2.0526, 0.1264, 0.4485, 1.4954, 0.254, 2.9466
-      ],
       userId: null,
       isDemo: true,
       ownerId: null,
@@ -445,11 +412,11 @@ export const useFlashcardStore = create<FlashcardStore>()(
         const state = get();
         decks.forEach((d) => queueSync(state, 'UPSERT_DECK', d.id));
         cards.forEach((c) => queueSync(state, 'UPSERT_CARD', c.id));
-        // ประวัติรายวันมีแค่จำนวน จึงสร้าง log แทนวันละ n รายการ (เวลาเที่ยงวัน UTC)
+        // ประวัติรายวันมีแค่จำนวน จึงสร้าง log แทนวันละ n รายการ (เที่ยงวันตามเวลาท้องถิ่น)
         Object.entries(reviewHistory).forEach(([day, count]) => {
           for (let i = 0; i < count; i++) {
             const id = newId();
-            queueSync(state, 'LOG_REVIEW', id, { id, cardId: '', rating: 3, reviewedAt: `${day}T12:00:00.000Z`, device: deviceId });
+            queueSync(state, 'LOG_REVIEW', id, { id, cardId: '', rating: 3, reviewedAt: keyToDate(day).toISOString(), device: deviceId });
           }
         });
         queueSync(state, 'UPSERT_PROGRESS', userId);
@@ -524,34 +491,6 @@ export const useFlashcardStore = create<FlashcardStore>()(
           userProgress: sanitizeProgress(backupData.userProgress, state.userProgress),
           unlockedAchievements: Array.isArray(backupData.unlockedAchievements) ? (backupData.unlockedAchievements as string[]) : state.unlockedAchievements,
         }));
-      },
-
-      recalibrateFSRS: async () => {
-        const { cards } = get();
-        let totalReps = 0;
-        let totalLapses = 0;
-
-        cards.forEach((c) => {
-          if (c.fsrsState) {
-            totalReps += c.fsrsState.reps || 0;
-            totalLapses += c.fsrsState.lapses || 0;
-          }
-        });
-
-        // Only recalibrate if the user has a statistically meaningful number of reviews (e.g. 80+ repetitions)
-        if (totalReps >= 80) {
-          const actualRetention = 1.0 - totalLapses / totalReps;
-          const { calibrateFSRSWeights } = await import('../utils/fsrs');
-
-          // Build simulated logs corresponding to the user's actual retention rate
-          const simulatedLogs = Array.from({ length: 150 }, (_, i) => ({
-            quality: i < 150 * actualRetention ? 3 : 1,
-          }));
-
-          const newWeights = calibrateFSRSWeights(simulatedLogs);
-          set({ fsrsWeights: newWeights });
-          console.log('[store] FSRS weights dynamically calibrated offline to retention:', actualRetention.toFixed(4), newWeights);
-        }
       },
 
       // ── Deck Actions ──
@@ -715,7 +654,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
           const card = state.cards.find((c) => c.id === id);
           if (!card) return state;
 
-          const today = new Date().toISOString().slice(0, 10);
+          const today = studyDayKey();
           const currentCount = state.reviewHistory[today] ?? 0;
 
           // Track consecutive perfect review streak (reset on non-perfect)
@@ -740,7 +679,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
           }
 
           const prevFsrs = card.fsrsState ?? createInitialFSRSState();
-          const { newState, nextReviewDate, interval } = calculateFSRS(prevFsrs, quality, state.fsrsWeights);
+          const { newState, nextReviewDate, interval } = calculateFSRS(prevFsrs, quality);
 
           return {
             cards: state.cards.map((c) =>
@@ -773,7 +712,6 @@ export const useFlashcardStore = create<FlashcardStore>()(
         });
 
         await get().updateStreak();
-        await get().recalibrateFSRS();
       },
 
       // ── Getters ──
@@ -802,7 +740,7 @@ export const useFlashcardStore = create<FlashcardStore>()(
       // ── Streak ──
       updateStreak: async () => {
         const { reviewHistory } = get();
-        const today = new Date().toISOString().slice(0, 10);
+        const today = studyDayKey();
 
         // Derive active and maximum streaks dynamically from the source-of-truth reviewHistory log
         const { currentStreak: newStreak, maxStreak: newMaxStreak } = calculateDynamicStreak(reviewHistory);
@@ -919,7 +857,6 @@ export const useFlashcardStore = create<FlashcardStore>()(
         streak: state.streak,
         lastStudyDate: state.lastStudyDate,
         reviewHistory: state.reviewHistory,
-        fsrsWeights: state.fsrsWeights,
         userId: state.userId,
         isDemo: state.isDemo,
         ownerId: state.ownerId,
@@ -936,10 +873,6 @@ export const useFlashcardStore = create<FlashcardStore>()(
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
-        state.fsrsWeights = state.fsrsWeights ?? [
-          0.4025, 0.9304, 2.5026, 7.8229, 4.9372, 0.9411, 0.8295, 0.0867, 1.4886, 
-          0.1348, 1.0118, 2.0526, 0.1264, 0.4485, 1.4954, 0.254, 2.9466
-        ];
         state.decks = (state.decks ?? []).map((d) => {
           const raw = d as unknown as Omit<Deck, 'createdAt'> & { createdAt: string | Date };
           return {

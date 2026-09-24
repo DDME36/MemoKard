@@ -1,20 +1,19 @@
 /**
- * FSRS (Free Spaced Repetition Scheduler) v5 Integration
- * ใช้ library ts-fsrs เป็น wrapper
+ * FSRS (Free Spaced Repetition Scheduler) ผ่าน library ts-fsrs (FSRS-6)
  *
- * FSRS ให้ผลลัพธ์แม่นยำกว่า SM-2 เพราะใช้ neural network model
- * แต่ต้องการ fields เพิ่มเติมใน card: stability, difficulty, state, lapses
+ * การ์ดแต่ละใบมี stability (ความจำอยู่ได้กี่วันก่อนโอกาสจำได้ลดเหลือ 90%)
+ * และ difficulty (การ์ดยากแค่ไหนสำหรับผู้ใช้) ทุกครั้งที่ให้คะแนน 1–4 จะคำนวณสองค่านี้ใหม่
+ * แล้วนัดวันทบทวนถัดไป
  *
- * Strategy: เก็บ FSRS state ใน IndexedDB ผ่าน Zustand พร้อม localStorage fallback
- * โดยไม่กระทบข้อมูลเดิม (backward compatible)
+ * ใช้พารามิเตอร์มาตรฐานของ FSRS-6 (ฝึกจากข้อมูลทบทวนจริงหลายล้านครั้ง)
+ * และเปิด fuzz เพื่อกระจายวันนัด ไม่ให้การ์ดที่เพิ่มพร้อมกันครบกำหนดวันเดียวกันเป็นกอง
  */
 
 import { fsrs, createEmptyCard, Rating, State, type Card as FSRSCard, type RecordLog } from 'ts-fsrs';
 
 export { Rating };
 
-// FSRS scheduler instance (ใช้ default parameters)
-export const scheduler = fsrs();
+export const scheduler = fsrs({ enable_fuzz: true });
 
 /**
  * Map quality (1/2/3/4) → FSRS Rating
@@ -63,30 +62,18 @@ export function createInitialFSRSState(): FSRSState {
 }
 
 /**
- * คำนวณ FSRS ครั้งถัดไปจาก state เดิม + quality
- * Returns: FSRSState ใหม่ + nextReviewDate
- */
-export const DEFAULT_FSRS_WEIGHTS = [
-  0.4025, 0.9304, 2.5026, 7.8229, 4.9372, 0.9411, 0.8295, 0.0867, 1.4886, 
-  0.1348, 1.0118, 2.0526, 0.1264, 0.4485, 1.4954, 0.254, 2.9466
-];
-
-/**
- * คำนวณ FSRS ครั้งถัดไปจาก state เดิม + quality + custom weights (ถ้ามี)
- * Returns: FSRSState ใหม่ + nextReviewDate
+ * คำนวณ FSRS ครั้งถัดไปจาก state เดิม + คะแนน (1–4)
  */
 export function calculateFSRS(
   prevState: FSRSState,
   quality: number,
-  weights?: number[]
+  now: Date = new Date(),
 ): { newState: FSRSState; nextReviewDate: Date; interval: number } {
   const rating = qualityToRating(quality);
 
-  // Reconstruct FSRSCard from stored state
-  // createEmptyCard() gives us a valid base with all required fields
-  const baseCard = createEmptyCard();
+  // สร้าง card ของ ts-fsrs กลับจาก state ที่เก็บไว้
   const card: FSRSCard = {
-    ...baseCard,
+    ...createEmptyCard(),
     due: new Date(prevState.due),
     stability: prevState.stability,
     difficulty: prevState.difficulty,
@@ -98,16 +85,7 @@ export function calculateFSRS(
     last_review: prevState.last_review ? new Date(prevState.last_review) : undefined,
   };
 
-  const now = new Date();
-  
-  // Recreate FSRS scheduler dynamically if custom weights are provided
-  const customScheduler = weights && weights.length === 17 
-    ? fsrs({ w: weights as unknown as [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number] }) 
-    : scheduler;
-    
-  const result: RecordLog = customScheduler.repeat(card, now);
-
-  // Grade = Exclude<Rating, Rating.Manual> — Again/Hard/Good/Easy are all valid
+  const result: RecordLog = scheduler.repeat(card, now);
   const scheduled = result[rating as keyof RecordLog];
 
   const newState: FSRSState = {
@@ -127,49 +105,4 @@ export function calculateFSRS(
     nextReviewDate: scheduled.card.due,
     interval: scheduled.card.scheduled_days,
   };
-}
-
-/**
- * ปรับแต่ง FSRS Parameters (17 Weights) ออฟไลน์บนตัวเครื่องฝั่ง Client
- * โดยใช้สถิติและพฤติกรรมการลืมจริงของผู้ใช้จากประวัติการทบทวน (Review Logs)
- * ช่วยเพิ่มประสิทธิภาพการทบทวนไพ่ให้แม่นยำขึ้นสูงสุดตามทฤษฎีสมองผู้ใช้
- */
-export function calibrateFSRSWeights(
-  reviewLogs: { quality: number; elapsed_days?: number }[]
-): number[] {
-  // ต้องการประวัติทบทวนขั้นต่ำ 100 ครั้งเพื่อความแม่นยำในการวิเคราะห์
-  if (reviewLogs.length < 100) {
-    return [...DEFAULT_FSRS_WEIGHTS];
-  }
-
-  // คำนวณอัตราความจำจริงของผู้ใช้ (Actual Retention) -> เปอร์เซ็นต์การตอบถูก (Good + Easy)
-  const successfulReviews = reviewLogs.filter(log => log.quality >= 3).length;
-  const totalReviews = reviewLogs.length;
-  const actualRetention = successfulReviews / totalReviews;
-
-  // เป้าหมายเปอร์เซ็นต์จำได้ที่เหมาะสมตามหลักประสาทวิทยาคือ 90% (0.90)
-  const targetRetention = 0.90;
-  const error = actualRetention - targetRetention;
-
-  // ปรับสเกลช่วงเวลา (Scale Factor): 
-  // - ถ้าจำแม่นเกินไป (Actual > 90%): สมองยังไหว ขยายเวลาก่อนทบทวนออกไปได้ (Factor > 1.0)
-  // - ถ้าลืมบ่อยเกินไป (Actual < 90%): หดช่วงเวลาให้ทบทวนบ่อยขึ้น (Factor < 1.0)
-  // จำกัดขอบเขตสเกลเพื่อความปลอดภัยของสมองอยู่ที่ [0.65 - 1.50]
-  const factor = Math.max(0.65, Math.min(1.50, 1.0 + error * 2.5));
-
-  const calibratedWeights = [...DEFAULT_FSRS_WEIGHTS];
-  
-  // ปรับจูนค่า Initial Stability สำหรับปุ่ม Again, Hard, Good, Easy (w[0..3])
-  calibratedWeights[0] *= factor;
-  calibratedWeights[1] *= factor;
-  calibratedWeights[2] *= factor;
-  calibratedWeights[3] *= factor;
-
-  // ปรับจูนค่า Stability adjustments (w[5], w[6], w[8], w[10]) เพื่อรักษาระดับการลืม
-  calibratedWeights[5] *= factor;
-  calibratedWeights[6] *= factor;
-  calibratedWeights[8] *= factor;
-  calibratedWeights[10] *= factor;
-
-  return calibratedWeights;
 }

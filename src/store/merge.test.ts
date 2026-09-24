@@ -27,8 +27,15 @@ describe('mergeById', () => {
   });
 });
 
+describe('addReviewCounts (Thai time)', () => {
+  it('files a 06:30 Thai-time review under that Thai day, not the previous UTC day', () => {
+    const out = addReviewCounts({}, [{ id: '1', reviewedAt: '2026-09-23T23:30:00.000Z', device: 'other' }], 'me');
+    expect(out).toEqual({ '2026-09-24': 1 });
+  });
+});
+
 describe('addReviewCounts', () => {
-  it('counts logs from other devices by UTC day and ignores this device', () => {
+  it('counts logs from other devices by study day and ignores this device', () => {
     const out = addReviewCounts({ '2026-09-20': 2 }, [
       { id: '1', reviewedAt: '2026-09-20T10:00:00.000Z', device: 'other' },
       { id: '2', reviewedAt: '2026-09-21 01:00:00.000Z', device: 'other' },
