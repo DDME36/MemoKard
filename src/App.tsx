@@ -275,7 +275,7 @@ function AppContent() {
   }, [hasHandledLaunchShortcut, isLoggedIn]);
 
   return (
-    <div className={`flex flex-col min-h-screen transition-colors duration-300 relative overflow-hidden ${isDark ? 'bg-slate-950' : 'bg-gradient-to-br from-slate-50 via-purple-50 to-pink-50'}`}>
+    <div className={`flex flex-col min-h-screen transition-colors duration-300 relative overflow-clip ${isDark ? 'bg-slate-950' : 'bg-gradient-to-br from-slate-50 via-purple-50 to-pink-50'}`}>
       {/* Premium Cosmic Ambient Glowing Nodes (2026 Cosmic Theme) */}
       <div className="cosmic-glow-node-1 top-[-10%] left-[-10%] opacity-50 dark:opacity-40" />
       <div className="cosmic-glow-node-2 bottom-[10%] right-[-10%] opacity-40 dark:opacity-30" />
