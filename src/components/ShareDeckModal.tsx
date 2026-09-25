@@ -4,6 +4,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { DECK_CATEGORIES, type DeckCategory } from '../store/communityStore';
 import CustomSelect from './CustomSelect';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 interface ShareDeckModalProps {
   isOpen: boolean;
@@ -20,6 +21,7 @@ export default function ShareDeckModal({
   onClose,
   onShare,
 }: ShareDeckModalProps) {
+  useEscapeKey(onClose, isOpen);
   const { isDark } = useTheme();
   const { showToast } = useToast();
   const [description, setDescription] = useState('');

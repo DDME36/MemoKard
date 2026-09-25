@@ -16,42 +16,42 @@ const ACHIEVEMENTS: Achievement[] = [
   // ─── Beginner (common) ───
   {
     id: 'first_card',
-    title: 'First Steps',
+    title: 'ก้าวแรก',
     description: 'สร้างการ์ดแรกของคุณ',
     rarity: 'common',
     icon: 'seedling' // 🌱
   },
   {
     id: 'first_deck',
-    title: 'Deck Builder',
+    title: 'ชุดแรกของฉัน',
     description: 'สร้างชุดการ์ดแรก',
     rarity: 'common',
     icon: 'stack' // 📦
   },
   {
     id: 'first_review',
-    title: 'Memory Novice',
+    title: 'เริ่มทบทวน',
     description: 'ทบทวนการ์ดครั้งแรก',
     rarity: 'common',
     icon: 'eye' // 👁
   },
   {
     id: 'cards_10',
-    title: 'Getting Started',
+    title: 'เริ่มติดลม',
     description: 'สร้าง 10 การ์ด',
     rarity: 'common',
     icon: 'layers' // 📋
   },
   {
     id: 'reviews_10',
-    title: 'Curious Mind',
+    title: 'ช่างสงสัย',
     description: 'ทบทวน 10 การ์ด',
     rarity: 'common',
     icon: 'lightbulb' // 💡
   },
   {
     id: 'streak_3',
-    title: 'Three-Peat',
+    title: 'สามวันติด',
     description: 'ทบทวน 3 วันติดต่อกัน',
     rarity: 'common',
     icon: 'calendar' // 📅
@@ -60,42 +60,42 @@ const ACHIEVEMENTS: Achievement[] = [
   // ─── Intermediate (rare) ───
   {
     id: 'streak_7',
-    title: 'Week Warrior',
+    title: 'ครบสัปดาห์',
     description: 'ทบทวน 7 วันติดต่อกัน',
     rarity: 'rare',
     icon: 'shield' // 🛡
   },
   {
     id: 'cards_50',
-    title: 'Half Century',
+    title: 'ครึ่งร้อย',
     description: 'สร้าง 50 การ์ด',
     rarity: 'rare',
     icon: 'bookmark' // 🔖
   },
   {
     id: 'cards_100',
-    title: 'Century Club',
+    title: 'ครบร้อยใบ',
     description: 'สร้าง 100 การ์ด',
     rarity: 'rare',
     icon: 'trophy' // 🏆
   },
   {
     id: 'reviews_50',
-    title: 'Speed Demon',
+    title: 'ทบทวนครบห้าสิบ',
     description: 'ทบทวนครบ 50 การ์ด (รวมทุกวัน)',
     rarity: 'rare',
     icon: 'bolt' // ⚡
   },
   {
     id: 'perfect_10',
-    title: 'Perfectionist',
-    description: 'ทบทวนได้คะแนนเต็ม 10 การ์ดติดต่อกัน',
+    title: 'จำได้สิบใบรวด',
+    description: 'ตอบจำได้ 10 ใบติดต่อกัน (พอได้หรือง่าย)',
     rarity: 'rare',
     icon: 'target' // 🎯
   },
   {
     id: 'decks_5',
-    title: 'Multi-Tasker',
+    title: 'หลายวิชา',
     description: 'สร้าง 5 ชุดการ์ด',
     rarity: 'rare',
     icon: 'grid' // 📊
@@ -104,49 +104,49 @@ const ACHIEVEMENTS: Achievement[] = [
   // ─── Advanced (epic) ───
   {
     id: 'streak_30',
-    title: 'Fire Streak',
+    title: 'ไฟไม่มอด',
     description: 'ทบทวน 30 วันติดต่อกัน',
     rarity: 'epic',
     icon: 'flame' // 🔥
   },
   {
     id: 'cards_500',
-    title: 'Knowledge Vault',
+    title: 'คลังความรู้',
     description: 'สร้าง 500 การ์ด',
     rarity: 'epic',
     icon: 'vault' // 🏛
   },
   {
     id: 'study_time_10h',
-    title: 'Dedicated Scholar',
+    title: 'นักเรียนตัวจริง',
     description: 'ทบทวนรวม 10 ชั่วโมง',
     rarity: 'epic',
     icon: 'clock' // ⏰
   },
   {
     id: 'share_first',
-    title: 'Community Helper',
+    title: 'ผู้แบ่งปัน',
     description: 'แชร์ชุดการ์ดแรกสู่ชุมชน',
     rarity: 'epic',
     icon: 'heart' // ❤️
   },
   {
     id: 'reviews_500',
-    title: 'Knowledge Seeker',
+    title: 'นักล่าความรู้',
     description: 'ทบทวนครบ 500 การ์ด',
     rarity: 'epic',
     icon: 'compass' // 🧭
   },
   {
     id: 'perfect_50',
-    title: 'Sharp Shooter',
-    description: 'ทบทวนได้คะแนนเต็ม 50 การ์ดติดต่อกัน',
+    title: 'จำได้ห้าสิบใบรวด',
+    description: 'ตอบจำได้ 50 ใบติดต่อกัน (พอได้หรือง่าย)',
     rarity: 'epic',
     icon: 'crosshair' // 🎯+
   },
   {
     id: 'streak_60',
-    title: 'Diamond Habit',
+    title: 'นิสัยเพชร',
     description: 'ทบทวน 60 วันติดต่อกัน',
     rarity: 'epic',
     icon: 'diamond' // 💎
@@ -155,42 +155,42 @@ const ACHIEVEMENTS: Achievement[] = [
   // ─── Legendary ───
   {
     id: 'streak_100',
-    title: 'Unstoppable',
+    title: 'ร้อยวันไม่หยุด',
     description: 'ทบทวน 100 วันติดต่อกัน',
     rarity: 'legendary',
     icon: 'crown' // 👑
   },
   {
     id: 'reviews_10000',
-    title: 'Memory Master',
+    title: 'ปรมาจารย์ความจำ',
     description: 'ทบทวนครบ 10,000 การ์ด',
     rarity: 'legendary',
     icon: 'brain' // 🧠
   },
   {
     id: 'cards_1000',
-    title: 'Encyclopedia',
+    title: 'สารานุกรมเดินได้',
     description: 'สร้าง 1,000 การ์ด',
     rarity: 'legendary',
     icon: 'book' // 📚
   },
   {
     id: 'perfect_100',
-    title: 'Flawless Mind',
-    description: 'ทบทวนได้คะแนนเต็ม 100 การ์ดติดต่อกัน',
+    title: 'จำได้ร้อยใบรวด',
+    description: 'ตอบจำได้ 100 ใบติดต่อกัน (พอได้หรือง่าย)',
     rarity: 'legendary',
     icon: 'sparkles' // ✨
   },
   {
     id: 'streak_365',
-    title: 'Year of Mastery',
+    title: 'ครบหนึ่งปี',
     description: 'ทบทวน 365 วันติดต่อกัน',
     rarity: 'legendary',
     icon: 'infinity' // ♾️
   },
   {
     id: 'study_time_100h',
-    title: 'Sage',
+    title: 'ปราชญ์',
     description: 'ทบทวนรวม 100 ชั่วโมง',
     rarity: 'legendary',
     icon: 'moon' // 🌙

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../contexts/ThemeContext';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 const PRESET_COLORS = [
   { name: 'violet', hex: '#8b5cf6', label: 'ม่วง' },
@@ -29,6 +30,7 @@ interface EditDeckModalProps {
 }
 
 export default function EditDeckModal({ isOpen, deckName, deckColor, onClose, onSave }: EditDeckModalProps) {
+  useEscapeKey(onClose, isOpen);
   const { isDark } = useTheme();
   const [name, setName] = useState(deckName);
   const [selectedColor, setSelectedColor] = useState(deckColor);

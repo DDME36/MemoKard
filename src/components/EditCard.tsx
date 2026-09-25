@@ -5,6 +5,7 @@ import { compressImage } from '../utils/imageCompression';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { Lightbulb } from 'lucide-react';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 interface EditCardProps {
   card: Flashcard;
@@ -12,6 +13,7 @@ interface EditCardProps {
 }
 
 export default function EditCard({ card, onClose }: EditCardProps) {
+  useEscapeKey(onClose);
   const [question, setQuestion] = useState(card.question);
   const [answer, setAnswer] = useState(card.answer);
   const [questionImage, setQuestionImage] = useState<string | undefined>(card.questionImage);

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../contexts/ThemeContext';
 import { REPORT_REASONS } from '../store/communityStore';
 import CustomSelect from './CustomSelect';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 interface ReportModalProps {
   isOpen: boolean;
@@ -12,6 +13,7 @@ interface ReportModalProps {
 }
 
 export default function ReportModal({ isOpen, deckName, onClose, onSubmit }: ReportModalProps) {
+  useEscapeKey(onClose, isOpen);
   const { isDark } = useTheme();
   const [reason, setReason] = useState<'spam' | 'inappropriate' | 'copyright' | 'other'>('spam');
   const [details, setDetails] = useState('');

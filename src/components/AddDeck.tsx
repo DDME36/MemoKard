@@ -6,11 +6,14 @@ import { useTheme } from '../contexts/ThemeContext';
 import { importDeckFromText, importDeck } from '../utils/deckIO';
 import { haptics } from '../utils/haptics';
 import CustomSelect from './CustomSelect';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 interface AddDeckProps {
   onClose: () => void;
   onCreated: (deckId: string) => void;
   dayColor: { gradient: string; shadow: string };
+  /** เปิดแท็บไหนก่อน: สร้างเอง หรือ นำเข้าจาก AI */
+  initialMode?: 'create' | 'import';
 }
 
 const COLOR_MAP: Record<DeckColor, { bg: string; ring: string; label: string }> = {
@@ -74,8 +77,9 @@ const RANDOM_TOPICS = [
   'ทักษะการเงินส่วนบุคคลและการวางแผนภาษีง่ายๆ'
 ];
 
-export default function AddDeck({ onClose, onCreated, dayColor }: AddDeckProps) {
-  const [mode, setMode] = useState<'create' | 'import'>('create');
+export default function AddDeck({ onClose, onCreated, dayColor, initialMode = 'create' }: AddDeckProps) {
+  useEscapeKey(onClose);
+  const [mode, setMode] = useState<'create' | 'import'>(initialMode);
   
   // Create state
   const [name, setName] = useState('');

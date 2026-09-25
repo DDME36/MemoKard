@@ -669,8 +669,9 @@ export const useFlashcardStore = create<FlashcardStore>()(
           const currentCount = state.reviewHistory[today] ?? 0;
 
           // Track consecutive perfect review streak (reset on non-perfect)
+          // นับ "ตอบจำได้ติดต่อกัน" (พอได้หรือง่าย) — ไม่ให้รางวัลเฉพาะปุ่มง่าย ซึ่งจะทำให้ผู้ใช้กดง่ายเกินจริง
           let newPerfectStreak = state.perfectReviewStreak;
-          if (quality === 4) {
+          if (quality >= 3) {
             newPerfectStreak += 1;
           } else {
             newPerfectStreak = 0;

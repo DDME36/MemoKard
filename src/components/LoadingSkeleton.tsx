@@ -1,13 +1,25 @@
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTheme } from '../contexts/ThemeContext';
 
 interface LoadingSkeletonProps {
   type?: 'card' | 'deck' | 'stats' | 'list';
   count?: number;
+  /** แสดงหลังรอเกินเวลานี้ (ms) — โหลดเร็วจะไม่เห็นกล่องแวบขึ้นมา */
+  delay?: number;
 }
 
-export default function LoadingSkeleton({ type = 'card', count = 1 }: LoadingSkeletonProps) {
+export default function LoadingSkeleton({ type = 'card', count = 1, delay = 250 }: LoadingSkeletonProps) {
   const { isDark } = useTheme();
+  const [visible, setVisible] = useState(delay <= 0);
+
+  useEffect(() => {
+    if (delay <= 0) return;
+    const timer = window.setTimeout(() => setVisible(true), delay);
+    return () => window.clearTimeout(timer);
+  }, [delay]);
+
+  if (!visible) return null;
   
   const baseClass = `animate-pulse rounded-2xl ${
     isDark ? 'bg-slate-800' : 'bg-slate-200'

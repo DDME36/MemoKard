@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../contexts/ThemeContext';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -25,6 +26,8 @@ export default function ConfirmModal({
   hideCancel = false
 }: ConfirmModalProps) {
   const { isDark } = useTheme();
+  // Esc = ยกเลิก (หรือปิด ถ้าไม่มีปุ่มยกเลิก)
+  useEscapeKey(onCancel ?? onConfirm, isOpen);
 
   const colors = {
     warning: {

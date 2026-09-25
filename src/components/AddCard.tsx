@@ -5,6 +5,7 @@ import { compressImage } from '../utils/imageCompression';
 import { useTheme } from '../contexts/ThemeContext';
 import { haptics } from '../utils/haptics';
 import { Lightbulb } from 'lucide-react';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 interface AddCardProps {
   deckId: string;
@@ -12,6 +13,7 @@ interface AddCardProps {
 }
 
 export default function AddCard({ deckId, onClose }: AddCardProps) {
+  useEscapeKey(onClose);
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [questionImage, setQuestionImage] = useState<string | undefined>();

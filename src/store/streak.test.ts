@@ -68,3 +68,19 @@ describe('desired retention setting', () => {
     useFlashcardStore.getState().setDesiredRetention(0.9);
   });
 });
+
+describe('correct-answer streak (achievements)', () => {
+  it('counts "Good" as correct so learners are never nudged into over-using "Easy"', async () => {
+    const { useFlashcardStore } = await import('./store');
+    const store = useFlashcardStore.getState();
+    store.clearStore();
+    const deck = await store.addDeck('D', 'violet');
+    const a = await store.addCard(deck.id, 'a', '1');
+    const b = await store.addCard(deck.id, 'b', '2');
+    await useFlashcardStore.getState().reviewCard(a, 3);
+    await useFlashcardStore.getState().reviewCard(b, 4);
+    expect(useFlashcardStore.getState().perfectReviewStreak).toBe(2);
+    await useFlashcardStore.getState().reviewCard(a, 1);
+    expect(useFlashcardStore.getState().perfectReviewStreak).toBe(0);
+  });
+});

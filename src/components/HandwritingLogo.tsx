@@ -18,8 +18,8 @@ export default function HandwritingLogo({ gradient, size = 'md', animated = true
     visible: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.1,
-        delayChildren: 0.15
+        staggerChildren: 0.06,
+        delayChildren: 0.1
       }
     }
   };

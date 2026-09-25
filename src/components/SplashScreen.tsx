@@ -13,10 +13,10 @@ export default function SplashScreen({ onComplete, dayColor }: SplashScreenProps
   const { isDark } = useTheme();
   
   useEffect(() => {
-    // โชว์ Splash 2.5 วิแล้วค่อยเอาออกเพื่อให้ App ค่อยๆ ขึ้นมา
+    // สั้นพอให้เห็นโลโก้เขียนจบ แต่ไม่ทำให้รอ (หน้าแรกถูกโหลดล่วงหน้าระหว่างนี้)
     const timer = setTimeout(() => {
       onComplete();
-    }, 2500);
+    }, 1300);
     return () => clearTimeout(timer);
   }, [onComplete]);
 
@@ -30,32 +30,8 @@ export default function SplashScreen({ onComplete, dayColor }: SplashScreenProps
       }`}
       initial={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.8 }}
+      transition={{ duration: 0.3, ease: 'easeOut' }}
     >
-      {/* Animated Background */}
-      {!isDark && (
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <motion.div
-            animate={{
-              scale: [1, 1.2, 1],
-              rotate: [0, 90, 0],
-              opacity: [0.3, 0.5, 0.3],
-            }}
-            transition={{ duration: 20, repeat: Infinity }}
-            className={`absolute -top-1/4 -left-1/4 w-1/2 h-1/2 bg-gradient-to-br ${dayColor.gradient.split(' ')[0].replace('from-', 'from-').replace('-600', '-400')} to-purple-400 rounded-full blur-3xl`}
-          />
-          <motion.div
-            animate={{
-              scale: [1, 1.3, 1],
-              rotate: [0, -90, 0],
-              opacity: [0.3, 0.5, 0.3],
-            }}
-            transition={{ duration: 25, repeat: Infinity, delay: 2 }}
-            className={`absolute -bottom-1/4 -right-1/4 w-1/2 h-1/2 bg-gradient-to-br ${dayColor.gradient.split(' ')[1].replace('to-', 'from-').replace('-600', '-400')} to-pink-400 rounded-full blur-3xl`}
-          />
-        </div>
-      )}
-
       {/* Logo Content */}
       <div className="relative z-10 flex flex-col items-center">
         {/* Icon Box */}
@@ -102,7 +78,7 @@ export default function SplashScreen({ onComplete, dayColor }: SplashScreenProps
           }`}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 1, duration: 0.5 }}
+          transition={{ delay: 0.55, duration: 0.35 }}
         >
           เมมโมการ์ด
         </motion.p>
@@ -114,7 +90,7 @@ export default function SplashScreen({ onComplete, dayColor }: SplashScreenProps
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0, y: 20 }}
-        transition={{ delay: 0.5 }}
+        transition={{ delay: 0.3 }}
       >
         <div className="flex gap-2">
           {[0, 1, 2].map((i) => (

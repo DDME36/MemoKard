@@ -60,20 +60,32 @@ function AppContent() {
     }
   }, [isDark]);
 
-  const [showSplash, setShowSplash] = useState(() => {
-    return !safeSessionStorage.get('hasSeenSplash');
+  // Splash แสดงครั้งเดียวต่อเซสชัน และข้ามไปเลยถ้าผู้ใช้ตั้งค่าลดการเคลื่อนไหว
+  const [splashAtStart] = useState(() => {
+    const reduceMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    return !reduceMotion && !safeSessionStorage.get('hasSeenSplash');
   });
+  const [showSplash, setShowSplash] = useState(splashAtStart);
+  // ส่วนหัว/ปุ่ม + รอให้ splash จางหายหมดก่อน ไม่งั้นโลโก้สองอันซ้อนกันช่วงเปลี่ยนหน้า
+  const [splashGone, setSplashGone] = useState(!splashAtStart);
 
   const handleSplashComplete = () => {
     setShowSplash(false);
     safeSessionStorage.set('hasSeenSplash', 'true');
   };
 
+  // โหลดโค้ดหน้าแรกไว้ระหว่าง splash จะได้ไม่มีกล่องโหลดแวบขึ้นมาหลัง splash
+  useEffect(() => {
+    void import('./pages/Dashboard');
+    void import('./pages/AuthPage');
+  }, []);
+
   const [view, setView] = useState<View>('home');
   const [activeDeck, setActiveDeck] = useState<Deck | null>(null);
   const [activePublicDeckId, setActivePublicDeckId] = useState<string | null>(null);
   const [showAddCard, setShowAddCard] = useState(false);
   const [showAddDeck, setShowAddDeck] = useState(false);
+  const [addDeckMode, setAddDeckMode] = useState<'create' | 'import'>('create');
   const [editingCard, setEditingCard] = useState<Flashcard | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
@@ -238,7 +250,7 @@ function AppContent() {
     ? (DECK_COLOR_MAP[liveActiveDeck.color] ?? getDeckColorStyles(liveActiveDeck.color))
     : undefined;
 
-  const isLoggedIn = !showSplash && !loading && (user || isDemo);
+  const isLoggedIn = splashGone && !showSplash && !loading && (user || isDemo);
 
   useEffect(() => {
     if (!isLoggedIn || hasHandledLaunchShortcut) return;
@@ -291,8 +303,8 @@ function AppContent() {
               </div>
               <div className="text-left hidden xs:block">
                 <HandwritingLogo gradient={dayColor.gradient} size="sm" animated={false} />
-                <p className={`text-[10px] font-medium uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                  Daily Memory
+                <p className={`text-[11px] font-medium ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                  เมมโมการ์ด
                 </p>
               </div>
             </button>
@@ -448,7 +460,7 @@ function AppContent() {
       {isLoggedIn && <PwaStatusBar dayColor={dayColor} />}
 
       {/* ── Page Content ── */}
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait" onExitComplete={() => setSplashGone(true)}>
         {showSplash ? (
           <SplashScreen
             key="splash"
@@ -522,7 +534,7 @@ function AppContent() {
                   <Dashboard
                     onOpenDeck={openDeck}
                     onStartReview={() => startReview(undefined, false, true)}
-                    onShowAddDeck={() => setShowAddDeck(true)}
+                    onShowAddDeck={(mode) => { setAddDeckMode(mode ?? 'create'); setShowAddDeck(true); }}
                     dayColor={dayColor}
                   />
                 </motion.div>
@@ -638,7 +650,7 @@ function AppContent() {
 
       {/* ── Modals ── */}
       <AnimatePresence>
-        {showAddDeck && <AddDeck onClose={() => setShowAddDeck(false)} onCreated={(id) => { const d = getDeckById(id); if (d) openDeck(d); }} dayColor={dayColor} />}
+        {showAddDeck && <AddDeck initialMode={addDeckMode} onClose={() => { setShowAddDeck(false); setAddDeckMode('create'); }} onCreated={(id) => { const d = getDeckById(id); if (d) openDeck(d); }} dayColor={dayColor} />}
         {showAddCard && activeDeck && <AddCard deckId={activeDeck.id} onClose={() => setShowAddCard(false)} />}
         {editingCard && <EditCard card={editingCard} onClose={() => setEditingCard(null)} />}
       </AnimatePresence>
@@ -685,7 +697,7 @@ function AppContent() {
 
       {/* ── Mobile FAB (Floating Action Button) ── */}
       <AnimatePresence>
-        {isLoggedIn && view === 'home' && (
+        {isLoggedIn && view === 'home' && decks.length > 0 && (
           <motion.button
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
